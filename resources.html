@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resources & Earnings Calculator — DriveNow Charlotte, NC</title>
+  <meta name="description" content="Calculate your weekly and monthly net earnings as a gig driver in Charlotte. Factor in DriveNow rental costs, gas, and expenses.">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="container nav__inner">
+    <a href="index.html" class="nav__logo">Drive<span>Now</span></a>
+    <ul class="nav__links">
+      <li><a href="fleet.html">Fleet</a></li>
+      <li><a href="resources.html" class="active">Resources</a></li>
+      <li><a href="contact.html">Contact</a></li>
+      <li><a href="apply.html" class="btn btn-white nav__cta" style="padding:10px 24px;font-size:0.78rem;">Apply Now</a></li>
+    </ul>
+    <div class="nav__hamburger"><span></span><span></span><span></span></div>
+  </div>
+  <div class="nav__mobile">
+    <a href="fleet.html">Fleet</a>
+    <a href="resources.html">Resources & Calculator</a>
+    <a href="contact.html">Contact</a>
+    <a href="apply.html">Apply Now →</a>
+  </div>
+</nav>
+
+<!-- PAGE HEADER -->
+<div class="page-header">
+  <div class="container">
+    <div class="tag">Resources</div>
+    <h1>Know Your Numbers.</h1>
+    <p>Use our earnings calculator to see exactly what you'll take home driving with a DriveNow rental in Charlotte.</p>
+  </div>
+</div>
+
+<!-- CALCULATOR -->
+<section class="section" id="calculator">
+  <div class="container">
+    <div class="text-center" style="margin-bottom:0;">
+      <div class="tag">Earnings Calculator</div>
+      <h2>What will you earn<br>this week?</h2>
+      <p style="color:var(--text-muted);margin-top:12px;max-width:480px;margin-left:auto;margin-right:auto;">Slide the values to match your driving habits. We'll calculate your estimated net after rental, gas, and expenses.</p>
+    </div>
+
+    <div class="calc-wrapper">
+      <!-- Inputs -->
+      <div class="calc-panel">
+        <h3>Your Settings</h3>
+
+        <div class="calc-slider-group">
+          <label>Days Driving / Week <span id="val-days">5 days</span></label>
+          <input type="range" id="calc-days" min="1" max="7" value="5" step="1">
+        </div>
+
+        <div class="calc-slider-group">
+          <label>Avg Hourly Earnings <span id="val-rate">$22</span></label>
+          <input type="range" id="calc-rate" min="10" max="40" value="22" step="1">
+        </div>
+
+        <div class="calc-slider-group">
+          <label>Gas Cost / Day <span id="val-gas">$18/day</span></label>
+          <input type="range" id="calc-gas" min="5" max="50" value="18" step="1">
+        </div>
+
+        <div class="calc-slider-group">
+          <label>Other Expenses / Week <span id="val-misc">$20</span></label>
+          <input type="range" id="calc-misc" min="0" max="100" value="20" step="5">
+        </div>
+
+        <div style="margin-top:28px;">
+          <label style="display:block;font-size:0.78rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.5);margin-bottom:10px;">Weekly Rental Rate</label>
+          <select id="calc-rental" style="width:100%;padding:12px 16px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);color:#fff;border-radius:4px;font-family:inherit;font-size:0.95rem;appearance:none;">
+            <option value="350">$350 / week (Economy)</option>
+            <option value="370">$370 / week (Camry SE)</option>
+            <option value="380" selected>$380 / week (Accord LX)</option>
+            <option value="420">$420 / week (Accord Sport)</option>
+            <option value="450">$450 / week (Camry XSE)</option>
+          </select>
+        </div>
+
+        <p style="font-size:0.72rem;color:rgba(255,255,255,0.3);margin-top:16px;line-height:1.6;">* Assumes 10 hours/day driving. Adjust to match your actual hours for more accuracy.</p>
+      </div>
+
+      <!-- Results -->
+      <div class="calc-result">
+        <h3>Your Estimated Earnings</h3>
+
+        <div class="result-row">
+          <div class="result-row__label">Gross Weekly Earnings</div>
+          <div class="result-row__val" id="res-gross">—</div>
+        </div>
+        <div class="result-row">
+          <div class="result-row__label">Rental Cost</div>
+          <div class="result-row__val" style="color:#e65100;" id="res-rental">—</div>
+        </div>
+        <div class="result-row">
+          <div class="result-row__label">Gas Costs</div>
+          <div class="result-row__val" style="color:#e65100;" id="res-gas">—</div>
+        </div>
+        <div class="result-row">
+          <div class="result-row__label">Other Expenses</div>
+          <div class="result-row__val" style="color:#e65100;" id="res-misc">—</div>
+        </div>
+
+        <div class="result-total">
+          <div class="result-total__label">Weekly Take-Home</div>
+          <div class="result-total__amount" id="res-net">—</div>
+        </div>
+
+        <div style="margin-top:20px;background:var(--gray-light);border-radius:6px;padding:20px;text-align:center;border:1px solid var(--gray-border);">
+          <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px;">Estimated Monthly Take-Home</div>
+          <div style="font-size:2rem;font-weight:900;letter-spacing:-0.03em;" id="res-monthly">—</div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;">× 4.3 weeks</div>
+        </div>
+
+        <a href="apply.html" class="btn btn-primary" style="width:100%;text-align:center;margin-top:24px;display:block;">Ready? Apply Now →</a>
+        <p style="font-size:0.72rem;color:var(--text-muted);text-align:center;margin-top:10px;">Estimates only. Actual earnings vary by platform, market conditions, and hours worked.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- RESOURCE CARDS -->
+<section class="section section--gray">
+  <div class="container">
+    <div class="tag">Driver Resources</div>
+    <h2>Everything you need<br>to succeed.</h2>
+    <div class="resources-grid">
+
+      <div class="resource-card">
+        <div class="resource-card__icon">🚗</div>
+        <h3>Getting Started on Uber</h3>
+        <p>New to Uber? Here's exactly how to activate your driver account, pass the vehicle inspection, and get your first ride within 24 hours of pickup.</p>
+        <a href="contact.html" style="display:inline-block;margin-top:16px;font-size:0.82rem;font-weight:700;letter-spacing:0.06em;text-decoration:underline;">Ask Us →</a>
+      </div>
+
+      <div class="resource-card">
+        <div class="resource-card__icon">🟣</div>
+        <h3>Getting Started on Lyft</h3>
+        <p>Lyft approval is fast when you have the right vehicle. We'll walk you through the checklist so your account is active before you even pick up the car.</p>
+        <a href="contact.html" style="display:inline-block;margin-top:16px;font-size:0.82rem;font-weight:700;letter-spacing:0.06em;text-decoration:underline;">Ask Us →</a>
+      </div>
+
+      <div class="resource-card">
+        <div class="resource-card__icon">🔴</div>
+        <h3>DoorDash Driver Tips</h3>
+        <p>Maximize your DoorDash earnings in Charlotte. The right hours, best zones, and how to stack orders to increase your hourly rate significantly.</p>
+        <a href="contact.html" style="display:inline-block;margin-top:16px;font-size:0.82rem;font-weight:700;letter-spacing:0.06em;text-decoration:underline;">Ask Us →</a>
+      </div>
+
+      <div class="resource-card">
+        <div class="resource-card__icon">⛽</div>
+        <h3>Cutting Your Gas Bill</h3>
+        <p>Gas is your biggest variable expense. Tips for finding the cheapest stations in Charlotte, optimizing your route, and keeping fuel costs under $15/day.</p>
+        <a href="contact.html" style="display:inline-block;margin-top:16px;font-size:0.82rem;font-weight:700;letter-spacing:0.06em;text-decoration:underline;">Ask Us →</a>
+      </div>
+
+      <div class="resource-card">
+        <div class="resource-card__icon">📍</div>
+        <h3>Charlotte Hot Zones</h3>
+        <p>Know where to be and when. Uptown, South End, NoDa, Airport — we'll show you the highest-demand zones and surge windows for Charlotte drivers.</p>
+        <a href="contact.html" style="display:inline-block;margin-top:16px;font-size:0.82rem;font-weight:700;letter-spacing:0.06em;text-decoration:underline;">Ask Us →</a>
+      </div>
+
+      <div class="resource-card">
+        <div class="resource-card__icon">💰</div>
+        <h3>Taxes for Gig Workers</h3>
+        <p>Your rental cost, gas, and phone bill are all deductible. We'll point you to the right tools so you're not overpaying the IRS at the end of the year.</p>
+        <a href="contact.html" style="display:inline-block;margin-top:16px;font-size:0.82rem;font-weight:700;letter-spacing:0.06em;text-decoration:underline;">Ask Us →</a>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="section">
+  <div class="container">
+    <div class="text-center">
+      <div class="tag">FAQ</div>
+      <h2>Common Questions</h2>
+    </div>
+    <div class="faq-list">
+
+      <div class="faq-item">
+        <button class="faq-question">How does the weekly rental work?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-answer"><p>You pay weekly, in advance. Payments are due the same day each week. No long-term contract — you can return the vehicle with proper notice. We keep it simple so you can focus on earning.</p></div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question">What are the requirements to rent?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-answer"><p>You need a valid driver's license, a clean-ish driving record (we review on a case-by-case basis), and an active or pending gig platform account. No perfect credit required — we're driver-friendly.</p></div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question">Are the cars insured?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-answer"><p>Yes. All vehicles come with commercial-grade insurance coverage. Additionally, Uber and Lyft provide their own coverage while you're on a trip. We'll walk you through the details during onboarding.</p></div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question">Can I use the car for personal trips too?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-answer"><p>Yes — you have full use of the vehicle 24/7 during your rental period. We just ask that you don't take it out of state without prior notice.</p></div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question">What happens if the car breaks down?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-answer"><p>Call us first. We provide roadside assistance and will work fast to get you back on the road. Mechanical issues on our end don't pause your ability to earn — we'll get you a replacement as quickly as possible.</p></div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question">How much does it really cost per week all-in?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-answer"><p>Rental: $350–$450/week depending on the vehicle. Gas in Charlotte typically runs $15–$25/day depending on your hours. Use our calculator above to build your own estimate based on your actual driving habits.</p></div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question">How fast can I get approved and pick up?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-answer"><p>Most applicants hear back within 24–48 hours. Once approved, we coordinate a pickup time at our Charlotte location. In most cases, you can be driving and earning within 2–3 days of applying.</p></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- CTA BAND -->
+<section class="cta-band">
+  <div class="container">
+    <h2>The numbers look good.<br>Now make them real.</h2>
+    <p>Apply now and be on the road in 48 hours.</p>
+    <div class="cta-band__actions">
+      <a href="apply.html" class="btn btn-white btn-lg">Apply Now</a>
+      <a href="fleet.html" class="btn btn-lg" style="border-color:rgba(255,255,255,0.3);color:rgba(255,255,255,0.7);">Browse the Fleet</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer__inner">
+      <div class="footer__brand">
+        <a href="index.html" class="nav__logo">Drive<span>Now</span></a>
+        <p class="footer__tagline">Weekly rental cars for gig workers in Charlotte, NC. Rent fast. Drive more. Keep the money.</p>
+      </div>
+      <div>
+        <div class="footer__col-title">Pages</div>
+        <div class="footer__links">
+          <a href="fleet.html">Fleet</a>
+          <a href="apply.html">Apply</a>
+          <a href="resources.html">Resources</a>
+          <a href="contact.html">Contact</a>
+        </div>
+      </div>
+      <div>
+        <div class="footer__col-title">Contact</div>
+        <div class="footer__links">
+          <a href="tel:7047777777">(704) 777-7777</a>
+          <a href="mailto:info@queencityrentals.com">info@queencityrentals.com</a>
+          <a href="#">Charlotte, NC</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <span>© 2024 DriveNow / Queen City Rentals. All rights reserved.</span>
+      <span>Charlotte, NC</span>
+    </div>
+  </div>
+</footer>
+
+<script src="js/main.js"></script>
+</body>
+</html>

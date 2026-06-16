@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact — DriveNow Charlotte, NC</title>
+  <meta name="description" content="Get in touch with DriveNow in Charlotte, NC. Questions about rental cars for gig workers? Call, text, or email us.">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="container nav__inner">
+    <a href="index.html" class="nav__logo">Drive<span>Now</span></a>
+    <ul class="nav__links">
+      <li><a href="fleet.html">Fleet</a></li>
+      <li><a href="resources.html">Resources</a></li>
+      <li><a href="contact.html" class="active">Contact</a></li>
+      <li><a href="apply.html" class="btn btn-white nav__cta" style="padding:10px 24px;font-size:0.78rem;">Apply Now</a></li>
+    </ul>
+    <div class="nav__hamburger"><span></span><span></span><span></span></div>
+  </div>
+  <div class="nav__mobile">
+    <a href="fleet.html">Fleet</a>
+    <a href="resources.html">Resources & Calculator</a>
+    <a href="contact.html">Contact</a>
+    <a href="apply.html">Apply Now →</a>
+  </div>
+</nav>
+
+<!-- PAGE HEADER -->
+<div class="page-header">
+  <div class="container">
+    <div class="tag">Get In Touch</div>
+    <h1>We're Local.<br>We Pick Up.</h1>
+    <p>Charlotte-based and easy to reach. Call, text, or send us a message and we'll get back to you fast.</p>
+  </div>
+</div>
+
+<!-- CONTACT SECTION -->
+<section class="section">
+  <div class="container">
+    <div class="contact-grid">
+
+      <!-- Left: Info -->
+      <div class="contact-info">
+        <div class="tag">Contact Info</div>
+        <h2>Reach out<br>anytime.</h2>
+        <p>We're not a big corporation — you'll talk to a real person. Whether you have a question about a vehicle, want to check availability, or just need help with your application, we've got you.</p>
+
+        <div class="contact-detail">
+          <div class="contact-detail__icon">📞</div>
+          <div>
+            <div class="contact-detail__label">Phone & Text</div>
+            <div class="contact-detail__value"><a href="tel:7047777777">(704) 777-7777</a></div>
+          </div>
+        </div>
+
+        <div class="contact-detail">
+          <div class="contact-detail__icon">✉️</div>
+          <div>
+            <div class="contact-detail__label">Email</div>
+            <div class="contact-detail__value"><a href="mailto:info@queencityrentals.com">info@queencityrentals.com</a></div>
+          </div>
+        </div>
+
+        <div class="contact-detail">
+          <div class="contact-detail__icon">📍</div>
+          <div>
+            <div class="contact-detail__label">Location</div>
+            <div class="contact-detail__value">Charlotte, NC<br><span style="font-size:0.82rem;color:var(--text-muted);font-weight:400;">Pickup address provided upon approval</span></div>
+          </div>
+        </div>
+
+        <div class="contact-detail">
+          <div class="contact-detail__icon">🕐</div>
+          <div>
+            <div class="contact-detail__label">Hours</div>
+            <div class="contact-detail__value" style="font-size:0.9rem;">
+              Mon–Fri: 8am – 7pm<br>
+              Sat: 9am – 5pm<br>
+              Sun: By appointment
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick links -->
+        <div style="margin-top:40px;padding:28px;background:var(--gray-light);border-radius:8px;">
+          <div style="font-size:0.75rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:16px;color:#888;">Quick Actions</div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <a href="apply.html" class="btn btn-primary" style="text-align:center;">Start an Application</a>
+            <a href="fleet.html" class="btn btn-outline" style="text-align:center;">View Available Cars</a>
+            <a href="resources.html" class="btn btn-outline" style="text-align:center;">Calculate Earnings</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Form -->
+      <div>
+        <div class="tag">Send a Message</div>
+        <h2 style="margin-bottom:32px;">What's on<br>your mind?</h2>
+
+        <!-- Success -->
+        <div class="form-success" id="contact-success" style="border:1px solid var(--gray-border);">
+          <div class="form-success__icon">✅</div>
+          <h3>Message Sent!</h3>
+          <p>Thanks for reaching out. We'll get back to you within 24 hours, usually much sooner.</p>
+          <a href="index.html" class="btn btn-primary" style="margin-top:24px;">Back to Home</a>
+        </div>
+
+        <form id="contact-form" novalidate>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="c-name">Your Name *</label>
+              <input type="text" id="c-name" name="name" placeholder="John Smith" required>
+            </div>
+            <div class="form-group">
+              <label for="c-phone">Phone Number</label>
+              <input type="tel" id="c-phone" name="phone" placeholder="(704) 555-0000">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="c-email">Email Address *</label>
+            <input type="email" id="c-email" name="email" placeholder="john@email.com" required>
+          </div>
+          <div class="form-group">
+            <label for="c-subject">What's this about?</label>
+            <select id="c-subject" name="subject">
+              <option value="">Select a topic</option>
+              <option value="availability">Vehicle availability</option>
+              <option value="pricing">Pricing & rates</option>
+              <option value="application">Application question</option>
+              <option value="existing">Existing rental</option>
+              <option value="platforms">Platform / app question</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="c-message">Message *</label>
+            <textarea id="c-message" name="message" placeholder="Ask us anything — vehicle questions, availability, how the process works, anything at all." style="min-height:140px;" required></textarea>
+          </div>
+          <div class="checkbox-group">
+            <input type="checkbox" id="c-sms">
+            <label for="c-sms">I'm okay with receiving a text reply to my phone number.</label>
+          </div>
+          <button type="submit" class="btn btn-primary btn-lg" style="width:100%;text-align:center;margin-top:8px;">Send Message →</button>
+          <p class="form-note">We respond within 24 hours. Usually same day.</p>
+        </form>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- MAP PLACEHOLDER -->
+<section style="background:var(--black);padding:0;">
+  <div style="height:240px;background:var(--gray-dark);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;border-top:1px solid rgba(255,255,255,0.06);">
+    <div style="font-size:2rem;">📍</div>
+    <div style="color:rgba(255,255,255,0.5);font-size:0.85rem;font-weight:600;letter-spacing:0.06em;">Charlotte, North Carolina</div>
+    <div style="color:rgba(255,255,255,0.3);font-size:0.75rem;">Exact pickup address provided after approval</div>
+  </div>
+</section>
+
+<!-- CTA BAND -->
+<section class="cta-band">
+  <div class="container">
+    <h2>Ready to get started?</h2>
+    <p>Apply now and we'll have you on the road in 24–48 hours.</p>
+    <div class="cta-band__actions">
+      <a href="apply.html" class="btn btn-white btn-lg">Apply in 5 Minutes</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer__inner">
+      <div class="footer__brand">
+        <a href="index.html" class="nav__logo">Drive<span>Now</span></a>
+        <p class="footer__tagline">Weekly rental cars for gig workers in Charlotte, NC. Rent fast. Drive more. Keep the money.</p>
+      </div>
+      <div>
+        <div class="footer__col-title">Pages</div>
+        <div class="footer__links">
+          <a href="fleet.html">Fleet</a>
+          <a href="apply.html">Apply</a>
+          <a href="resources.html">Resources</a>
+          <a href="contact.html">Contact</a>
+        </div>
+      </div>
+      <div>
+        <div class="footer__col-title">Platforms</div>
+        <div class="footer__links">
+          <a href="#">Uber</a>
+          <a href="#">Lyft</a>
+          <a href="#">DoorDash</a>
+        </div>
+      </div>
+      <div>
+        <div class="footer__col-title">Contact</div>
+        <div class="footer__links">
+          <a href="tel:7047777777">(704) 777-7777</a>
+          <a href="mailto:info@queencityrentals.com">info@queencityrentals.com</a>
+          <a href="#">Charlotte, NC</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <span>© 2024 DriveNow / Queen City Rentals. All rights reserved.</span>
+      <span>Charlotte, NC</span>
+    </div>
+  </div>
+</footer>
+
+<script src="js/main.js"></script>
+</body>
+</html>

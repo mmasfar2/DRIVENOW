@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apply — DriveNow Charlotte, NC</title>
+  <meta name="description" content="Apply for a weekly rental car with DriveNow in Charlotte, NC. Fast approval for gig workers on Uber, Lyft, and DoorDash.">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="container nav__inner">
+    <a href="index.html" class="nav__logo">Drive<span>Now</span></a>
+    <ul class="nav__links">
+      <li><a href="fleet.html">Fleet</a></li>
+      <li><a href="resources.html">Resources</a></li>
+      <li><a href="contact.html">Contact</a></li>
+      <li><a href="apply.html" class="btn btn-white nav__cta active" style="padding:10px 24px;font-size:0.78rem;">Apply Now</a></li>
+    </ul>
+    <div class="nav__hamburger"><span></span><span></span><span></span></div>
+  </div>
+  <div class="nav__mobile">
+    <a href="fleet.html">Fleet</a>
+    <a href="resources.html">Resources & Calculator</a>
+    <a href="contact.html">Contact</a>
+    <a href="apply.html">Apply Now →</a>
+  </div>
+</nav>
+
+<!-- PAGE HEADER -->
+<div class="page-header">
+  <div class="container">
+    <div class="tag">Get Started</div>
+    <h1>Apply for Your Car</h1>
+    <p>5 minutes to complete. Approval within 24–48 hours. Charlotte, NC.</p>
+  </div>
+</div>
+
+<!-- FORM SECTION -->
+<section class="section">
+  <div class="container">
+
+    <!-- Progress steps -->
+    <div style="display:flex;justify-content:center;gap:8px;margin-bottom:64px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="width:28px;height:28px;background:var(--black);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:800;">1</div>
+        <span style="font-size:0.78rem;font-weight:700;">Your Info</span>
+      </div>
+      <div style="width:40px;height:1px;background:var(--gray-border);align-self:center;"></div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="width:28px;height:28px;background:var(--black);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:800;">2</div>
+        <span style="font-size:0.78rem;font-weight:700;">Vehicle Choice</span>
+      </div>
+      <div style="width:40px;height:1px;background:var(--gray-border);align-self:center;"></div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="width:28px;height:28px;background:var(--black);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:800;">3</div>
+        <span style="font-size:0.78rem;font-weight:700;">Platform Details</span>
+      </div>
+      <div style="width:40px;height:1px;background:var(--gray-border);align-self:center;"></div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="width:28px;height:28px;background:var(--gray-border);color:#999;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:800;">4</div>
+        <span style="font-size:0.78rem;font-weight:700;color:#999;">Submit</span>
+      </div>
+    </div>
+
+    <div class="form-wrapper">
+
+      <!-- Success Message -->
+      <div class="form-success" id="form-success">
+        <div class="form-success__icon">🎉</div>
+        <h3>Application Received!</h3>
+        <p>Thanks for applying with DriveNow. We'll review your information and reach out within 24–48 hours at the phone number and email you provided.<br><br>In the meantime, feel free to browse our <a href="resources.html" style="text-decoration:underline;">resources page</a> or <a href="contact.html" style="text-decoration:underline;">contact us</a> with any questions.</p>
+        <a href="index.html" class="btn btn-primary" style="margin-top:28px;">Back to Home</a>
+      </div>
+
+      <form id="application-form" novalidate>
+
+        <!-- Section 1: Personal Info -->
+        <div class="form-section-title">Personal Information</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="first-name">First Name *</label>
+            <input type="text" id="first-name" name="first_name" placeholder="John" required>
+          </div>
+          <div class="form-group">
+            <label for="last-name">Last Name *</label>
+            <input type="text" id="last-name" name="last_name" placeholder="Smith" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="phone">Phone Number *</label>
+            <input type="tel" id="phone" name="phone" placeholder="(704) 555-0000" required>
+          </div>
+          <div class="form-group">
+            <label for="email">Email Address *</label>
+            <input type="email" id="email" name="email" placeholder="john@email.com" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="dob">Date of Birth *</label>
+            <input type="date" id="dob" name="dob" required>
+          </div>
+          <div class="form-group">
+            <label for="city">City *</label>
+            <input type="text" id="city" name="city" placeholder="Charlotte" required>
+          </div>
+        </div>
+
+        <!-- Section 2: License Info -->
+        <div class="form-section-title">Driver's License</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="license-number">License Number *</label>
+            <input type="text" id="license-number" name="license_number" placeholder="NC12345678" required>
+          </div>
+          <div class="form-group">
+            <label for="license-state">Issuing State *</label>
+            <select id="license-state" name="license_state" required>
+              <option value="">Select State</option>
+              <option value="NC" selected>North Carolina</option>
+              <option value="SC">South Carolina</option>
+              <option value="VA">Virginia</option>
+              <option value="GA">Georgia</option>
+              <option value="other">Other State</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="license-expiry">License Expiration Date *</label>
+            <input type="date" id="license-expiry" name="license_expiry" required>
+          </div>
+          <div class="form-group">
+            <label for="years-licensed">Years Licensed</label>
+            <select id="years-licensed" name="years_licensed">
+              <option value="">Select</option>
+              <option value="1">Less than 1 year</option>
+              <option value="1-3">1–3 years</option>
+              <option value="3-5">3–5 years</option>
+              <option value="5+">5+ years</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Section 3: Vehicle Preference -->
+        <div class="form-section-title">Vehicle Preference</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="vehicle-choice">Preferred Vehicle *</label>
+            <select id="vehicle-choice" name="vehicle_choice" required>
+              <option value="">Select a vehicle</option>
+              <option value="accord-2013">2013 Honda Accord LX — $380/wk</option>
+              <option value="camry-2014">2014 Toyota Camry SE — $370/wk</option>
+              <option value="accord-2015">2015 Honda Accord Sport — $420/wk</option>
+              <option value="camry-2012">2012 Toyota Camry LE — $350/wk</option>
+              <option value="accord-2011">2011 Honda Accord EX — $350/wk</option>
+              <option value="camry-2015">2015 Toyota Camry XSE — $450/wk</option>
+              <option value="any">No preference — any available</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="start-date">Desired Start Date *</label>
+            <input type="date" id="start-date" name="start_date" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="rental-duration">How long do you plan to rent?</label>
+          <select id="rental-duration" name="rental_duration">
+            <option value="">Select</option>
+            <option value="1-4wk">1–4 weeks</option>
+            <option value="1-3mo">1–3 months</option>
+            <option value="3-6mo">3–6 months</option>
+            <option value="6mo+">6+ months</option>
+            <option value="ongoing">Ongoing / indefinite</option>
+          </select>
+        </div>
+
+        <!-- Section 4: Platform Info -->
+        <div class="form-section-title">Gig Platform Details</div>
+        <div class="form-group">
+          <label for="platforms">Which platforms do you drive for? *</label>
+          <select id="platforms" name="platforms" required>
+            <option value="">Select primary platform</option>
+            <option value="uber">Uber</option>
+            <option value="lyft">Lyft</option>
+            <option value="doordash">DoorDash</option>
+            <option value="uber-lyft">Uber & Lyft</option>
+            <option value="multiple">Multiple platforms</option>
+            <option value="new">New — not yet active</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="avg-hours">Avg hours per week driving?</label>
+            <select id="avg-hours" name="avg_hours">
+              <option value="">Select</option>
+              <option value="under20">Under 20 hrs</option>
+              <option value="20-40">20–40 hrs</option>
+              <option value="40-60">40–60 hrs (full time)</option>
+              <option value="60+">60+ hrs</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="account-status">Account status on platform</label>
+            <select id="account-status" name="account_status">
+              <option value="">Select</option>
+              <option value="active">Active & in good standing</option>
+              <option value="new">Brand new account</option>
+              <option value="pending">Pending approval</option>
+              <option value="multiple">Multiple active accounts</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Section 5: Additional -->
+        <div class="form-section-title">Additional Information</div>
+        <div class="form-group">
+          <label for="accidents">Any accidents or violations in the past 3 years?</label>
+          <select id="accidents" name="accidents">
+            <option value="">Select</option>
+            <option value="none">None</option>
+            <option value="minor">Minor (1 ticket / fender bender)</option>
+            <option value="moderate">Moderate (2–3 incidents)</option>
+            <option value="major">Major incident</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="how-heard">How did you hear about DriveNow?</label>
+          <select id="how-heard" name="how_heard">
+            <option value="">Select</option>
+            <option value="google">Google Search</option>
+            <option value="referral">Friend / Referral</option>
+            <option value="social">Social Media</option>
+            <option value="rideshare-group">Rideshare Facebook Group</option>
+            <option value="flyer">Flyer / Handout</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="notes">Anything else you'd like us to know?</label>
+          <textarea id="notes" name="notes" placeholder="Questions, special requests, or anything that helps us match you with the right vehicle..."></textarea>
+        </div>
+
+        <!-- Agreements -->
+        <div class="form-section-title">Agreements</div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="agree-terms" required>
+          <label for="agree-terms">I confirm that all information provided is accurate and I understand a background check and driving record review may be required as part of the application process.</label>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="agree-contact">
+          <label for="agree-contact">I agree to be contacted by DriveNow via phone, text, and email regarding my application and rental options.</label>
+        </div>
+
+        <!-- Submit -->
+        <div class="form-submit">
+          <button type="submit" class="btn btn-primary btn-lg" style="width:100%;text-align:center;">Submit Application →</button>
+          <p class="form-note">By submitting, you agree to our terms. No payment is required at this stage.</p>
+        </div>
+
+      </form>
+    </div>
+
+    <!-- Side note -->
+    <div style="max-width:680px;margin:48px auto 0;display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">
+      <div style="text-align:center;padding:24px;background:var(--gray-light);border-radius:8px;">
+        <div style="font-size:1.5rem;margin-bottom:8px;">⚡</div>
+        <div style="font-weight:700;font-size:0.9rem;">Fast Approval</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;">24–48 hours</div>
+      </div>
+      <div style="text-align:center;padding:24px;background:var(--gray-light);border-radius:8px;">
+        <div style="font-size:1.5rem;margin-bottom:8px;">🔒</div>
+        <div style="font-weight:700;font-size:0.9rem;">Secure & Private</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;">Data never shared</div>
+      </div>
+      <div style="text-align:center;padding:24px;background:var(--gray-light);border-radius:8px;">
+        <div style="font-size:1.5rem;margin-bottom:8px;">📞</div>
+        <div style="font-weight:700;font-size:0.9rem;">Local Support</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;">(704) 777-7777</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer__inner">
+      <div class="footer__brand">
+        <a href="index.html" class="nav__logo">Drive<span>Now</span></a>
+        <p class="footer__tagline">Weekly rental cars for gig workers in Charlotte, NC.</p>
+      </div>
+      <div>
+        <div class="footer__col-title">Pages</div>
+        <div class="footer__links">
+          <a href="fleet.html">Fleet</a>
+          <a href="apply.html">Apply</a>
+          <a href="resources.html">Resources</a>
+          <a href="contact.html">Contact</a>
+        </div>
+      </div>
+      <div>
+        <div class="footer__col-title">Contact</div>
+        <div class="footer__links">
+          <a href="tel:7047777777">(704) 777-7777</a>
+          <a href="mailto:info@queencityrentals.com">info@queencityrentals.com</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <span>© 2024 DriveNow / Queen City Rentals. All rights reserved.</span>
+      <span>Charlotte, NC</span>
+    </div>
+  </div>
+</footer>
+
+<script src="js/main.js"></script>
+</body>
+</html>
