@@ -74,7 +74,8 @@ function render() {
   document.getElementById('info-block').innerHTML = `
     <div class="info-row"><div class="info-row__label">Address</div><div class="info-row__val">${app.address || '—'}</div></div>
     <div class="info-row"><div class="info-row__label">Occupation / Use</div><div class="info-row__val">${app.occupation || '—'} ${app.intended_use ? '/ ' + app.intended_use : ''}</div></div>
-    <div class="info-row"><div class="info-row__label">License Upload</div><div class="info-row__val">${app.license_path ? `<a href="/uploads/${app.license_path}" target="_blank">View File</a>` : 'Not provided'}</div></div>
+    <div class="info-row"><div class="info-row__label">License Number Entered</div><div class="info-row__val">${app.license_number || '—'} ${app.license_state ? `(${app.license_state})` : ''}</div></div>
+    <div class="info-row"><div class="info-row__label">License Upload</div><div class="info-row__val">${app.license_path ? `<a href="/uploads/${app.license_path}" target="_blank">View File — compare to number above</a>` : 'Not provided'}</div></div>
     <div class="info-row"><div class="info-row__label">Insurance Upload</div><div class="info-row__val">${app.insurance_path ? `<a href="/uploads/${app.insurance_path}" target="_blank">View File</a>` : 'Not provided'}</div></div>
     <div class="info-row"><div class="info-row__label">Status</div><div class="info-row__val"><span class="badge badge-${app.status}">${app.status}</span></div></div>
     ${app.rejection_reason ? `<div class="info-row"><div class="info-row__label">Rejection Reason</div><div class="info-row__val">${app.rejection_reason}</div></div>` : ''}

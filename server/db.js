@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS applications (
   address TEXT,
   occupation TEXT,
   intended_use TEXT,
+  license_number TEXT,
+  license_state TEXT,
   license_path TEXT,
   insurance_path TEXT,
   consent_background INTEGER DEFAULT 0,
@@ -104,6 +106,15 @@ CREATE TABLE IF NOT EXISTS messages_outbox (
   FOREIGN KEY (application_id) REFERENCES applications(id)
 );
 `);
+
+// Lightweight migration: add columns introduced after initial release
+const existingCols = db.prepare("PRAGMA table_info(applications)").all().map(c => c.name);
+if (!existingCols.includes('license_number')) {
+  db.exec('ALTER TABLE applications ADD COLUMN license_number TEXT');
+}
+if (!existingCols.includes('license_state')) {
+  db.exec('ALTER TABLE applications ADD COLUMN license_state TEXT');
+}
 
 // Seed owner account if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;

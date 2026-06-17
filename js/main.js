@@ -120,6 +120,8 @@ if (appForm) {
     formData.append('address', document.getElementById('address').value);
     formData.append('occupation', document.getElementById('platforms')?.value || '');
     formData.append('intended_use', document.getElementById('vehicle-choice')?.value || '');
+    formData.append('license_number', document.getElementById('license-number')?.value || '');
+    formData.append('license_state', document.getElementById('license-state')?.value || '');
     formData.append('consent_background', document.getElementById('agree-terms').checked ? 'true' : 'false');
     const licenseFile = document.getElementById('license-upload')?.files[0];
     const insuranceFile = document.getElementById('insurance-upload')?.files[0];
