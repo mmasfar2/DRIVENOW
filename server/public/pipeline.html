@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipeline — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<nav class="admin-nav">
+  <div class="admin-nav__logo">Drive<span>Now</span> Portal</div>
+  <div class="admin-nav__links">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="pipeline.html" class="active">Pipeline</a>
+    <span class="admin-nav__user" id="nav-user"></span>
+    <a href="#" class="btn btn-sm btn-outline" style="border-color:rgba(255,255,255,0.3);color:#fff;" onclick="logout()">Log Out</a>
+  </div>
+</nav>
+
+<div class="page">
+  <div class="page-title">Applications Pipeline</div>
+  <div class="page-sub">All customer applications across the 8-stage pipeline.</div>
+
+  <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+    <select id="filter-stage" class="filter-select" style="padding:10px 14px;border:1.5px solid #e0e0e0;border-radius:4px;font-family:inherit;">
+      <option value="">All Stages</option>
+      <option value="1">1. Customer Application</option>
+      <option value="2">2. Initial Screening</option>
+      <option value="3">3. Background Check</option>
+      <option value="4">4. Insurance Quote</option>
+      <option value="5">5. Quote Presentation</option>
+      <option value="6">6. Rental Agreement</option>
+      <option value="7">7. Invoice & Payment Sent</option>
+      <option value="8">8. Payment Verification</option>
+    </select>
+    <select id="filter-status" style="padding:10px 14px;border:1.5px solid #e0e0e0;border-radius:4px;font-family:inherit;">
+      <option value="">All Statuses</option>
+      <option value="active">Active</option>
+      <option value="rejected">Rejected</option>
+      <option value="completed">Completed</option>
+    </select>
+  </div>
+
+  <div class="panel" style="padding:0;overflow-x:auto;">
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Phone</th><th>Stage</th><th>Status</th><th>Applied</th></tr>
+      </thead>
+      <tbody id="app-table-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="js/admin-common.js"></script>
+<script>
+const STAGE_NAMES = ['', 'Customer Application', 'Initial Screening', 'Background Check', 'Insurance Quote', 'Quote Presentation', 'Rental Agreement', 'Invoice & Payment Sent', 'Payment Verification'];
+
+async function loadApplications() {
+  const stage = document.getElementById('filter-stage').value;
+  const status = document.getElementById('filter-status').value;
+  const params = new URLSearchParams();
+  if (stage) params.set('stage', stage);
+  if (status) params.set('status', status);
+  const apps = await api('/api/applications?' + params.toString());
+
+  document.getElementById('app-table-body').innerHTML = apps.length ? apps.map(a => `
+    <tr class="row-link" onclick="window.location.href='application.html?id=${a.id}'">
+      <td><strong>${a.first_name} ${a.last_name}</strong></td>
+      <td>${a.phone}</td>
+      <td>${a.stage}. ${STAGE_NAMES[a.stage]}</td>
+      <td><span class="badge badge-${a.status}">${a.status}</span></td>
+      <td>${fmtDate(a.created_at)}</td>
+    </tr>
+  `).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:32px;">No applications yet.</td></tr>';
+}
+
+(async () => {
+  await requireLogin();
+  document.getElementById('filter-stage').addEventListener('change', loadApplications);
+  document.getElementById('filter-status').addEventListener('change', loadApplications);
+  loadApplications();
+})();
+</script>
+</body>
+</html>

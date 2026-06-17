@@ -105,11 +105,41 @@ document.querySelectorAll('.faq-question').forEach(btn => {
 // ── Application Form ──
 const appForm = document.getElementById('application-form');
 if (appForm) {
-  appForm.addEventListener('submit', e => {
+  appForm.addEventListener('submit', async e => {
     e.preventDefault();
-    appForm.style.display = 'none';
-    document.getElementById('form-success').style.display = 'block';
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const submitBtn = appForm.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = 'Submitting…';
+    submitBtn.disabled = true;
+
+    const formData = new FormData();
+    formData.append('first_name', document.getElementById('first-name').value);
+    formData.append('last_name', document.getElementById('last-name').value);
+    formData.append('phone', document.getElementById('phone').value);
+    formData.append('email', document.getElementById('email').value);
+    formData.append('address', document.getElementById('address').value);
+    formData.append('occupation', document.getElementById('platforms')?.value || '');
+    formData.append('intended_use', document.getElementById('vehicle-choice')?.value || '');
+    formData.append('consent_background', document.getElementById('agree-terms').checked ? 'true' : 'false');
+    const licenseFile = document.getElementById('license-upload')?.files[0];
+    const insuranceFile = document.getElementById('insurance-upload')?.files[0];
+    if (licenseFile) formData.append('license', licenseFile);
+    if (insuranceFile) formData.append('insurance', insuranceFile);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/applications`, { method: 'POST', body: formData });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Submission failed');
+      }
+      appForm.style.display = 'none';
+      document.getElementById('form-success').style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      alert('There was a problem submitting your application: ' + err.message);
+      submitBtn.textContent = originalText;
+      submitBtn.disabled = false;
+    }
   });
 }
 

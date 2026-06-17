@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Application Detail — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<nav class="admin-nav">
+  <div class="admin-nav__logo">Drive<span>Now</span> Portal</div>
+  <div class="admin-nav__links">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="pipeline.html">Pipeline</a>
+    <span class="admin-nav__user" id="nav-user"></span>
+    <a href="#" class="btn btn-sm btn-outline" style="border-color:rgba(255,255,255,0.3);color:#fff;" onclick="logout()">Log Out</a>
+  </div>
+</nav>
+
+<div class="page">
+  <a href="pipeline.html" style="font-size:0.82rem;color:#888;">← Back to Pipeline</a>
+  <div class="page-title" id="applicant-name" style="margin-top:12px;">Loading…</div>
+  <div class="page-sub" id="applicant-meta"></div>
+
+  <div class="stage-tracker" id="stage-tracker"></div>
+
+  <div class="detail-grid">
+    <div>
+      <div class="panel">
+        <div class="panel-title">Applicant Info</div>
+        <div id="info-block"></div>
+      </div>
+
+      <div class="panel" id="action-panel">
+        <div class="panel-title">Action</div>
+        <div id="action-content"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Activity Log</div>
+      <div id="activity-list"></div>
+    </div>
+  </div>
+</div>
+
+<script src="js/admin-common.js"></script>
+<script>
+const id = new URLSearchParams(window.location.search).get('id');
+const STAGE_NAMES = ['', 'Customer Application', 'Initial Screening', 'Background Check', 'Insurance Quote', 'Quote Presentation', 'Rental Agreement', 'Invoice & Payment Sent', 'Payment Verification'];
+let app, vehicles;
+
+async function load() {
+  app = await api(`/api/applications/${id}`);
+  vehicles = await api('/api/vehicles');
+  render();
+}
+
+function render() {
+  document.getElementById('applicant-name').textContent = `${app.first_name} ${app.last_name}`;
+  document.getElementById('applicant-meta').textContent = `${app.phone} · ${app.email} · Applied ${fmtDate(app.created_at)}`;
+
+  document.getElementById('stage-tracker').innerHTML = STAGE_NAMES.slice(1).map((name, i) => {
+    const stageNum = i + 1;
+    let cls = 'stage-pill';
+    if (app.status === 'rejected' && stageNum >= app.stage) cls += '';
+    else if (stageNum < app.stage || app.status === 'completed') cls += ' done';
+    else if (stageNum === app.stage) cls += ' current';
+    return `<div class="${cls}">${stageNum}. ${name}</div>`;
+  }).join('');
+
+  document.getElementById('info-block').innerHTML = `
+    <div class="info-row"><div class="info-row__label">Address</div><div class="info-row__val">${app.address || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">Occupation / Use</div><div class="info-row__val">${app.occupation || '—'} ${app.intended_use ? '/ ' + app.intended_use : ''}</div></div>
+    <div class="info-row"><div class="info-row__label">License Upload</div><div class="info-row__val">${app.license_path ? `<a href="/uploads/${app.license_path}" target="_blank">View File</a>` : 'Not provided'}</div></div>
+    <div class="info-row"><div class="info-row__label">Insurance Upload</div><div class="info-row__val">${app.insurance_path ? `<a href="/uploads/${app.insurance_path}" target="_blank">View File</a>` : 'Not provided'}</div></div>
+    <div class="info-row"><div class="info-row__label">Status</div><div class="info-row__val"><span class="badge badge-${app.status}">${app.status}</span></div></div>
+    ${app.rejection_reason ? `<div class="info-row"><div class="info-row__label">Rejection Reason</div><div class="info-row__val">${app.rejection_reason}</div></div>` : ''}
+  `;
+
+  document.getElementById('activity-list').innerHTML = app.activity.length
+    ? app.activity.map(a => `<div class="activity-item"><div>${a.message}</div><div class="activity-item__time">${fmtDate(a.created_at)}</div></div>`).join('')
+    : '<p style="color:#888;font-size:0.85rem;">No activity yet.</p>';
+
+  renderActionPanel();
+}
+
+function renderActionPanel() {
+  const box = document.getElementById('action-content');
+  if (app.status === 'rejected') {
+    box.innerHTML = `<p style="color:#c62828;font-weight:600;">This application was rejected. No further action available.</p>`;
+    return;
+  }
+  if (app.status === 'completed') {
+    box.innerHTML = `<p style="color:#2e7d32;font-weight:600;">Pipeline complete — payment verified, vehicle reserved.</p>`;
+    return;
+  }
+
+  if (app.stage === 1) {
+    box.innerHTML = `<p style="color:#888;">Move this applicant into initial screening to begin review.</p>
+      <button class="btn" style="margin-top:12px;" onclick="advanceToScreening()">Begin Initial Screening →</button>`;
+  } else if (app.stage === 2) {
+    box.innerHTML = `
+      <div class="checkbox-row"><input type="checkbox" id="chk-license"><label for="chk-license">License is valid</label></div>
+      <div class="checkbox-row"><input type="checkbox" id="chk-age"><label for="chk-age">Meets minimum age requirement</label></div>
+      <div class="checkbox-row"><input type="checkbox" id="chk-address"><label for="chk-address">Address matches license</label></div>
+      <div class="checkbox-row"><input type="checkbox" id="chk-vehicle"><label for="chk-vehicle">Vehicle available for this applicant</label></div>
+      <div class="field"><label>Notes / Red Flags</label><textarea id="screening-notes" rows="2"></textarea></div>
+      <div style="display:flex;gap:10px;margin-top:12px;">
+        <button class="btn" onclick="submitScreening('pass')">Pass → Background Check</button>
+        <button class="btn btn-danger" onclick="rejectScreening()">Reject Application</button>
+      </div>`;
+  } else if (app.stage === 3) {
+    box.innerHTML = `
+      <div class="field"><label>Background Check Result</label>
+        <select id="bg-status">
+          <option value="approved">Approved</option>
+          <option value="conditional">Conditional Approval</option>
+          <option value="declined">Declined</option>
+        </select>
+      </div>
+      <div class="field"><label>Notes</label><textarea id="bg-notes" rows="2"></textarea></div>
+      <button class="btn" onclick="submitBackgroundCheck()">Submit Result</button>`;
+  } else if (app.stage === 4) {
+    box.innerHTML = `
+      <div class="field"><label>Insurance Quote Amount ($)</label><input type="number" id="insurance-amount" step="0.01"></div>
+      <div class="field"><label>Notes</label><textarea id="insurance-notes" rows="2"></textarea></div>
+      <button class="btn" onclick="submitInsuranceQuote()">Submit Quote</button>`;
+  } else if (app.stage === 5) {
+    box.innerHTML = `
+      <div class="field"><label>Assign Vehicle</label>
+        <select id="quote-vehicle">
+          <option value="">— Select vehicle —</option>
+          ${vehicles.map(v => `<option value="${v.id}" data-rate="${v.weekly_rate}">${v.year} ${v.make} ${v.model} — $${v.weekly_rate}/wk</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>Weekly Rental Rate ($)</label><input type="number" id="quote-weekly" step="0.01"></div>
+      <div class="field"><label>Total Due at Pickup ($)</label><input type="number" id="quote-total" step="0.01"></div>
+      <button class="btn" onclick="submitQuote()">Present Quote → Send Agreement</button>`;
+  } else if (app.stage === 6) {
+    const sent = !!app.agreement_sent_at;
+    box.innerHTML = sent
+      ? `<p style="color:#888;">Agreement sent ${fmtDate(app.agreement_sent_at)}. Waiting on customer signature.</p>
+         <button class="btn" style="margin-top:12px;" onclick="markSigned()">Mark as Signed →</button>`
+      : `<p style="color:#888;">Send the rental agreement for e-signature.</p>
+         <button class="btn" style="margin-top:12px;" onclick="sendAgreement()">Send Agreement</button>`;
+  } else if (app.stage === 7) {
+    box.innerHTML = `
+      <div class="field"><label>Invoice Amount ($)</label><input type="number" id="invoice-amount" step="0.01" value="${app.total_due_at_pickup || ''}"></div>
+      <button class="btn" onclick="sendInvoice()">Send Invoice</button>`;
+  } else if (app.stage === 8) {
+    box.innerHTML = `
+      <div class="field"><label>Payment Amount Received ($)</label><input type="number" id="payment-amount" step="0.01" value="${app.invoice_amount || ''}"></div>
+      <div class="field"><label>Pickup Date/Time</label><input type="datetime-local" id="pickup-time"></div>
+      <button class="btn" onclick="verifyPayment()">Verify Payment & Complete</button>`;
+  }
+}
+
+async function advanceToScreening() {
+  await api(`/api/applications/${id}`, { method: 'PATCH', body: JSON.stringify({}) });
+  app.stage = 2;
+  render();
+}
+async function submitScreening(decision) {
+  await api(`/api/applications/${id}/screening`, { method: 'POST', body: JSON.stringify({
+    license_valid: document.getElementById('chk-license').checked,
+    age_ok: document.getElementById('chk-age').checked,
+    address_match: document.getElementById('chk-address').checked,
+    vehicle_available: document.getElementById('chk-vehicle').checked,
+    notes: document.getElementById('screening-notes').value,
+    decision,
+  })});
+  load();
+}
+async function rejectScreening() {
+  const reason = prompt('Reason for rejection:');
+  if (reason === null) return;
+  await api(`/api/applications/${id}/screening`, { method: 'POST', body: JSON.stringify({
+    license_valid: document.getElementById('chk-license').checked,
+    age_ok: document.getElementById('chk-age').checked,
+    address_match: document.getElementById('chk-address').checked,
+    vehicle_available: document.getElementById('chk-vehicle').checked,
+    notes: document.getElementById('screening-notes').value,
+    decision: 'reject', rejection_reason: reason,
+  })});
+  load();
+}
+async function submitBackgroundCheck() {
+  await api(`/api/applications/${id}/background-check`, { method: 'POST', body: JSON.stringify({
+    background_status: document.getElementById('bg-status').value,
+    background_notes: document.getElementById('bg-notes').value,
+  })});
+  load();
+}
+async function submitInsuranceQuote() {
+  await api(`/api/applications/${id}/insurance-quote`, { method: 'POST', body: JSON.stringify({
+    insurance_quote_amount: document.getElementById('insurance-amount').value,
+    insurance_notes: document.getElementById('insurance-notes').value,
+  })});
+  load();
+}
+async function submitQuote() {
+  await api(`/api/applications/${id}/quote`, { method: 'POST', body: JSON.stringify({
+    assigned_vehicle_id: document.getElementById('quote-vehicle').value || null,
+    weekly_rate: document.getElementById('quote-weekly').value,
+    total_due_at_pickup: document.getElementById('quote-total').value,
+  })});
+  load();
+}
+async function sendAgreement() {
+  await api(`/api/applications/${id}/agreement/send`, { method: 'POST' });
+  load();
+}
+async function markSigned() {
+  await api(`/api/applications/${id}/agreement/signed`, { method: 'POST' });
+  load();
+}
+async function sendInvoice() {
+  await api(`/api/applications/${id}/invoice`, { method: 'POST', body: JSON.stringify({
+    invoice_amount: document.getElementById('invoice-amount').value,
+  })});
+  load();
+}
+async function verifyPayment() {
+  await api(`/api/applications/${id}/payment`, { method: 'POST', body: JSON.stringify({
+    payment_amount: document.getElementById('payment-amount').value,
+    pickup_scheduled_at: document.getElementById('pickup-time').value || null,
+  })});
+  load();
+}
+
+(async () => {
+  await requireLogin();
+  load();
+})();
+</script>
+</body>
+</html>
