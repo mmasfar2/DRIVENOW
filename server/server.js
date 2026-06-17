@@ -12,6 +12,8 @@ const dashboardRoutes = require('./routes/dashboard');
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+app.set('trust proxy', 1); // Render terminates TLS at its proxy; trust X-Forwarded-* so secure cookies work
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
