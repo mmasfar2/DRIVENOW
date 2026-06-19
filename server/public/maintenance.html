@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maintenance — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  .photo-thumb { width: 90px; height: 70px; object-fit: cover; border-radius: 4px; cursor: pointer; }
+  .photo-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+  .maint-row__details { display: none; background: var(--gray-light); padding: 16px; }
+  .maint-row__details.open { display: table-row; }
+  .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; z-index: 100; cursor: zoom-out; }
+  .lightbox.open { display: flex; }
+  .lightbox img { max-width: 90vw; max-height: 90vh; border-radius: 6px; }
+</style>
+</head>
+<body>
+
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
+<div class="page">
+  <div class="page-title">Maintenance</div>
+  <div class="page-sub">Service history and damage records for every vehicle in the fleet.</div>
+
+  <div class="panel">
+    <div class="panel-title">Log Maintenance / Damage Record</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div class="field"><label>Vehicle</label>
+        <select id="m-vehicle"></select>
+      </div>
+      <div class="field"><label>Date Performed</label><input type="date" id="m-date"></div>
+    </div>
+    <div class="field"><label>Description</label><input type="text" id="m-desc" placeholder="Oil change, brake pad replacement, bumper damage repair, etc."></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div class="field"><label>Cost ($)</label><input type="number" id="m-cost" step="0.01"></div>
+      <div class="field"><label>Photos (damage records, before/after, receipts)</label><input type="file" id="m-photos" accept="image/*" multiple></div>
+    </div>
+    <div class="field"><label>Notes</label><textarea id="m-notes" rows="2"></textarea></div>
+    <button class="btn" onclick="submitMaintenance()">Log Record</button>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Filter by Vehicle</div>
+    <select id="filter-vehicle" style="padding:10px 14px;border:1.5px solid #e0e0e0;border-radius:4px;font-family:inherit;">
+      <option value="">All Vehicles</option>
+    </select>
+  </div>
+
+  <div class="panel" style="padding:0;overflow-x:auto;">
+    <table>
+      <thead>
+        <tr><th>Vehicle</th><th>Date</th><th>Description</th><th>Cost</th><th>Photos</th><th></th></tr>
+      </thead>
+      <tbody id="maint-table-body"></tbody>
+    </table>
+  </div>
+</div>
+</div>
+</div>
+
+<div class="lightbox" id="lightbox" onclick="closeLightbox()"><img id="lightbox-img" src=""></div>
+
+<script src="js/admin-common.js"></script>
+<script>
+let vehicles = [];
+let records = [];
+
+function openLightbox(src) {
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+}
+
+async function loadVehicles() {
+  vehicles = await api('/api/vehicles');
+  const opts = vehicles.map(v => `<option value="${v.id}">${v.year} ${v.make} ${v.model}</option>`).join('');
+  document.getElementById('m-vehicle').innerHTML = opts;
+  document.getElementById('filter-vehicle').innerHTML = '<option value="">All Vehicles</option>' + opts;
+}
+
+async function loadRecords() {
+  const vehicleId = document.getElementById('filter-vehicle').value;
+  const params = vehicleId ? `?vehicle_id=${vehicleId}` : '';
+  records = await api('/api/maintenance' + params);
+  renderRecords();
+}
+
+function renderRecords() {
+  document.getElementById('maint-table-body').innerHTML = records.length ? records.map(r => `
+    <tr class="row-link" onclick="toggleDetails(${r.id})">
+      <td><strong>${r.year} ${r.make} ${r.model}</strong></td>
+      <td>${r.performed_at || '—'}</td>
+      <td>${r.description}</td>
+      <td>${r.cost ? '$' + r.cost : '—'}</td>
+      <td>${r.photo_count > 0 ? `${r.photo_count} photo${r.photo_count > 1 ? 's' : ''}` : '—'}</td>
+      <td><button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); deleteRecord(${r.id})">Delete</button></td>
+    </tr>
+    <tr id="details-${r.id}" style="display:none;"><td colspan="6" style="background:var(--gray-light);"><div id="details-content-${r.id}"></div></td></tr>
+  `).join('') : '<tr><td colspan="6" style="text-align:center;color:#888;padding:32px;">No maintenance records yet.</td></tr>';
+}
+
+async function toggleDetails(id) {
+  const row = document.getElementById(`details-${id}`);
+  const isOpen = row.style.display !== 'none';
+  if (isOpen) { row.style.display = 'none'; return; }
+
+  const full = await api(`/api/maintenance/${id}`);
+  document.getElementById(`details-content-${id}`).innerHTML = `
+    ${full.notes ? `<div style="margin-bottom:10px;"><strong>Notes:</strong> ${full.notes}</div>` : ''}
+    <div class="photo-row">
+      ${full.photos.length ? full.photos.map(p => `<img class="photo-thumb" src="/uploads/${p.photo_path}" onclick="openLightbox('/uploads/${p.photo_path}')">`).join('') : '<span style="color:#888;font-size:0.85rem;">No photos attached.</span>'}
+    </div>
+  `;
+  row.style.display = 'table-row';
+}
+
+async function submitMaintenance() {
+  const vehicle_id = document.getElementById('m-vehicle').value;
+  const description = document.getElementById('m-desc').value;
+  if (!vehicle_id || !description) { alert('Vehicle and description are required'); return; }
+
+  const formData = new FormData();
+  formData.append('vehicle_id', vehicle_id);
+  formData.append('description', description);
+  formData.append('cost', document.getElementById('m-cost').value);
+  formData.append('performed_at', document.getElementById('m-date').value);
+  formData.append('notes', document.getElementById('m-notes').value);
+  const photos = document.getElementById('m-photos').files;
+  for (const file of photos) formData.append('photos', file);
+
+  const res = await fetch('/api/maintenance', { method: 'POST', body: formData });
+  if (!res.ok) { alert('Failed to log maintenance record'); return; }
+
+  document.getElementById('m-desc').value = '';
+  document.getElementById('m-cost').value = '';
+  document.getElementById('m-date').value = '';
+  document.getElementById('m-notes').value = '';
+  document.getElementById('m-photos').value = '';
+  loadRecords();
+}
+
+async function deleteRecord(id) {
+  if (!confirm('Delete this maintenance record?')) return;
+  await api(`/api/maintenance/${id}`, { method: 'DELETE' });
+  loadRecords();
+}
+
+(async () => {
+  renderSidebar('maintenance');
+  await requireLogin();
+  await loadVehicles();
+  document.getElementById('filter-vehicle').addEventListener('change', loadRecords);
+  loadRecords();
+})();
+</script>
+</body>
+</html>

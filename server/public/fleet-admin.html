@@ -30,11 +30,12 @@
   <div class="panel" style="padding:0;overflow-x:auto;">
     <table>
       <thead>
-        <tr><th>Vehicle</th><th>Weekly Rate</th><th>Status</th><th>Notes</th><th></th></tr>
+        <tr><th>Photo</th><th>Vehicle</th><th>Weekly Rate</th><th>Status</th><th>Notes</th><th></th></tr>
       </thead>
       <tbody id="fleet-table-body"></tbody>
     </table>
   </div>
+  <p style="font-size:0.78rem;color:#888;margin-top:10px;">Photos uploaded here appear on the public website's Fleet page.</p>
 </div>
 </div>
 </div>
@@ -51,6 +52,14 @@ async function load() {
 function render() {
   document.getElementById('fleet-table-body').innerHTML = vehicles.length ? vehicles.map(v => `
     <tr>
+      <td>
+        <img src="${v.photo_path ? '/uploads/' + v.photo_path : ''}" alt=""
+          style="width:64px;height:48px;object-fit:cover;border-radius:4px;background:#eee;display:${v.photo_path ? 'block' : 'none'};">
+        <label class="btn btn-sm btn-outline" style="cursor:pointer;${v.photo_path ? 'margin-top:6px;' : ''}">
+          ${v.photo_path ? 'Replace' : 'Upload Photo'}
+          <input type="file" accept="image/*" style="display:none;" onchange="uploadPhoto(${v.id}, this)">
+        </label>
+      </td>
       <td><strong>${v.year} ${v.make} ${v.model}</strong></td>
       <td>$${v.weekly_rate}/wk</td>
       <td>
@@ -64,7 +73,17 @@ function render() {
       <td>${v.notes || '—'}</td>
       <td><button class="btn btn-sm btn-outline" onclick="removeVehicle(${v.id})">Remove</button></td>
     </tr>
-  `).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:32px;">No vehicles yet.</td></tr>';
+  `).join('') : '<tr><td colspan="6" style="text-align:center;color:#888;padding:32px;">No vehicles yet.</td></tr>';
+}
+
+async function uploadPhoto(id, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('photo', file);
+  const res = await fetch(`/api/vehicles/${id}/photo`, { method: 'POST', body: formData });
+  if (!res.ok) { alert('Photo upload failed'); return; }
+  load();
 }
 
 async function addVehicle() {

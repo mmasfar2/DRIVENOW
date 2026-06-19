@@ -2,6 +2,7 @@ const SIDEBAR_LINKS = [
   { key: 'leads', label: 'Leads', href: 'dashboard.html' },
   { key: 'automation', label: 'Automation', href: 'automation.html' },
   { key: 'fleet', label: 'Fleet Management', href: 'fleet-admin.html' },
+  { key: 'maintenance', label: 'Maintenance', href: 'maintenance.html' },
 ];
 
 function renderSidebar(activeKey) {

@@ -106,6 +106,26 @@ CREATE TABLE IF NOT EXISTS messages_outbox (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (application_id) REFERENCES applications(id)
 );
+
+CREATE TABLE IF NOT EXISTS vehicle_maintenance (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vehicle_id INTEGER NOT NULL,
+  description TEXT NOT NULL,
+  cost REAL,
+  performed_at TEXT,
+  notes TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
+);
+
+CREATE TABLE IF NOT EXISTS maintenance_photos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  maintenance_id INTEGER NOT NULL,
+  photo_path TEXT NOT NULL,
+  caption TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (maintenance_id) REFERENCES vehicle_maintenance(id)
+);
 `);
 
 // Lightweight migration: add columns introduced after initial release
@@ -115,6 +135,11 @@ if (!existingCols.includes('license_number')) {
 }
 if (!existingCols.includes('license_state')) {
   db.exec('ALTER TABLE applications ADD COLUMN license_state TEXT');
+}
+
+const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);
+if (!vehicleCols.includes('photo_path')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN photo_path TEXT');
 }
 
 // Seed owner account if no users exist

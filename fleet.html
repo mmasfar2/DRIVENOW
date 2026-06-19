@@ -53,6 +53,7 @@
       margin-bottom: 8px;
     }
   </style>
+  <script src="js/config.js"></script>
 </head>
 <body>
 
@@ -99,192 +100,8 @@
     </div>
 
     <div class="fleet-grid" id="fleet-grid">
-
-      <!-- Card 1 -->
-      <div class="fleet-card" data-type="accord" data-status="available">
-        <div class="slideshow">
-          <div class="slide active"><div class="slide-bg slide-1a"></div><div class="car-label"><span class="car-icon">🚗</span><span class="car-label-big">Accord</span><span class="car-label-sub">2013 · Black</span></div></div>
-          <div class="slide"><div class="slide-bg slide-1b"></div><div class="car-label"><span class="car-icon">⚙️</span><span class="car-label-big">2.4L</span><span class="car-label-sub">Engine · Auto Trans</span></div></div>
-          <div class="slide"><div class="slide-bg slide-1c"></div><div class="car-label"><span class="car-icon">⛽</span><span class="car-label-big">32 MPG</span><span class="car-label-sub">Highway Fuel Economy</span></div></div>
-          <button class="slide-arrow slide-arrow--prev">‹</button>
-          <button class="slide-arrow slide-arrow--next">›</button>
-          <div class="slide-nav">
-            <div class="slide-dot active"></div>
-            <div class="slide-dot"></div>
-            <div class="slide-dot"></div>
-          </div>
-        </div>
-        <div class="fleet-card__body">
-          <div class="fleet-card__make">Honda</div>
-          <div class="fleet-card__name">Accord LX — 2013</div>
-          <div class="fleet-card__features">
-            <span class="feature-tag">32 MPG</span>
-            <span class="feature-tag">Auto Trans</span>
-            <span class="feature-tag">Bluetooth</span>
-            <span class="feature-tag">Backup Cam</span>
-          </div>
-          <div style="font-size:0.8rem;color:#888;margin-bottom:16px;line-height:1.6;">Sedan · 4-door · Seats 5 · Uber/Lyft/DoorDash approved</div>
-          <div class="fleet-card__price-row">
-            <div class="price-weekly">$380 <span>/ week</span></div>
-            <div class="availability availability--open">Available</div>
-          </div>
-          <a href="apply.html" class="btn btn-primary" style="width:100%;text-align:center;margin-top:16px;display:block;">Apply for This Car</a>
-        </div>
-      </div>
-
-      <!-- Card 2 -->
-      <div class="fleet-card" data-type="camry" data-status="available">
-        <div class="slideshow">
-          <div class="slide active"><div class="slide-bg slide-2a"></div><div class="car-label"><span class="car-icon">🚘</span><span class="car-label-big">Camry</span><span class="car-label-sub">2014 · Silver</span></div></div>
-          <div class="slide"><div class="slide-bg slide-2b"></div><div class="car-label"><span class="car-icon">⚙️</span><span class="car-label-big">2.5L</span><span class="car-label-sub">Engine · Auto Trans</span></div></div>
-          <div class="slide"><div class="slide-bg slide-2c"></div><div class="car-label"><span class="car-icon">⛽</span><span class="car-label-big">33 MPG</span><span class="car-label-sub">Highway Fuel Economy</span></div></div>
-          <button class="slide-arrow slide-arrow--prev">‹</button>
-          <button class="slide-arrow slide-arrow--next">›</button>
-          <div class="slide-nav">
-            <div class="slide-dot active"></div>
-            <div class="slide-dot"></div>
-            <div class="slide-dot"></div>
-          </div>
-        </div>
-        <div class="fleet-card__body">
-          <div class="fleet-card__make">Toyota</div>
-          <div class="fleet-card__name">Camry SE — 2014</div>
-          <div class="fleet-card__features">
-            <span class="feature-tag">33 MPG</span>
-            <span class="feature-tag">Auto Trans</span>
-            <span class="feature-tag">Bluetooth</span>
-            <span class="feature-tag">USB</span>
-          </div>
-          <div style="font-size:0.8rem;color:#888;margin-bottom:16px;line-height:1.6;">Sedan · 4-door · Seats 5 · Uber/Lyft/DoorDash approved</div>
-          <div class="fleet-card__price-row">
-            <div class="price-weekly">$370 <span>/ week</span></div>
-            <div class="availability availability--open">Available</div>
-          </div>
-          <a href="apply.html" class="btn btn-primary" style="width:100%;text-align:center;margin-top:16px;display:block;">Apply for This Car</a>
-        </div>
-      </div>
-
-      <!-- Card 3 -->
-      <div class="fleet-card" data-type="accord" data-status="limited">
-        <div class="slideshow">
-          <div class="slide active"><div class="slide-bg slide-3a"></div><div class="car-label"><span class="car-icon">🚗</span><span class="car-label-big">Accord</span><span class="car-label-sub">2015 · White</span></div></div>
-          <div class="slide"><div class="slide-bg slide-3b"></div><div class="car-label"><span class="car-icon">⛽</span><span class="car-label-big">35 MPG</span><span class="car-label-sub">Highway Fuel Economy</span></div></div>
-          <button class="slide-arrow slide-arrow--prev">‹</button>
-          <button class="slide-arrow slide-arrow--next">›</button>
-          <div class="slide-nav">
-            <div class="slide-dot active"></div>
-            <div class="slide-dot"></div>
-          </div>
-        </div>
-        <div class="fleet-card__body">
-          <div class="fleet-card__make">Honda</div>
-          <div class="fleet-card__name">Accord Sport — 2015</div>
-          <div class="fleet-card__features">
-            <span class="feature-tag">35 MPG</span>
-            <span class="feature-tag">Sport Trim</span>
-            <span class="feature-tag">Apple CarPlay</span>
-            <span class="feature-tag">Backup Cam</span>
-          </div>
-          <div style="font-size:0.8rem;color:#888;margin-bottom:16px;line-height:1.6;">Sedan · 4-door · Seats 5 · Uber/Lyft/DoorDash approved</div>
-          <div class="fleet-card__price-row">
-            <div class="price-weekly">$420 <span>/ week</span></div>
-            <div class="availability availability--limited">1 Left</div>
-          </div>
-          <a href="apply.html" class="btn btn-primary" style="width:100%;text-align:center;margin-top:16px;display:block;">Apply for This Car</a>
-        </div>
-      </div>
-
-      <!-- Card 4 -->
-      <div class="fleet-card" data-type="camry" data-status="available">
-        <div class="slideshow">
-          <div class="slide active"><div class="slide-bg slide-4a"></div><div class="car-label"><span class="car-icon">🚘</span><span class="car-label-big">Camry</span><span class="car-label-sub">2012 · Dark Gray</span></div></div>
-          <div class="slide"><div class="slide-bg slide-4b"></div><div class="car-label"><span class="car-icon">⚙️</span><span class="car-label-big">2.5L</span><span class="car-label-sub">Engine · Auto Trans</span></div></div>
-          <div class="slide"><div class="slide-bg slide-4c"></div><div class="car-label"><span class="car-icon">⛽</span><span class="car-label-big">31 MPG</span><span class="car-label-sub">Highway Fuel Economy</span></div></div>
-          <button class="slide-arrow slide-arrow--prev">‹</button>
-          <button class="slide-arrow slide-arrow--next">›</button>
-          <div class="slide-nav">
-            <div class="slide-dot active"></div>
-            <div class="slide-dot"></div>
-            <div class="slide-dot"></div>
-          </div>
-        </div>
-        <div class="fleet-card__body">
-          <div class="fleet-card__make">Toyota</div>
-          <div class="fleet-card__name">Camry LE — 2012</div>
-          <div class="fleet-card__features">
-            <span class="feature-tag">31 MPG</span>
-            <span class="feature-tag">Auto Trans</span>
-            <span class="feature-tag">Bluetooth</span>
-          </div>
-          <div style="font-size:0.8rem;color:#888;margin-bottom:16px;line-height:1.6;">Sedan · 4-door · Seats 5 · Uber/Lyft/DoorDash approved</div>
-          <div class="fleet-card__price-row">
-            <div class="price-weekly">$350 <span>/ week</span></div>
-            <div class="availability availability--open">Available</div>
-          </div>
-          <a href="apply.html" class="btn btn-primary" style="width:100%;text-align:center;margin-top:16px;display:block;">Apply for This Car</a>
-        </div>
-      </div>
-
-      <!-- Card 5 -->
-      <div class="fleet-card" data-type="accord" data-status="available">
-        <div class="slideshow">
-          <div class="slide active"><div class="slide-bg slide-1b"></div><div class="car-label"><span class="car-icon">🚗</span><span class="car-label-big">Accord</span><span class="car-label-sub">2011 · Silver</span></div></div>
-          <div class="slide"><div class="slide-bg slide-1c"></div><div class="car-label"><span class="car-icon">⛽</span><span class="car-label-big">30 MPG</span><span class="car-label-sub">Highway Fuel Economy</span></div></div>
-          <button class="slide-arrow slide-arrow--prev">‹</button>
-          <button class="slide-arrow slide-arrow--next">›</button>
-          <div class="slide-nav">
-            <div class="slide-dot active"></div>
-            <div class="slide-dot"></div>
-          </div>
-        </div>
-        <div class="fleet-card__body">
-          <div class="fleet-card__make">Honda</div>
-          <div class="fleet-card__name">Accord EX — 2011</div>
-          <div class="fleet-card__features">
-            <span class="feature-tag">30 MPG</span>
-            <span class="feature-tag">Auto Trans</span>
-            <span class="feature-tag">Power Seats</span>
-          </div>
-          <div style="font-size:0.8rem;color:#888;margin-bottom:16px;line-height:1.6;">Sedan · 4-door · Seats 5 · Uber/Lyft/DoorDash approved</div>
-          <div class="fleet-card__price-row">
-            <div class="price-weekly">$350 <span>/ week</span></div>
-            <div class="availability availability--open">Available</div>
-          </div>
-          <a href="apply.html" class="btn btn-primary" style="width:100%;text-align:center;margin-top:16px;display:block;">Apply for This Car</a>
-        </div>
-      </div>
-
-      <!-- Card 6 -->
-      <div class="fleet-card" data-type="camry" data-status="limited">
-        <div class="slideshow">
-          <div class="slide active"><div class="slide-bg slide-2b"></div><div class="car-label"><span class="car-icon">🚘</span><span class="car-label-big">Camry</span><span class="car-label-sub">2015 · White</span></div></div>
-          <div class="slide"><div class="slide-bg slide-2c"></div><div class="car-label"><span class="car-icon">⛽</span><span class="car-label-big">35 MPG</span><span class="car-label-sub">Highway Fuel Economy</span></div></div>
-          <button class="slide-arrow slide-arrow--prev">‹</button>
-          <button class="slide-arrow slide-arrow--next">›</button>
-          <div class="slide-nav">
-            <div class="slide-dot active"></div>
-            <div class="slide-dot"></div>
-          </div>
-        </div>
-        <div class="fleet-card__body">
-          <div class="fleet-card__make">Toyota</div>
-          <div class="fleet-card__name">Camry XSE — 2015</div>
-          <div class="fleet-card__features">
-            <span class="feature-tag">35 MPG</span>
-            <span class="feature-tag">XSE Trim</span>
-            <span class="feature-tag">Bluetooth</span>
-            <span class="feature-tag">USB</span>
-          </div>
-          <div style="font-size:0.8rem;color:#888;margin-bottom:16px;line-height:1.6;">Sedan · 4-door · Seats 5 · Uber/Lyft/DoorDash approved</div>
-          <div class="fleet-card__price-row">
-            <div class="price-weekly">$450 <span>/ week</span></div>
-            <div class="availability availability--limited">1 Left</div>
-          </div>
-          <a href="apply.html" class="btn btn-primary" style="width:100%;text-align:center;margin-top:16px;display:block;">Apply for This Car</a>
-        </div>
-      </div>
-
-    </div><!-- /fleet-grid -->
+      <p style="color:#888;grid-column:1/-1;">Loading fleet…</p>
+    </div><!-- /fleet-grid (rendered dynamically from the live fleet, see script at bottom) -->
 
     <!-- All-app approved note -->
     <div style="margin-top:48px;background:var(--gray-light);border-radius:8px;padding:28px 36px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
@@ -353,19 +170,70 @@
 
 <script src="js/main.js"></script>
 <script>
-// Fleet filter
-document.querySelectorAll('.filter-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.filter-btn').forEach(b => { b.classList.remove('btn-primary'); b.classList.add('btn-outline'); });
-    btn.classList.add('btn-primary'); btn.classList.remove('btn-outline');
-    const filter = btn.dataset.filter;
-    document.querySelectorAll('.fleet-card').forEach(card => {
-      if (filter === 'all') { card.style.display = ''; return; }
-      if (filter === 'available') { card.style.display = card.dataset.status === 'available' ? '' : 'none'; return; }
-      card.style.display = card.dataset.type === filter ? '' : 'none';
+const STATUS_LABEL = {
+  available: { text: 'Available', cls: 'availability--open' },
+  reserved: { text: 'Reserved', cls: 'availability--limited' },
+  rented: { text: 'Rented', cls: 'availability--limited' },
+  maintenance: { text: 'In Service', cls: 'availability--limited' },
+};
+
+function vehicleType(v) {
+  const model = (v.model || '').toLowerCase();
+  if (model.includes('accord')) return 'accord';
+  if (model.includes('camry')) return 'camry';
+  return (v.make || '').toLowerCase();
+}
+
+function renderFleetCard(v) {
+  const status = STATUS_LABEL[v.status] || STATUS_LABEL.available;
+  const photoSlide = v.photo_path
+    ? `<div class="slide active" style="background-size:cover;background-position:center;background-image:url('${API_BASE_URL}/uploads/${v.photo_path}');"></div>`
+    : `<div class="slide active"><div class="slide-bg slide-1a"></div><div class="car-label"><span class="car-icon">🚗</span><span class="car-label-big">${v.make}</span><span class="car-label-sub">${v.year}</span></div></div>`;
+
+  return `
+    <div class="fleet-card" data-type="${vehicleType(v)}" data-status="${v.status === 'available' ? 'available' : 'limited'}">
+      <div class="slideshow">${photoSlide}</div>
+      <div class="fleet-card__body">
+        <div class="fleet-card__make">${v.make}</div>
+        <div class="fleet-card__name">${v.model} — ${v.year}</div>
+        <div style="font-size:0.8rem;color:#888;margin-bottom:16px;line-height:1.6;">Sedan · 4-door · Seats 5 · Uber/Lyft/DoorDash approved</div>
+        <div class="fleet-card__price-row">
+          <div class="price-weekly">$${v.weekly_rate} <span>/ week</span></div>
+          <div class="availability ${status.cls}">${status.text}</div>
+        </div>
+        <a href="apply.html" class="btn btn-primary" style="width:100%;text-align:center;margin-top:16px;display:block;">Apply for This Car</a>
+      </div>
+    </div>
+  `;
+}
+
+(async () => {
+  const grid = document.getElementById('fleet-grid');
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/vehicles/public`);
+    if (!res.ok) throw new Error('Failed to load fleet');
+    const vehicles = await res.json();
+    grid.innerHTML = vehicles.length
+      ? vehicles.map(renderFleetCard).join('')
+      : '<p style="color:#888;grid-column:1/-1;">No vehicles available right now — check back soon.</p>';
+  } catch (err) {
+    grid.innerHTML = '<p style="color:#888;grid-column:1/-1;">Unable to load the fleet right now. Please try again shortly.</p>';
+  }
+
+  // Fleet filter
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => { b.classList.remove('btn-primary'); b.classList.add('btn-outline'); });
+      btn.classList.add('btn-primary'); btn.classList.remove('btn-outline');
+      const filter = btn.dataset.filter;
+      document.querySelectorAll('.fleet-card').forEach(card => {
+        if (filter === 'all') { card.style.display = ''; return; }
+        if (filter === 'available') { card.style.display = card.dataset.status === 'available' ? '' : 'none'; return; }
+        card.style.display = card.dataset.type === filter ? '' : 'none';
+      });
     });
   });
-});
+})();
 </script>
 </body>
 </html>

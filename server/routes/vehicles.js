@@ -1,11 +1,37 @@
 const express = require('express');
-const { db, logActivity } = require('../db');
+const multer = require('multer');
+const { db } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { UPLOADS_DIR } = require('../paths');
 
 const router = express.Router();
 
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: UPLOADS_DIR,
+    filename: (req, file, cb) => cb(null, `${Date.now()}-vehicle-${file.originalname}`),
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
+
+// Public, unauthenticated — used by the marketing site to show fleet photos/pricing
+router.get('/public', (req, res) => {
+  const rows = db.prepare(`
+    SELECT id, make, model, year, weekly_rate, status, photo_path
+    FROM vehicles
+    ORDER BY created_at ASC
+  `).all();
+  res.json(rows);
+});
+
 router.get('/', requireAuth, (req, res) => {
   res.json(db.prepare('SELECT * FROM vehicles ORDER BY created_at DESC').all());
+});
+
+router.post('/:id/photo', requireAuth, upload.single('photo'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No photo uploaded' });
+  db.prepare('UPDATE vehicles SET photo_path = ? WHERE id = ?').run(req.file.filename, req.params.id);
+  res.json({ ok: true, photo_path: req.file.filename });
 });
 
 router.post('/', requireAuth, (req, res) => {

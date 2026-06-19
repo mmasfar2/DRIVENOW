@@ -13,6 +13,7 @@ const applicationRoutes = require('./routes/applications');
 const vehicleRoutes = require('./routes/vehicles');
 const dashboardRoutes = require('./routes/dashboard');
 const messageRoutes = require('./routes/messages');
+const maintenanceRoutes = require('./routes/maintenance');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -49,6 +50,7 @@ app.use('/api/applications', applicationRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/maintenance', maintenanceRoutes);
 
 app.use('/uploads', express.static(UPLOADS_DIR));
 app.use(express.static(path.join(__dirname, 'public')));
