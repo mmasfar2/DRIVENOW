@@ -1,14 +1,14 @@
 const express = require('express');
 const multer = require('multer');
-const path = require('path');
 const { db, logActivity, queueMessage } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { UPLOADS_DIR } = require('../paths');
 
 const router = express.Router();
 
 const upload = multer({
   storage: multer.diskStorage({
-    destination: path.join(__dirname, '..', 'uploads'),
+    destination: UPLOADS_DIR,
     filename: (req, file, cb) => {
       cb(null, `${Date.now()}-${file.fieldname}-${file.originalname}`);
     },

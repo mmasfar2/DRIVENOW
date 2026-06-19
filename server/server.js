@@ -1,8 +1,12 @@
 require('dotenv').config({ quiet: true });
 const express = require('express');
 const session = require('express-session');
+const fs = require('fs');
 const path = require('path');
+const { UPLOADS_DIR } = require('./paths');
 require('./db'); // initializes + seeds the database
+
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const authRoutes = require('./routes/auth');
 const applicationRoutes = require('./routes/applications');
@@ -46,7 +50,7 @@ app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/messages', messageRoutes);
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(UPLOADS_DIR));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/health', (req, res) => res.json({ ok: true, timestamp: new Date().toISOString() }));

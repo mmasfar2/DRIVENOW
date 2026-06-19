@@ -1,8 +1,9 @@
 const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 const path = require('path');
+const { DATA_DIR } = require('./paths');
 
-const db = new Database(path.join(__dirname, 'data.db'));
+const db = new Database(path.join(DATA_DIR, 'data.db'));
 db.pragma('journal_mode = WAL');
 
 db.exec(`
