@@ -61,7 +61,15 @@ function render() {
         </label>
       </td>
       <td><strong>${v.year} ${v.make} ${v.model}</strong></td>
-      <td>$${v.weekly_rate}/wk</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <span>$</span>
+          <input type="number" value="${v.weekly_rate}" style="width:80px;padding:6px 8px;border:1.5px solid #e0e0e0;border-radius:4px;"
+            onkeydown="if(event.key==='Enter') this.blur();"
+            onblur="updateRate(${v.id}, this.value, this)">
+          <span>/wk</span>
+        </div>
+      </td>
       <td>
         <select onchange="updateStatus(${v.id}, this.value)" style="padding:6px 10px;border:1.5px solid #e0e0e0;border-radius:4px;">
           <option value="available" ${v.status === 'available' ? 'selected' : ''}>Available</option>
@@ -97,6 +105,14 @@ async function addVehicle() {
   document.getElementById('new-model').value = '';
   document.getElementById('new-year').value = '';
   document.getElementById('new-rate').value = '';
+  load();
+}
+
+async function updateRate(id, weekly_rate, input) {
+  const v = vehicles.find(x => x.id === id);
+  if (!weekly_rate || isNaN(weekly_rate) || Number(weekly_rate) <= 0) { alert('Enter a valid weekly rate'); input.value = v.weekly_rate; return; }
+  if (Number(weekly_rate) === Number(v.weekly_rate)) return;
+  await api(`/api/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify({ weekly_rate: Number(weekly_rate) }) });
   load();
 }
 
