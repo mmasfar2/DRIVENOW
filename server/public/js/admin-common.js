@@ -3,6 +3,7 @@ const SIDEBAR_LINKS = [
   { key: 'automation', label: 'Automation', href: 'automation.html' },
   { key: 'fleet', label: 'Fleet Management', href: 'fleet-admin.html' },
   { key: 'maintenance', label: 'Maintenance', href: 'maintenance.html' },
+  { key: 'mysite', label: 'My Site', href: 'https://mmasfar2.github.io/drivenow/', external: true },
 ];
 
 function renderSidebar(activeKey) {
@@ -12,7 +13,7 @@ function renderSidebar(activeKey) {
     <div class="sidebar">
       <div class="sidebar__logo">Drive<span>Now</span></div>
       <div class="sidebar__nav">
-        ${SIDEBAR_LINKS.map(l => `<a href="${l.href}" class="${l.key === activeKey ? 'active' : ''}">${l.label}</a>`).join('')}
+        ${SIDEBAR_LINKS.map(l => `<a href="${l.href}" class="${l.key === activeKey ? 'active' : ''}"${l.external ? ' target="_blank" rel="noopener"' : ''}>${l.label}${l.external ? ' ↗' : ''}</a>`).join('')}
       </div>
       <div class="sidebar__footer">
         <div class="sidebar__user" id="nav-user"></div>
