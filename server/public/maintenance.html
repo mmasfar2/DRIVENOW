@@ -49,6 +49,18 @@
     </select>
   </div>
 
+  <div class="panel" style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;">
+    <div>
+      <div style="font-size:0.78rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#888;">Total Expense</div>
+      <div id="total-expense" style="font-size:1.8rem;font-weight:800;">$0</div>
+    </div>
+    <div style="color:#bbb;">·</div>
+    <div>
+      <div style="font-size:0.78rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#888;">Records</div>
+      <div id="total-count" style="font-size:1.8rem;font-weight:800;">0</div>
+    </div>
+  </div>
+
   <div class="panel" style="padding:0;overflow-x:auto;">
     <table>
       <thead>
@@ -90,7 +102,14 @@ async function loadRecords() {
   renderRecords();
 }
 
+function renderTotals() {
+  const total = records.reduce((sum, r) => sum + (Number(r.cost) || 0), 0);
+  document.getElementById('total-expense').textContent = '$' + total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  document.getElementById('total-count').textContent = records.length;
+}
+
 function renderRecords() {
+  renderTotals();
   document.getElementById('maint-table-body').innerHTML = records.length ? records.map(r => `
     <tr class="row-link" onclick="toggleDetails(${r.id})">
       <td><strong>${r.year} ${r.make} ${r.model}</strong></td>
