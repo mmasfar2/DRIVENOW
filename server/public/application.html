@@ -9,16 +9,9 @@
 </head>
 <body>
 
-<nav class="admin-nav">
-  <div class="admin-nav__logo">Drive<span>Now</span> Portal</div>
-  <div class="admin-nav__links">
-    <a href="dashboard.html">Dashboard</a>
-    <a href="pipeline.html">Pipeline</a>
-    <span class="admin-nav__user" id="nav-user"></span>
-    <a href="#" class="btn btn-sm btn-outline" style="border-color:rgba(255,255,255,0.3);color:#fff;" onclick="logout()">Log Out</a>
-  </div>
-</nav>
-
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
 <div class="page">
   <a href="pipeline.html" style="font-size:0.82rem;color:#888;">← Back to Pipeline</a>
   <div class="page-title" id="applicant-name" style="margin-top:12px;">Loading…</div>
@@ -44,6 +37,8 @@
       <div id="activity-list"></div>
     </div>
   </div>
+</div>
+</div>
 </div>
 
 <script src="js/admin-common.js"></script>
@@ -233,6 +228,7 @@ async function verifyPayment() {
 }
 
 (async () => {
+  renderSidebar('leads');
   await requireLogin();
   load();
 })();

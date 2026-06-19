@@ -8,6 +8,7 @@ const authRoutes = require('./routes/auth');
 const applicationRoutes = require('./routes/applications');
 const vehicleRoutes = require('./routes/vehicles');
 const dashboardRoutes = require('./routes/dashboard');
+const messageRoutes = require('./routes/messages');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -43,6 +44,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/messages', messageRoutes);
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.static(path.join(__dirname, 'public')));

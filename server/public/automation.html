@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Automation — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
+<div class="page">
+  <div class="page-title">Automation</div>
+  <div class="page-sub">SMS &amp; email notifications triggered automatically as applicants move through the pipeline.</div>
+
+  <div class="panel" style="background:#fff3e0;border-color:#ffe0b2;">
+    <strong>Status: Stubbed</strong> — messages below are logged but not actually sent yet. Real Twilio (SMS) and SendGrid (email) delivery is a planned upgrade; for now this is a record of what <em>would</em> have gone out.
+  </div>
+
+  <div class="cards-row" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="stat-card"><div class="stat-card__label">Total Queued</div><div class="stat-card__value" id="stat-total">—</div></div>
+    <div class="stat-card"><div class="stat-card__label">SMS</div><div class="stat-card__value" id="stat-sms">—</div></div>
+    <div class="stat-card"><div class="stat-card__label">Email</div><div class="stat-card__value" id="stat-email">—</div></div>
+  </div>
+
+  <div class="panel" style="padding:0;overflow-x:auto;">
+    <table>
+      <thead>
+        <tr><th>Applicant</th><th>Channel</th><th>To</th><th>Message</th><th>Status</th><th>Queued</th></tr>
+      </thead>
+      <tbody id="msg-table-body"></tbody>
+    </table>
+  </div>
+</div>
+</div>
+</div>
+
+<script src="js/admin-common.js"></script>
+<script>
+(async () => {
+  renderSidebar('automation');
+  await requireLogin();
+  const messages = await api('/api/messages');
+
+  document.getElementById('stat-total').textContent = messages.length;
+  document.getElementById('stat-sms').textContent = messages.filter(m => m.channel === 'sms').length;
+  document.getElementById('stat-email').textContent = messages.filter(m => m.channel === 'email').length;
+
+  document.getElementById('msg-table-body').innerHTML = messages.length ? messages.map(m => `
+    <tr>
+      <td>${m.first_name ? `${m.first_name} ${m.last_name}` : '—'}</td>
+      <td>${m.channel.toUpperCase()}</td>
+      <td>${m.to_value || '—'}</td>
+      <td style="max-width:340px;">${m.body}</td>
+      <td><span class="badge badge-active">${m.status}</span></td>
+      <td>${fmtDate(m.created_at)}</td>
+    </tr>
+  `).join('') : '<tr><td colspan="6" style="text-align:center;color:#888;padding:32px;">No messages yet.</td></tr>';
+})();
+</script>
+</body>
+</html>

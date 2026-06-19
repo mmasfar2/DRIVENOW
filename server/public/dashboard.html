@@ -9,19 +9,12 @@
 </head>
 <body>
 
-<nav class="admin-nav">
-  <div class="admin-nav__logo">Drive<span>Now</span> Portal</div>
-  <div class="admin-nav__links">
-    <a href="dashboard.html" class="active">Dashboard</a>
-    <a href="pipeline.html">Pipeline</a>
-    <span class="admin-nav__user" id="nav-user"></span>
-    <a href="#" class="btn btn-sm btn-outline" style="border-color:rgba(255,255,255,0.3);color:#fff;" onclick="logout()">Log Out</a>
-  </div>
-</nav>
-
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
 <div class="page">
-  <div class="page-title">Dashboard</div>
-  <div class="page-sub">Live overview of your pipeline, revenue, and fleet.</div>
+  <div class="page-title">Leads</div>
+  <div class="page-sub">Live overview of your pipeline, revenue, and fleet. <a href="pipeline.html" style="text-decoration:underline;">View full applications list →</a></div>
 
   <div class="cards-row" id="stat-cards">
     <div class="stat-card"><div class="stat-card__label">Total Applications</div><div class="stat-card__value" id="stat-total">—</div></div>
@@ -52,10 +45,13 @@
     </div>
   </div>
 </div>
+</div>
+</div>
 
 <script src="js/admin-common.js"></script>
 <script>
 (async () => {
+  renderSidebar('leads');
   await requireLogin();
   const data = await api('/api/dashboard/summary');
 

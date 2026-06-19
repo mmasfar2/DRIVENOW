@@ -9,18 +9,12 @@
 </head>
 <body>
 
-<nav class="admin-nav">
-  <div class="admin-nav__logo">Drive<span>Now</span> Portal</div>
-  <div class="admin-nav__links">
-    <a href="dashboard.html">Dashboard</a>
-    <a href="pipeline.html" class="active">Pipeline</a>
-    <span class="admin-nav__user" id="nav-user"></span>
-    <a href="#" class="btn btn-sm btn-outline" style="border-color:rgba(255,255,255,0.3);color:#fff;" onclick="logout()">Log Out</a>
-  </div>
-</nav>
-
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
 <div class="page">
-  <div class="page-title">Applications Pipeline</div>
+  <a href="dashboard.html" style="font-size:0.82rem;color:#888;">← Back to Leads</a>
+  <div class="page-title" style="margin-top:12px;">Applications Pipeline</div>
   <div class="page-sub">All customer applications across the 8-stage pipeline.</div>
 
   <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
@@ -52,6 +46,8 @@
     </table>
   </div>
 </div>
+</div>
+</div>
 
 <script src="js/admin-common.js"></script>
 <script>
@@ -77,6 +73,7 @@ async function loadApplications() {
 }
 
 (async () => {
+  renderSidebar('leads');
   await requireLogin();
   document.getElementById('filter-stage').addEventListener('change', loadApplications);
   document.getElementById('filter-status').addEventListener('change', loadApplications);

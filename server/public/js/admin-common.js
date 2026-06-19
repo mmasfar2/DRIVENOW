@@ -1,3 +1,26 @@
+const SIDEBAR_LINKS = [
+  { key: 'leads', label: 'Leads', href: 'dashboard.html' },
+  { key: 'automation', label: 'Automation', href: 'automation.html' },
+  { key: 'fleet', label: 'Fleet Management', href: 'fleet-admin.html' },
+];
+
+function renderSidebar(activeKey) {
+  const root = document.getElementById('sidebar-root');
+  if (!root) return;
+  root.innerHTML = `
+    <div class="sidebar">
+      <div class="sidebar__logo">Drive<span>Now</span></div>
+      <div class="sidebar__nav">
+        ${SIDEBAR_LINKS.map(l => `<a href="${l.href}" class="${l.key === activeKey ? 'active' : ''}">${l.label}</a>`).join('')}
+      </div>
+      <div class="sidebar__footer">
+        <div class="sidebar__user" id="nav-user"></div>
+        <a href="#" class="btn btn-sm btn-outline btn-block" style="border-color:rgba(255,255,255,0.3);color:#fff;" onclick="logout()">Log Out</a>
+      </div>
+    </div>
+  `;
+}
+
 async function requireLogin() {
   try {
     const res = await fetch('/api/auth/me');

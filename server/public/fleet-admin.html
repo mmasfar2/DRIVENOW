@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fleet Management — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
+<div class="page">
+  <div class="page-title">Fleet Management</div>
+  <div class="page-sub">Vehicles available for assignment to approved applicants.</div>
+
+  <div class="panel">
+    <div class="panel-title">Add Vehicle</div>
+    <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:10px;align-items:end;">
+      <div class="field" style="margin-bottom:0;"><label>Make</label><input id="new-make" placeholder="Honda"></div>
+      <div class="field" style="margin-bottom:0;"><label>Model</label><input id="new-model" placeholder="Accord LX"></div>
+      <div class="field" style="margin-bottom:0;"><label>Year</label><input id="new-year" type="number" placeholder="2015"></div>
+      <div class="field" style="margin-bottom:0;"><label>Weekly Rate ($)</label><input id="new-rate" type="number" placeholder="380"></div>
+      <button class="btn" style="height:46px;" onclick="addVehicle()">Add</button>
+    </div>
+  </div>
+
+  <div class="panel" style="padding:0;overflow-x:auto;">
+    <table>
+      <thead>
+        <tr><th>Vehicle</th><th>Weekly Rate</th><th>Status</th><th>Notes</th><th></th></tr>
+      </thead>
+      <tbody id="fleet-table-body"></tbody>
+    </table>
+  </div>
+</div>
+</div>
+</div>
+
+<script src="js/admin-common.js"></script>
+<script>
+let vehicles = [];
+
+async function load() {
+  vehicles = await api('/api/vehicles');
+  render();
+}
+
+function render() {
+  document.getElementById('fleet-table-body').innerHTML = vehicles.length ? vehicles.map(v => `
+    <tr>
+      <td><strong>${v.year} ${v.make} ${v.model}</strong></td>
+      <td>$${v.weekly_rate}/wk</td>
+      <td>
+        <select onchange="updateStatus(${v.id}, this.value)" style="padding:6px 10px;border:1.5px solid #e0e0e0;border-radius:4px;">
+          <option value="available" ${v.status === 'available' ? 'selected' : ''}>Available</option>
+          <option value="reserved" ${v.status === 'reserved' ? 'selected' : ''}>Reserved</option>
+          <option value="rented" ${v.status === 'rented' ? 'selected' : ''}>Rented</option>
+          <option value="maintenance" ${v.status === 'maintenance' ? 'selected' : ''}>Maintenance</option>
+        </select>
+      </td>
+      <td>${v.notes || '—'}</td>
+      <td><button class="btn btn-sm btn-outline" onclick="removeVehicle(${v.id})">Remove</button></td>
+    </tr>
+  `).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:32px;">No vehicles yet.</td></tr>';
+}
+
+async function addVehicle() {
+  const make = document.getElementById('new-make').value;
+  const model = document.getElementById('new-model').value;
+  const year = document.getElementById('new-year').value;
+  const weekly_rate = document.getElementById('new-rate').value;
+  if (!make || !model || !year || !weekly_rate) { alert('Fill in all fields'); return; }
+  await api('/api/vehicles', { method: 'POST', body: JSON.stringify({ make, model, year, weekly_rate }) });
+  document.getElementById('new-make').value = '';
+  document.getElementById('new-model').value = '';
+  document.getElementById('new-year').value = '';
+  document.getElementById('new-rate').value = '';
+  load();
+}
+
+async function updateStatus(id, status) {
+  await api(`/api/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+  load();
+}
+
+async function removeVehicle(id) {
+  if (!confirm('Remove this vehicle from the fleet?')) return;
+  await api(`/api/vehicles/${id}`, { method: 'DELETE' });
+  load();
+}
+
+(async () => {
+  renderSidebar('fleet');
+  await requireLogin();
+  load();
+})();
+</script>
+</body>
+</html>
