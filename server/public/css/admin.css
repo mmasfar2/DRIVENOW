@@ -119,3 +119,22 @@ tr:hover td { background: var(--gray-light); }
   .pipeline-row { grid-template-columns: repeat(4, 1fr); }
   .detail-grid { grid-template-columns: 1fr; }
 }
+
+/* Overview dashboard (iFleet-style) */
+.stat-card__sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; }
+.overview-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: start; }
+.chart-wrap { display: flex; align-items: flex-end; gap: 6px; height: 220px; padding-top: 10px; }
+.chart-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.chart-bar { width: 100%; max-width: 36px; background: var(--black); border-radius: 3px 3px 0 0; min-height: 2px; transition: height 0.3s; }
+.chart-bar-label { font-size: 0.65rem; color: var(--text-muted); margin-top: 6px; text-transform: uppercase; }
+.chart-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 220px; color: var(--text-muted); font-size: 0.85rem; }
+.fleet-status-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-radius: 6px; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem; }
+.fleet-status-row .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 10px; }
+.fleet-status-row.fs-available { background: #e8f5e9; } .fleet-status-row.fs-available .dot { background: #2e7d32; }
+.fleet-status-row.fs-rented { background: #e3f2fd; } .fleet-status-row.fs-rented .dot { background: #1565c0; }
+.fleet-status-row.fs-maintenance { background: #fff3e0; } .fleet-status-row.fs-maintenance .dot { background: #e65100; }
+.fleet-status-row.fs-reserved { background: #f3e5f5; } .fleet-status-row.fs-reserved .dot { background: #6a1b9a; }
+
+@media (max-width: 900px) {
+  .overview-grid { grid-template-columns: 1fr; }
+}
