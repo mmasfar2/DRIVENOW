@@ -92,6 +92,18 @@ router.get('/summary', requireAuth, (req, res) => {
     GROUP BY month ORDER BY month ASC
   `).all();
 
+  const overdueList = db.prepare(`
+    SELECT id, first_name, last_name, invoice_amount, invoice_sent_at FROM applications
+    WHERE payment_status = 'unpaid' AND invoice_sent_at IS NOT NULL AND invoice_sent_at <= datetime('now', '-7 days')
+    ORDER BY invoice_sent_at ASC LIMIT 5
+  `).all();
+
+  const pendingBookingsList = db.prepare(`
+    SELECT id, first_name, last_name, stage, pickup_scheduled_at FROM applications
+    WHERE status = 'active' AND stage >= 6
+    ORDER BY updated_at DESC LIMIT 5
+  `).all();
+
   res.json({
     pipeline,
     revenue: { totalRevenue, pendingInvoices, paidThisWeek },
@@ -101,9 +113,9 @@ router.get('/summary', requireAuth, (req, res) => {
     overview: {
       totalVehicles, availableVehicles, rentedVehicles, utilizationRate,
       revenueThisMonth,
-      overdueCount: overdue.c, overdueBalance: overdue.total,
+      overdueCount: overdue.c, overdueBalance: overdue.total, overdueList,
       customers, newCustomersThisMonth,
-      activeBookings,
+      activeBookings, pendingBookingsList,
       maintenanceCostThisMonth, maintenanceCostLastMonth,
       monthlyRevenue,
     },

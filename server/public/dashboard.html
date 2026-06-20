@@ -18,51 +18,81 @@
 
   <div class="cards-row" id="overview-cards-1">
     <div class="stat-card">
-      <div class="stat-card__top"><div class="stat-card__label">Total Vehicles</div><div class="stat-card__icon">🚗</div></div>
+      <div class="stat-card__top"><div class="stat-card__label">Total Vehicles</div><div class="stat-card__icon icon-blue" id="icon-car"></div></div>
       <div class="stat-card__value" id="ov-total-vehicles">—</div><div class="stat-card__sub" id="ov-available-sub"></div>
     </div>
     <div class="stat-card">
-      <div class="stat-card__top"><div class="stat-card__label">Rented Cars</div><div class="stat-card__icon">📈</div></div>
+      <div class="stat-card__top"><div class="stat-card__label">Rented Cars</div><div class="stat-card__icon icon-purple" id="icon-trending"></div></div>
       <div class="stat-card__value" id="ov-rented">—</div><div class="stat-card__sub" id="ov-utilization-sub"></div>
     </div>
     <div class="stat-card">
-      <div class="stat-card__top"><div class="stat-card__label">Revenue Earned</div><div class="stat-card__icon">💲</div></div>
+      <div class="stat-card__top"><div class="stat-card__label">Revenue Earned</div><div class="stat-card__icon icon-green" id="icon-dollar"></div></div>
       <div class="stat-card__value green" id="ov-revenue">—</div><div class="stat-card__sub">this month, resets monthly</div>
     </div>
     <div class="stat-card">
-      <div class="stat-card__top"><div class="stat-card__label">Overdue Balance</div><div class="stat-card__icon">⚠️</div></div>
+      <div class="stat-card__top"><div class="stat-card__label">Overdue Balance</div><div class="stat-card__icon icon-red" id="icon-alert"></div></div>
       <div class="stat-card__value orange" id="ov-overdue">—</div><div class="stat-card__sub" id="ov-overdue-sub"></div>
     </div>
   </div>
 
   <div class="cards-row" id="overview-cards-2">
     <div class="stat-card">
-      <div class="stat-card__top"><div class="stat-card__label">Utilization Rate</div><div class="stat-card__icon">⏱️</div></div>
+      <div class="stat-card__top"><div class="stat-card__label">Utilization Rate</div><div class="stat-card__icon icon-blue" id="icon-clock"></div></div>
       <div class="stat-card__value" id="ov-util-rate">—</div><div class="stat-card__sub" id="ov-util-sub"></div>
     </div>
     <div class="stat-card">
-      <div class="stat-card__top"><div class="stat-card__label">Customers</div><div class="stat-card__icon">👥</div></div>
+      <div class="stat-card__top"><div class="stat-card__label">Customers</div><div class="stat-card__icon icon-purple" id="icon-users"></div></div>
       <div class="stat-card__value" id="ov-customers">—</div><div class="stat-card__sub" id="ov-customers-sub"></div>
     </div>
     <div class="stat-card">
-      <div class="stat-card__top"><div class="stat-card__label">Active Bookings</div><div class="stat-card__icon">📅</div></div>
+      <div class="stat-card__top"><div class="stat-card__label">Active Bookings</div><div class="stat-card__icon icon-green" id="icon-calendar"></div></div>
       <div class="stat-card__value" id="ov-bookings">—</div><div class="stat-card__sub">pending pickup or final payment</div>
     </div>
     <div class="stat-card">
-      <div class="stat-card__top"><div class="stat-card__label">Maintenance Cost</div><div class="stat-card__icon">🔧</div></div>
+      <div class="stat-card__top"><div class="stat-card__label">Maintenance Cost</div><div class="stat-card__icon icon-orange" id="icon-wrench"></div></div>
       <div class="stat-card__value orange" id="ov-maint-cost">—</div><div class="stat-card__sub" id="ov-maint-sub"></div>
     </div>
   </div>
 
   <div class="overview-grid">
     <div class="panel">
-      <div class="panel-title">Monthly Revenue <span style="color:var(--text-muted);font-weight:400;font-size:0.85rem;">— Last 12 months</span></div>
+      <div class="panel-title"><div class="panel-title__left" id="title-trending">Monthly Revenue <span style="color:var(--text-muted);font-weight:400;font-size:0.85rem;">— Last 12 months</span></div></div>
       <div id="revenue-chart"></div>
     </div>
     <div class="panel">
-      <div class="panel-title">Fleet Status</div>
+      <div class="panel-title"><div class="panel-title__left" id="title-car">Fleet Status</div></div>
       <div id="fleet-status"></div>
+      <div class="info-row" style="border-top:2px solid var(--gray-border);margin-top:8px;padding-top:14px;">
+        <div class="info-row__label">Utilization</div>
+        <div class="info-row__val" id="fleet-utilization">—</div>
+      </div>
     </div>
+  </div>
+
+  <div class="split-grid">
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title__left" id="title-alert">Overdue Payments</div><a href="pipeline.html" class="panel-title__view-all">View all</a></div>
+      <div id="overdue-list"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title__left" id="title-calendar">Pending Bookings</div><a href="pipeline.html" class="panel-title__view-all">View all</a></div>
+      <div id="pending-list"></div>
+    </div>
+  </div>
+
+  <div class="action-tiles">
+    <a href="fleet-admin.html" class="action-tile">
+      <div class="action-tile__icon icon-blue" id="tile-car"></div>
+      <div><div class="action-tile__title">Add a Vehicle</div><div class="action-tile__sub">Expand your fleet</div></div>
+    </a>
+    <a href="https://mmasfar2.github.io/drivenow/" target="_blank" rel="noopener" class="action-tile">
+      <div class="action-tile__icon icon-green" id="tile-rocket"></div>
+      <div><div class="action-tile__title">Launch Your Site</div><div class="action-tile__sub">View your live booking page</div></div>
+    </a>
+    <a href="leads.html" class="action-tile">
+      <div class="action-tile__icon icon-purple" id="tile-users"></div>
+      <div><div class="action-tile__title">View Customers</div><div class="action-tile__sub">Leads & history</div></div>
+    </a>
   </div>
 </div>
 </div>
@@ -80,6 +110,22 @@ function monthLabel(ym) {
   await requireLogin();
   const data = await api('/api/dashboard/summary');
   const ov = data.overview;
+
+  document.getElementById('icon-car').innerHTML = icon('car');
+  document.getElementById('icon-trending').innerHTML = icon('trending');
+  document.getElementById('icon-dollar').innerHTML = icon('dollar');
+  document.getElementById('icon-alert').innerHTML = icon('alert');
+  document.getElementById('icon-clock').innerHTML = icon('clock');
+  document.getElementById('icon-users').innerHTML = icon('users');
+  document.getElementById('icon-calendar').innerHTML = icon('calendar');
+  document.getElementById('icon-wrench').innerHTML = icon('wrench');
+  document.getElementById('title-trending').insertAdjacentHTML('afterbegin', icon('trending', 16));
+  document.getElementById('title-car').insertAdjacentHTML('afterbegin', icon('car', 16));
+  document.getElementById('title-alert').insertAdjacentHTML('afterbegin', icon('alert', 16));
+  document.getElementById('title-calendar').insertAdjacentHTML('afterbegin', icon('calendar', 16));
+  document.getElementById('tile-car').innerHTML = icon('car', 20);
+  document.getElementById('tile-rocket').innerHTML = icon('rocket', 20);
+  document.getElementById('tile-users').innerHTML = icon('users', 20);
 
   document.getElementById('ov-total-vehicles').textContent = ov.totalVehicles;
   document.getElementById('ov-available-sub').textContent = `${ov.availableVehicles} available`;
@@ -100,7 +146,7 @@ function monthLabel(ym) {
 
   const chartEl = document.getElementById('revenue-chart');
   if (ov.monthlyRevenue.length === 0) {
-    chartEl.innerHTML = '<div class="chart-empty">No revenue data yet</div>';
+    chartEl.innerHTML = `<div class="empty-state">${icon('trending', 32)}<span>No revenue data yet</span></div>`;
   } else {
     const max = Math.max(...ov.monthlyRevenue.map(m => m.total), 1);
     chartEl.innerHTML = `<div class="chart-wrap">${ov.monthlyRevenue.map(m => `
@@ -120,6 +166,25 @@ function monthLabel(ym) {
         </div>
       `).join('')
     : '<p style="color:#888;font-size:0.85rem;">No vehicles yet.</p>';
+  document.getElementById('fleet-utilization').textContent = `${ov.utilizationRate}%`;
+
+  document.getElementById('overdue-list').innerHTML = ov.overdueList.length
+    ? ov.overdueList.map(o => `
+        <div class="list-item">
+          <div>${o.first_name} ${o.last_name}<div class="list-item__sub">Invoiced ${fmtDate(o.invoice_sent_at)}</div></div>
+          <div style="font-weight:700;color:#c62828;">${fmtMoney(o.invoice_amount)}</div>
+        </div>
+      `).join('')
+    : `<div class="empty-state">${icon('alert', 32)}<span>No overdue rentals</span></div>`;
+
+  document.getElementById('pending-list').innerHTML = ov.pendingBookingsList.length
+    ? ov.pendingBookingsList.map(p => `
+        <div class="list-item">
+          <div>${p.first_name} ${p.last_name}<div class="list-item__sub">Stage ${p.stage} of 8</div></div>
+          <div>${p.pickup_scheduled_at ? fmtDate(p.pickup_scheduled_at) : '—'}</div>
+        </div>
+      `).join('')
+    : `<div class="empty-state">${icon('clock', 32)}<span>No pending bookings right now</span></div>`;
 })();
 </script>
 </body>
