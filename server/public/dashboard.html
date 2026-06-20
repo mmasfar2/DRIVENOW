@@ -80,14 +80,10 @@
     </div>
   </div>
 
-  <div class="action-tiles">
+  <div class="action-tiles" style="grid-template-columns:repeat(2,1fr);">
     <a href="fleet-admin.html" class="action-tile">
       <div class="action-tile__icon icon-blue" id="tile-car"></div>
       <div><div class="action-tile__title">Add a Vehicle</div><div class="action-tile__sub">Expand your fleet</div></div>
-    </a>
-    <a href="https://mmasfar2.github.io/drivenow/" target="_blank" rel="noopener" class="action-tile">
-      <div class="action-tile__icon icon-green" id="tile-rocket"></div>
-      <div><div class="action-tile__title">Launch Your Site</div><div class="action-tile__sub">View your live booking page</div></div>
     </a>
     <a href="leads.html" class="action-tile">
       <div class="action-tile__icon icon-purple" id="tile-users"></div>
@@ -124,7 +120,6 @@ function monthLabel(ym) {
   document.getElementById('title-alert').insertAdjacentHTML('afterbegin', icon('alert', 16));
   document.getElementById('title-calendar').insertAdjacentHTML('afterbegin', icon('calendar', 16));
   document.getElementById('tile-car').innerHTML = icon('car', 20);
-  document.getElementById('tile-rocket').innerHTML = icon('rocket', 20);
   document.getElementById('tile-users').innerHTML = icon('users', 20);
 
   document.getElementById('ov-total-vehicles').textContent = ov.totalVehicles;
@@ -157,15 +152,18 @@ function monthLabel(ym) {
     `).join('')}</div>`;
   }
 
-  const statusLabels = { available: 'Available', reserved: 'Reserved', rented: 'Rented', maintenance: 'Maintenance' };
-  document.getElementById('fleet-status').innerHTML = data.fleetStatus.length
-    ? data.fleetStatus.map(f => `
-        <div class="fleet-status-row fs-${f.status}">
-          <div><span class="dot"></span>${statusLabels[f.status] || f.status}</div>
-          <div>${f.count}</div>
-        </div>
-      `).join('')
-    : '<p style="color:#888;font-size:0.85rem;">No vehicles yet.</p>';
+  const statusLabels = { available: 'Available', rented: 'Rented', maintenance: 'Maintenance', inactive: 'Inactive' };
+  const statusCounts = {};
+  data.fleetStatus.forEach(f => {
+    const key = f.status === 'reserved' ? 'inactive' : f.status;
+    statusCounts[key] = (statusCounts[key] || 0) + f.count;
+  });
+  document.getElementById('fleet-status').innerHTML = ['available', 'rented', 'maintenance', 'inactive'].map(status => `
+    <div class="fleet-status-row fs-${status}">
+      <div><span class="dot"></span>${statusLabels[status]}</div>
+      <div>${statusCounts[status] || 0}</div>
+    </div>
+  `).join('');
   document.getElementById('fleet-utilization').textContent = `${ov.utilizationRate}%`;
 
   document.getElementById('overdue-list').innerHTML = ov.overdueList.length

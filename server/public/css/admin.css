@@ -143,7 +143,7 @@ tr:hover td { background: var(--gray-light); }
 .fleet-status-row.fs-available { background: #e8f5e9; } .fleet-status-row.fs-available .dot { background: #2e7d32; }
 .fleet-status-row.fs-rented { background: #e3f2fd; } .fleet-status-row.fs-rented .dot { background: #1565c0; }
 .fleet-status-row.fs-maintenance { background: #fff3e0; } .fleet-status-row.fs-maintenance .dot { background: #e65100; }
-.fleet-status-row.fs-reserved { background: #f3e5f5; } .fleet-status-row.fs-reserved .dot { background: #6a1b9a; }
+.fleet-status-row.fs-inactive { background: var(--gray-light); } .fleet-status-row.fs-inactive .dot { background: #888; }
 
 @media (max-width: 900px) {
   .overview-grid { grid-template-columns: 1fr; }
