@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leads — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
+<div class="page">
+  <div class="page-title">Leads</div>
+  <div class="page-sub">Live overview of your pipeline, revenue, and activity. <a href="pipeline.html" style="text-decoration:underline;">View full applications list →</a></div>
+
+  <div class="cards-row" id="stat-cards">
+    <div class="stat-card"><div class="stat-card__label">Total Applications</div><div class="stat-card__value" id="stat-total">—</div></div>
+    <div class="stat-card"><div class="stat-card__label">Active in Pipeline</div><div class="stat-card__value" id="stat-active">—</div></div>
+    <div class="stat-card"><div class="stat-card__label">Completed Rentals</div><div class="stat-card__value green" id="stat-completed">—</div></div>
+    <div class="stat-card"><div class="stat-card__label">Rejected</div><div class="stat-card__value orange" id="stat-rejected">—</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Pipeline Overview</div>
+    <div class="pipeline-row" id="pipeline-row"></div>
+  </div>
+
+  <div class="cards-row" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="stat-card"><div class="stat-card__label">Total Revenue Collected</div><div class="stat-card__value green" id="rev-total">—</div></div>
+    <div class="stat-card"><div class="stat-card__label">Pending Invoices</div><div class="stat-card__value orange" id="rev-pending">—</div></div>
+    <div class="stat-card"><div class="stat-card__label">Paid This Week</div><div class="stat-card__value green" id="rev-week">—</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Recent Activity</div>
+    <div id="activity-list"></div>
+  </div>
+</div>
+</div>
+</div>
+
+<script src="js/admin-common.js"></script>
+<script>
+(async () => {
+  renderSidebar('leads');
+  await requireLogin();
+  const data = await api('/api/dashboard/summary');
+
+  document.getElementById('stat-total').textContent = data.counts.totalApplications;
+  document.getElementById('stat-active').textContent = data.counts.activeApplications;
+  document.getElementById('stat-completed').textContent = data.counts.completedApplications;
+  document.getElementById('stat-rejected').textContent = data.counts.rejectedApplications;
+
+  document.getElementById('pipeline-row').innerHTML = data.pipeline.map(p => `
+    <div class="pipeline-col">
+      <div class="pipeline-col__num">${p.count}</div>
+      <div class="pipeline-col__name">${p.stage}. ${p.name}</div>
+    </div>
+  `).join('');
+
+  document.getElementById('rev-total').textContent = fmtMoney(data.revenue.totalRevenue);
+  document.getElementById('rev-pending').textContent = fmtMoney(data.revenue.pendingInvoices);
+  document.getElementById('rev-week').textContent = fmtMoney(data.revenue.paidThisWeek);
+
+  document.getElementById('activity-list').innerHTML = data.recentActivity.length
+    ? data.recentActivity.map(a => `
+        <div class="activity-item">
+          <div>${a.first_name ? `<strong>${a.first_name} ${a.last_name}</strong> — ` : ''}${a.message}</div>
+          <div class="activity-item__time">${fmtDate(a.created_at)}</div>
+        </div>
+      `).join('')
+    : '<p style="color:#888;font-size:0.85rem;">No activity yet.</p>';
+})();
+</script>
+</body>
+</html>

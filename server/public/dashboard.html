@@ -14,20 +14,44 @@
 <div class="main-content">
 <div class="page">
   <div class="page-title">Dashboard</div>
-  <div class="page-sub">Your fleet operations at a glance. <a href="pipeline.html" style="text-decoration:underline;">View full applications list →</a></div>
+  <div class="page-sub">Your fleet operations at a glance.</div>
 
   <div class="cards-row" id="overview-cards-1">
-    <div class="stat-card"><div class="stat-card__label">Total Vehicles</div><div class="stat-card__value" id="ov-total-vehicles">—</div><div class="stat-card__sub" id="ov-available-sub"></div></div>
-    <div class="stat-card"><div class="stat-card__label">Rented Cars</div><div class="stat-card__value" id="ov-rented">—</div><div class="stat-card__sub" id="ov-utilization-sub"></div></div>
-    <div class="stat-card"><div class="stat-card__label">Revenue Earned</div><div class="stat-card__value green" id="ov-revenue">—</div><div class="stat-card__sub">this month, resets monthly</div></div>
-    <div class="stat-card"><div class="stat-card__label">Overdue Balance</div><div class="stat-card__value orange" id="ov-overdue">—</div><div class="stat-card__sub" id="ov-overdue-sub"></div></div>
+    <div class="stat-card">
+      <div class="stat-card__top"><div class="stat-card__label">Total Vehicles</div><div class="stat-card__icon">🚗</div></div>
+      <div class="stat-card__value" id="ov-total-vehicles">—</div><div class="stat-card__sub" id="ov-available-sub"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__top"><div class="stat-card__label">Rented Cars</div><div class="stat-card__icon">📈</div></div>
+      <div class="stat-card__value" id="ov-rented">—</div><div class="stat-card__sub" id="ov-utilization-sub"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__top"><div class="stat-card__label">Revenue Earned</div><div class="stat-card__icon">💲</div></div>
+      <div class="stat-card__value green" id="ov-revenue">—</div><div class="stat-card__sub">this month, resets monthly</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__top"><div class="stat-card__label">Overdue Balance</div><div class="stat-card__icon">⚠️</div></div>
+      <div class="stat-card__value orange" id="ov-overdue">—</div><div class="stat-card__sub" id="ov-overdue-sub"></div>
+    </div>
   </div>
 
   <div class="cards-row" id="overview-cards-2">
-    <div class="stat-card"><div class="stat-card__label">Utilization Rate</div><div class="stat-card__value" id="ov-util-rate">—</div><div class="stat-card__sub" id="ov-util-sub"></div></div>
-    <div class="stat-card"><div class="stat-card__label">Customers</div><div class="stat-card__value" id="ov-customers">—</div><div class="stat-card__sub" id="ov-customers-sub"></div></div>
-    <div class="stat-card"><div class="stat-card__label">Active Bookings</div><div class="stat-card__value" id="ov-bookings">—</div><div class="stat-card__sub">pending pickup or final payment</div></div>
-    <div class="stat-card"><div class="stat-card__label">Maintenance Cost</div><div class="stat-card__value orange" id="ov-maint-cost">—</div><div class="stat-card__sub" id="ov-maint-sub"></div></div>
+    <div class="stat-card">
+      <div class="stat-card__top"><div class="stat-card__label">Utilization Rate</div><div class="stat-card__icon">⏱️</div></div>
+      <div class="stat-card__value" id="ov-util-rate">—</div><div class="stat-card__sub" id="ov-util-sub"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__top"><div class="stat-card__label">Customers</div><div class="stat-card__icon">👥</div></div>
+      <div class="stat-card__value" id="ov-customers">—</div><div class="stat-card__sub" id="ov-customers-sub"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__top"><div class="stat-card__label">Active Bookings</div><div class="stat-card__icon">📅</div></div>
+      <div class="stat-card__value" id="ov-bookings">—</div><div class="stat-card__sub">pending pickup or final payment</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__top"><div class="stat-card__label">Maintenance Cost</div><div class="stat-card__icon">🔧</div></div>
+      <div class="stat-card__value orange" id="ov-maint-cost">—</div><div class="stat-card__sub" id="ov-maint-sub"></div>
+    </div>
   </div>
 
   <div class="overview-grid">
@@ -38,31 +62,6 @@
     <div class="panel">
       <div class="panel-title">Fleet Status</div>
       <div id="fleet-status"></div>
-    </div>
-  </div>
-
-  <div class="panel">
-    <div class="panel-title">Pipeline Overview</div>
-    <div class="pipeline-row" id="pipeline-row"></div>
-  </div>
-
-  <div class="cards-row" style="grid-template-columns: repeat(3, 1fr);">
-    <div class="stat-card"><div class="stat-card__label">Total Revenue Collected</div><div class="stat-card__value green" id="rev-total">—</div></div>
-    <div class="stat-card"><div class="stat-card__label">Pending Invoices</div><div class="stat-card__value orange" id="rev-pending">—</div></div>
-    <div class="stat-card"><div class="stat-card__label">Paid This Week</div><div class="stat-card__value green" id="rev-week">—</div></div>
-  </div>
-
-  <div class="detail-grid">
-    <div class="panel">
-      <div class="panel-title">Recent Activity</div>
-      <div id="activity-list"></div>
-    </div>
-    <div class="panel">
-      <div class="panel-title">Application Stats</div>
-      <div class="info-row"><div class="info-row__label">Total Applications</div><div class="info-row__val" id="stat-total">—</div></div>
-      <div class="info-row"><div class="info-row__label">Active in Pipeline</div><div class="info-row__val" id="stat-active">—</div></div>
-      <div class="info-row"><div class="info-row__label">Completed Rentals</div><div class="info-row__val" id="stat-completed">—</div></div>
-      <div class="info-row"><div class="info-row__label">Rejected</div><div class="info-row__val" id="stat-rejected">—</div></div>
     </div>
   </div>
 </div>
@@ -77,37 +76,11 @@ function monthLabel(ym) {
 }
 
 (async () => {
-  renderSidebar('leads');
+  renderSidebar('dashboard');
   await requireLogin();
   const data = await api('/api/dashboard/summary');
   const ov = data.overview;
 
-  document.getElementById('stat-total').textContent = data.counts.totalApplications;
-  document.getElementById('stat-active').textContent = data.counts.activeApplications;
-  document.getElementById('stat-completed').textContent = data.counts.completedApplications;
-  document.getElementById('stat-rejected').textContent = data.counts.rejectedApplications;
-
-  document.getElementById('pipeline-row').innerHTML = data.pipeline.map(p => `
-    <div class="pipeline-col">
-      <div class="pipeline-col__num">${p.count}</div>
-      <div class="pipeline-col__name">${p.stage}. ${p.name}</div>
-    </div>
-  `).join('');
-
-  document.getElementById('rev-total').textContent = fmtMoney(data.revenue.totalRevenue);
-  document.getElementById('rev-pending').textContent = fmtMoney(data.revenue.pendingInvoices);
-  document.getElementById('rev-week').textContent = fmtMoney(data.revenue.paidThisWeek);
-
-  document.getElementById('activity-list').innerHTML = data.recentActivity.length
-    ? data.recentActivity.map(a => `
-        <div class="activity-item">
-          <div>${a.first_name ? `<strong>${a.first_name} ${a.last_name}</strong> — ` : ''}${a.message}</div>
-          <div class="activity-item__time">${fmtDate(a.created_at)}</div>
-        </div>
-      `).join('')
-    : '<p style="color:#888;font-size:0.85rem;">No activity yet.</p>';
-
-  // Overview tiles
   document.getElementById('ov-total-vehicles').textContent = ov.totalVehicles;
   document.getElementById('ov-available-sub').textContent = `${ov.availableVehicles} available`;
   document.getElementById('ov-rented').textContent = ov.rentedVehicles;
@@ -125,7 +98,6 @@ function monthLabel(ym) {
   const maintDiff = ov.maintenanceCostThisMonth - ov.maintenanceCostLastMonth;
   document.getElementById('ov-maint-sub').textContent = maintDiff === 0 ? 'same as prev period' : `${maintDiff > 0 ? '+' : ''}${fmtMoney(maintDiff)} vs prev period`;
 
-  // Monthly revenue chart
   const chartEl = document.getElementById('revenue-chart');
   if (ov.monthlyRevenue.length === 0) {
     chartEl.innerHTML = '<div class="chart-empty">No revenue data yet</div>';

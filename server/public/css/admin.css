@@ -47,6 +47,9 @@ a { text-decoration: none; color: inherit; }
 }
 .sidebar__nav a:hover { color: #fff; background: rgba(255,255,255,0.04); }
 .sidebar__nav a.active { color: #fff; background: rgba(255,255,255,0.08); border-left-color: #fff; }
+.sidebar__nav a { cursor: grab; display: flex; align-items: center; gap: 8px; }
+.sidebar__nav a.dragging { opacity: 0.4; }
+.sidebar__drag-handle { color: rgba(255,255,255,0.3); font-size: 0.9rem; }
 .sidebar__footer { padding: 16px 24px 0; border-top: 1px solid rgba(255,255,255,0.1); }
 .sidebar__user { font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-bottom: 10px; }
 .main-content { margin-left: 230px; flex: 1; min-width: 0; }
@@ -62,16 +65,19 @@ a { text-decoration: none; color: inherit; }
 }
 
 .page { max-width: 1280px; margin: 0 auto; padding: 32px 24px 80px; }
-.page-title { font-size: 1.8rem; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.02em; }
-.page-sub { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 32px; }
+.page-title { font-size: 2rem; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.02em; }
+.page-sub { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 32px; }
 
 /* Cards */
 .cards-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
-.stat-card { background: var(--white); border: 1px solid var(--gray-border); border-radius: 8px; padding: 20px; }
-.stat-card__label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 8px; }
-.stat-card__value { font-size: 1.8rem; font-weight: 800; letter-spacing: -0.02em; }
+.stat-card { background: var(--white); border: 1px solid var(--gray-border); border-radius: 10px; padding: 22px; }
+.stat-card__top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+.stat-card__label { font-size: 0.82rem; font-weight: 600; color: var(--text-muted); }
+.stat-card__icon { width: 36px; height: 36px; border-radius: 8px; background: var(--gray-light); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+.stat-card__value { font-size: 2.3rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
 .stat-card__value.green { color: #2e7d32; }
 .stat-card__value.orange { color: #e65100; }
+.stat-card__sub { font-size: 0.85rem; color: var(--text-muted); margin-top: 6px; }
 
 .panel { background: var(--white); border: 1px solid var(--gray-border); border-radius: 8px; padding: 24px; margin-bottom: 24px; }
 .panel-title { font-size: 1rem; font-weight: 700; margin-bottom: 16px; }
@@ -121,7 +127,6 @@ tr:hover td { background: var(--gray-light); }
 }
 
 /* Overview dashboard (iFleet-style) */
-.stat-card__sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; }
 .overview-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: start; }
 .chart-wrap { display: flex; align-items: flex-end; gap: 6px; height: 220px; padding-top: 10px; }
 .chart-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
