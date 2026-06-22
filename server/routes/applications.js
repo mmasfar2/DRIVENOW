@@ -249,4 +249,36 @@ router.get('/bookings/all', requireAuth, (req, res) => {
   res.json({ bookings, stats: { totalBookings, upcoming, onRental, outstandingBalance } });
 });
 
+// ── AUTHED: Manual Booking — VA/owner creates a reservation directly ──
+router.post('/manual-booking', requireAuth, (req, res) => {
+  const {
+    first_name, last_name, phone, email,
+    assigned_vehicle_id, weekly_rate, total_due_at_pickup,
+    pickup_scheduled_at, rental_end_at,
+  } = req.body;
+
+  if (!first_name || !last_name || !phone || !email) {
+    return res.status(400).json({ error: 'First name, last name, phone, and email are required' });
+  }
+  if (!assigned_vehicle_id || !weekly_rate || !pickup_scheduled_at || !rental_end_at) {
+    return res.status(400).json({ error: 'Vehicle, weekly rate, and dates are required' });
+  }
+
+  const vehicle = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(assigned_vehicle_id);
+  if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
+
+  const result = db.prepare(`
+    INSERT INTO applications
+      (first_name, last_name, phone, email, consent_background, stage, status,
+       assigned_vehicle_id, weekly_rate, total_due_at_pickup, pickup_scheduled_at, rental_end_at, source)
+    VALUES (?, ?, ?, ?, 1, 6, 'active', ?, ?, ?, ?, ?, 'manual_booking')
+  `).run(first_name, last_name, phone, email, assigned_vehicle_id, weekly_rate, total_due_at_pickup || null, pickup_scheduled_at, rental_end_at);
+
+  const appId = result.lastInsertRowid;
+  db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ?").run(assigned_vehicle_id);
+  logActivity(appId, `Manual reservation created for ${first_name} ${last_name} — ${vehicle.make} ${vehicle.model} at $${weekly_rate}/week`);
+
+  res.status(201).json({ id: appId, message: 'Reservation created' });
+});
+
 module.exports = router;

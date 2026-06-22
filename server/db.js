@@ -136,6 +136,12 @@ if (!existingCols.includes('license_number')) {
 if (!existingCols.includes('license_state')) {
   db.exec('ALTER TABLE applications ADD COLUMN license_state TEXT');
 }
+if (!existingCols.includes('rental_end_at')) {
+  db.exec('ALTER TABLE applications ADD COLUMN rental_end_at TEXT');
+}
+if (!existingCols.includes('source')) {
+  db.exec("ALTER TABLE applications ADD COLUMN source TEXT DEFAULT 'public_form'");
+}
 
 const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);
 if (!vehicleCols.includes('photo_path')) {
