@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reservations — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
+<div class="page">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;">
+    <div>
+      <div class="page-title">Reservations</div>
+      <div class="page-sub" style="margin-bottom:0;">Manage reservation requests and active rentals.</div>
+    </div>
+  </div>
+  <div style="height:24px;"></div>
+
+  <div class="cards-row">
+    <div class="stat-card">
+      <div class="stat-card__top"><div class="stat-card__label">Total Bookings</div><div class="stat-card__icon icon-blue" id="icon-calendar1"></div></div>
+      <div class="stat-card__value" id="r-total">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__top"><div class="stat-card__label">Upcoming</div><div class="stat-card__icon icon-purple" id="icon-calendar2"></div></div>
+      <div class="stat-card__value" id="r-upcoming">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__top"><div class="stat-card__label">On Rental</div><div class="stat-card__icon icon-green" id="icon-car1"></div></div>
+      <div class="stat-card__value green" id="r-rental">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__top"><div class="stat-card__label">Outstanding Balance</div><div class="stat-card__icon icon-orange" id="icon-card1"></div></div>
+      <div class="stat-card__value orange" id="r-balance">—</div>
+    </div>
+  </div>
+
+  <div class="panel" style="padding:0;">
+    <div style="display:flex;gap:4px;padding:0 20px;border-bottom:1px solid var(--gray-border);overflow-x:auto;">
+      <button class="resv-tab active" data-bucket="all">All Bookings</button>
+      <button class="resv-tab" data-bucket="upcoming">Upcoming</button>
+      <button class="resv-tab" data-bucket="on_rental">On Rental</button>
+      <button class="resv-tab" data-bucket="pending_payment">Pending Payment</button>
+      <button class="resv-tab" data-bucket="completed">Completed</button>
+    </div>
+    <div style="display:flex;gap:12px;padding:18px 20px;flex-wrap:wrap;">
+      <input id="r-search" placeholder="Search by name, email, phone, or car..." style="flex:1;min-width:220px;padding:10px 14px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;">
+      <span id="r-count" style="align-self:center;color:var(--text-muted);font-size:0.85rem;white-space:nowrap;"></span>
+    </div>
+    <div id="r-list" style="padding:0 20px 20px;"></div>
+  </div>
+</div>
+</div>
+</div>
+
+<script src="js/admin-common.js"></script>
+<style>
+.resv-tab { padding: 14px 16px; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+.resv-tab:hover { color: var(--black); }
+.resv-tab.active { color: var(--black); border-bottom-color: var(--black); }
+.resv-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--gray-border); gap: 16px; flex-wrap: wrap; }
+.resv-row:last-child { border-bottom: none; }
+.resv-row__name { font-weight: 700; font-size: 0.92rem; }
+.resv-row__sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
+.resv-row__right { display: flex; align-items: center; gap: 16px; }
+</style>
+<script>
+let bookings = [];
+let activeBucket = 'all';
+
+const bucketLabels = {
+  upcoming: { text: 'Upcoming', cls: 'badge-reserved' },
+  on_rental: { text: 'On Rental', cls: 'badge-rented' },
+  pending_payment: { text: 'Pending Payment', cls: 'badge-rejected' },
+  completed: { text: 'Completed', cls: 'badge-completed' },
+};
+
+function renderList() {
+  const search = document.getElementById('r-search').value.trim().toLowerCase();
+  let filtered = bookings.filter(b => activeBucket === 'all' || b.bucket === activeBucket);
+  if (search) {
+    filtered = filtered.filter(b =>
+      `${b.first_name} ${b.last_name}`.toLowerCase().includes(search) ||
+      (b.email || '').toLowerCase().includes(search) ||
+      (b.phone || '').toLowerCase().includes(search) ||
+      `${b.make} ${b.model}`.toLowerCase().includes(search)
+    );
+  }
+
+  document.getElementById('r-count').textContent = `${filtered.length} reservation${filtered.length === 1 ? '' : 's'}`;
+
+  document.getElementById('r-list').innerHTML = filtered.length
+    ? filtered.map(b => {
+        const label = bucketLabels[b.bucket];
+        return `
+          <div class="resv-row">
+            <div>
+              <div class="resv-row__name">${b.first_name} ${b.last_name}</div>
+              <div class="resv-row__sub">${b.year} ${b.make} ${b.model} · ${fmtDate(b.updated_at)}</div>
+            </div>
+            <div class="resv-row__right">
+              <div style="text-align:right;">
+                <div style="font-weight:700;">${fmtMoney(b.weekly_rate)}<span style="font-weight:400;color:var(--text-muted);font-size:0.78rem;"> /wk</span></div>
+                ${b.bucket === 'pending_payment' ? `<div class="resv-row__sub">Invoiced ${fmtMoney(b.invoice_amount)}</div>` : ''}
+              </div>
+              <span class="badge ${label.cls}">${label.text}</span>
+              <a href="application.html?id=${b.id}" class="btn btn-sm btn-outline">View</a>
+            </div>
+          </div>
+        `;
+      }).join('')
+    : `<div class="empty-state">${icon('calendar', 36)}<div style="font-size:1rem;font-weight:700;color:var(--black);">No Bookings Found</div><span>No reservations match your current filter. Try changing the filter or check back later.</span></div>`;
+}
+
+(async () => {
+  renderSidebar('reservations');
+  await requireLogin();
+
+  document.getElementById('icon-calendar1').innerHTML = icon('calendar');
+  document.getElementById('icon-calendar2').innerHTML = icon('calendar');
+  document.getElementById('icon-car1').innerHTML = icon('car');
+  document.getElementById('icon-card1').innerHTML = icon('card');
+
+  const data = await api('/api/applications/bookings/all');
+  bookings = data.bookings;
+
+  document.getElementById('r-total').textContent = data.stats.totalBookings;
+  document.getElementById('r-upcoming').textContent = data.stats.upcoming;
+  document.getElementById('r-rental').textContent = data.stats.onRental;
+  document.getElementById('r-balance').textContent = fmtMoney(data.stats.outstandingBalance);
+
+  document.querySelectorAll('.resv-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.resv-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      activeBucket = tab.dataset.bucket;
+      renderList();
+    });
+  });
+  document.getElementById('r-search').addEventListener('input', renderList);
+
+  renderList();
+})();
+</script>
+</body>
+</html>

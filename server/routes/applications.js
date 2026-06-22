@@ -220,4 +220,33 @@ router.patch('/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── AUTHED: Bookings/Reservations — applications that have an assigned vehicle ──
+router.get('/bookings/all', requireAuth, (req, res) => {
+  const rows = db.prepare(`
+    SELECT a.id, a.first_name, a.last_name, a.phone, a.email, a.weekly_rate, a.total_due_at_pickup,
+           a.payment_status, a.invoice_amount, a.invoice_sent_at, a.pickup_scheduled_at, a.status, a.updated_at,
+           v.id as vehicle_id, v.make, v.model, v.year, v.status as vehicle_status
+    FROM applications a
+    JOIN vehicles v ON v.id = a.assigned_vehicle_id
+    WHERE a.assigned_vehicle_id IS NOT NULL
+    ORDER BY a.updated_at DESC
+  `).all();
+
+  const bookings = rows.map(r => {
+    let bucket;
+    if (r.payment_status === 'unpaid' && r.invoice_amount) bucket = 'pending_payment';
+    else if (r.vehicle_status === 'rented') bucket = 'on_rental';
+    else if (r.vehicle_status === 'reserved') bucket = 'upcoming';
+    else bucket = 'completed';
+    return { ...r, bucket };
+  });
+
+  const totalBookings = bookings.length;
+  const upcoming = bookings.filter(b => b.bucket === 'upcoming').length;
+  const onRental = bookings.filter(b => b.bucket === 'on_rental').length;
+  const outstandingBalance = bookings.filter(b => b.bucket === 'pending_payment').reduce((sum, b) => sum + (b.invoice_amount || 0), 0);
+
+  res.json({ bookings, stats: { totalBookings, upcoming, onRental, outstandingBalance } });
+});
+
 module.exports = router;
