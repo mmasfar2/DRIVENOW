@@ -127,7 +127,49 @@
 .resv-review-row > span:first-child { color: var(--text-muted); }
 .resv-review-row > span:last-child { font-weight: 600; text-align: right; }
 
+.resv-cal { border: 1.5px solid var(--gray-border); border-radius: 8px; overflow: hidden; }
+.resv-cal__summary { display: flex; }
+.resv-cal__summary > div { flex: 1; padding: 14px 18px; }
+.resv-cal__summary > div:first-child { border-right: 1px solid var(--gray-border); }
+.resv-cal__summary-label { font-size: 0.76rem; color: var(--text-muted); margin-bottom: 4px; }
+.resv-cal__summary-value { font-size: 0.95rem; font-weight: 700; }
+.resv-cal__grid { background: var(--gray-light); padding: 18px; display: flex; gap: 24px; align-items: flex-start; border-top: 1px solid var(--gray-border); }
+.resv-cal__nav { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 4px 8px; }
+.resv-cal__nav:disabled { opacity: 0.3; cursor: not-allowed; }
+.resv-cal__nav:not(:disabled):hover { color: var(--black); }
+.resv-cal__month { flex: 1; min-width: 0; }
+.resv-cal__month-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 700; font-size: 0.92rem; }
+.resv-cal__dow { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 0.7rem; color: var(--text-muted); margin-bottom: 6px; }
+.resv-cal__days { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 4px; }
+.resv-cal__day {
+  display: flex; align-items: center; justify-content: center; height: 34px; font-size: 0.82rem; cursor: pointer;
+  border-radius: 50%; color: var(--black); position: relative;
+}
+.resv-cal__day.empty { cursor: default; }
+.resv-cal__day.disabled { color: #ccc; cursor: not-allowed; }
+.resv-cal__day.in-range { background: var(--gray-border); border-radius: 0; }
+.resv-cal__day.range-start { border-radius: 50% 0 0 50%; }
+.resv-cal__day.range-end { border-radius: 0 50% 50% 0; }
+.resv-cal__day.selected .resv-cal__day-inner {
+  background: var(--black); color: #fff; width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+}
+.resv-cal__day-inner { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.resv-cal__times { display: flex; gap: 14px; padding: 16px 18px; border-top: 1px solid var(--gray-border); }
+.resv-cal__time { flex: 1; border: 1.5px solid var(--gray-border); border-radius: 6px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; }
+.resv-cal__time-icon { font-size: 1rem; color: var(--text-muted); }
+.resv-cal__time label { display: block; font-size: 0.72rem; color: var(--text-muted); }
+.resv-cal__time select { border: none; font-family: inherit; font-size: 0.88rem; font-weight: 600; background: none; cursor: pointer; }
+.resv-cal__time select:focus { outline: none; }
+.resv-cal__apply-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-top: 1px solid var(--gray-border); }
+.resv-cal__total-days { font-size: 0.88rem; font-weight: 700; }
+.resv-cal__total-days span { color: var(--text-muted); font-weight: 400; margin-right: 4px; }
+.resv-cal__apply-btn {
+  padding: 10px 22px; background: var(--black); color: #fff; border: none; border-radius: 6px;
+  font-size: 0.82rem; font-weight: 700; cursor: pointer;
+}
+
 .resv-modal--wide { width: 640px; }
+.resv-modal--cal { width: 820px; }
 .resv-vsearch { display: flex; align-items: center; gap: 8px; padding: 0 14px; border: 1.5px solid var(--gray-border); border-radius: 6px; margin-bottom: 18px; }
 .resv-vsearch input { flex: 1; border: none; padding: 11px 0; font-family: inherit; font-size: 0.88rem; outline: none; }
 .resv-vsearch svg { color: var(--text-muted); flex-shrink: 0; }
@@ -336,6 +378,7 @@ function initNewReservationModal() {
   let step = 1;
   let vehicles = [];
   let vehicleSearch = '';
+  let calMonth = null;
   const openClasses = new Set();
   let customerResults = [];
   let customerSearchTerm = '';
@@ -343,7 +386,7 @@ function initNewReservationModal() {
 
   const form = {
     source: '',
-    pickup_scheduled_at: '', rental_end_at: '',
+    pickup_scheduled_at: '', rental_end_at: '', pickup_time: '10:00 AM', return_time: '10:00 AM',
     assigned_vehicle_id: null, weekly_rate: null, total_due_at_pickup: '',
     customer_mode: 'existing', first_name: '', last_name: '', phone: '', email: '',
     dob: '', license_number: '', address: '',
@@ -361,6 +404,159 @@ function initNewReservationModal() {
     const d = new Date();
     d.setDate(d.getDate() + offsetDays);
     return d.toISOString().slice(0, 10);
+  }
+
+  function timeOptions() {
+    const opts = [];
+    for (let h = 0; h < 24; h++) {
+      for (let m = 0; m < 60; m += 30) {
+        const hh12 = h % 12 === 0 ? 12 : h % 12;
+        const ampm = h < 12 ? 'AM' : 'PM';
+        opts.push(`${String(hh12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`);
+      }
+    }
+    return opts;
+  }
+
+  function fmtCalDate(dateStr) {
+    if (!dateStr) return 'Select date';
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  function renderDatesStep() {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const minPickup = todayStr(0);
+    const maxPickup = todayStr(3);
+    const minReturn = form.pickup_scheduled_at
+      ? new Date(new Date(form.pickup_scheduled_at).getTime() + 7 * 86400000).toISOString().slice(0, 10)
+      : null;
+
+    if (!calMonth) {
+      calMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    }
+
+    function dayState(dateStr) {
+      if (dateStr < minPickup) return 'disabled';
+      if (!form.pickup_scheduled_at) {
+        return dateStr > maxPickup ? 'disabled' : 'pickable';
+      }
+      if (!form.rental_end_at) {
+        if (dateStr === form.pickup_scheduled_at) return 'pickable';
+        return dateStr < minReturn ? 'disabled' : 'pickable';
+      }
+      return 'pickable';
+    }
+
+    function monthGrid(monthDate) {
+      const year = monthDate.getFullYear();
+      const month = monthDate.getMonth();
+      const firstDow = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const cells = [];
+      for (let i = 0; i < firstDow; i++) cells.push('<div class="resv-cal__day empty"></div>');
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const state = dayState(dateStr);
+        const isPickup = dateStr === form.pickup_scheduled_at;
+        const isReturn = dateStr === form.rental_end_at;
+        const inRange = form.pickup_scheduled_at && form.rental_end_at && dateStr > form.pickup_scheduled_at && dateStr < form.rental_end_at;
+        const classes = ['resv-cal__day'];
+        if (state === 'disabled') classes.push('disabled');
+        if (inRange) classes.push('in-range');
+        if (isPickup && form.rental_end_at) classes.push('in-range', 'range-start');
+        if (isReturn) classes.push('in-range', 'range-end');
+        if (isPickup || isReturn) classes.push('selected');
+        cells.push(`
+          <div class="${classes.join(' ')}" ${state !== 'disabled' ? `data-date="${dateStr}"` : ''}>
+            <div class="resv-cal__day-inner">${day}</div>
+          </div>
+        `);
+      }
+      return `
+        <div class="resv-cal__month">
+          <div class="resv-cal__month-head"><span>${monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span></div>
+          <div class="resv-cal__dow">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div>${d}</div>`).join('')}</div>
+          <div class="resv-cal__days">${cells.join('')}</div>
+        </div>
+      `;
+    }
+
+    const nextMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1);
+    const isAtCurrentMonth = calMonth.getFullYear() === today.getFullYear() && calMonth.getMonth() === today.getMonth();
+    const days = form.pickup_scheduled_at && form.rental_end_at
+      ? Math.round((new Date(form.rental_end_at) - new Date(form.pickup_scheduled_at)) / 86400000)
+      : null;
+
+    body.innerHTML = `
+      <div class="resv-cal">
+        <div class="resv-cal__summary">
+          <div>
+            <div class="resv-cal__summary-label">Pickup Details</div>
+            <div class="resv-cal__summary-value">${fmtCalDate(form.pickup_scheduled_at)}${form.pickup_scheduled_at ? ` at ${form.pickup_time}` : ''}</div>
+          </div>
+          <div>
+            <div class="resv-cal__summary-label">Return Details</div>
+            <div class="resv-cal__summary-value">${fmtCalDate(form.rental_end_at)}${form.rental_end_at ? ` at ${form.return_time}` : ''}</div>
+          </div>
+        </div>
+        <div class="resv-cal__grid">
+          <button class="resv-cal__nav" id="cal-prev" ${isAtCurrentMonth ? 'disabled' : ''}>&#8249;</button>
+          ${monthGrid(calMonth)}
+          ${monthGrid(nextMonth)}
+          <button class="resv-cal__nav" id="cal-next">&#8250;</button>
+        </div>
+        <div class="resv-cal__times">
+          <div class="resv-cal__time">
+            <span class="resv-cal__time-icon">&#128337;</span>
+            <div>
+              <label>Pickup time</label>
+              <select id="cal-pickup-time">${timeOptions().map(t => `<option ${t === form.pickup_time ? 'selected' : ''}>${t}</option>`).join('')}</select>
+            </div>
+          </div>
+          <div class="resv-cal__time">
+            <span class="resv-cal__time-icon">&#128337;</span>
+            <div>
+              <label>Return time</label>
+              <select id="cal-return-time">${timeOptions().map(t => `<option ${t === form.return_time ? 'selected' : ''}>${t}</option>`).join('')}</select>
+            </div>
+          </div>
+        </div>
+        <div class="resv-cal__apply-row">
+          <div class="resv-cal__total-days"><span>Total:</span>${days !== null ? `${days} day${days === 1 ? '' : 's'}` : '—'}</div>
+          <button class="resv-cal__apply-btn" id="cal-apply">Apply</button>
+        </div>
+      </div>
+      <div style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;">Pickup must be within 3 days of today. Minimum rental length is one week.</div>
+    `;
+
+    document.getElementById('cal-prev').addEventListener('click', () => {
+      calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1);
+      renderStep();
+    });
+    document.getElementById('cal-next').addEventListener('click', () => {
+      calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1);
+      renderStep();
+    });
+    document.getElementById('cal-pickup-time').addEventListener('change', (e) => { form.pickup_time = e.target.value; renderStep(); });
+    document.getElementById('cal-return-time').addEventListener('change', (e) => { form.return_time = e.target.value; renderStep(); });
+    document.getElementById('cal-apply').addEventListener('click', () => { renderStep(); });
+
+    body.querySelectorAll('.resv-cal__day[data-date]').forEach(el => {
+      el.addEventListener('click', () => {
+        const dateStr = el.dataset.date;
+        if (!form.pickup_scheduled_at || form.rental_end_at) {
+          form.pickup_scheduled_at = dateStr;
+          form.rental_end_at = '';
+        } else if (dateStr >= minReturn) {
+          form.rental_end_at = dateStr;
+        } else {
+          form.pickup_scheduled_at = dateStr;
+          form.rental_end_at = '';
+        }
+        renderStep();
+      });
+    });
   }
 
   function showError(msg) {
@@ -382,30 +578,10 @@ function initNewReservationModal() {
     setStepDots();
     const key = currentKey();
     modalEl.classList.toggle('resv-modal--wide', key === 'vehicle');
+    modalEl.classList.toggle('resv-modal--cal', key === 'dates');
 
     if (key === 'dates') {
-      const minPickup = todayStr(0);
-      const maxPickup = todayStr(3);
-      const minReturn = form.pickup_scheduled_at ? new Date(new Date(form.pickup_scheduled_at).getTime() + 7 * 86400000).toISOString().slice(0, 10) : '';
-      body.innerHTML = `
-        <div class="field-row">
-          <div class="field">
-            <label>Pickup Date</label>
-            <input type="date" id="f-pickup" min="${minPickup}" max="${maxPickup}" value="${form.pickup_scheduled_at}">
-          </div>
-          <div class="field">
-            <label>Return Date</label>
-            <input type="date" id="f-return" min="${minReturn || minPickup}" value="${form.rental_end_at}" ${form.pickup_scheduled_at ? '' : 'disabled'}>
-          </div>
-        </div>
-        <div style="font-size:0.78rem;color:var(--text-muted);">Pickup must be within 3 days of today. Minimum rental length is one week.</div>
-      `;
-      document.getElementById('f-pickup').addEventListener('change', (e) => {
-        form.pickup_scheduled_at = e.target.value;
-        form.rental_end_at = '';
-        renderStep();
-      });
-      document.getElementById('f-return').addEventListener('change', (e) => { form.rental_end_at = e.target.value; });
+      renderDatesStep();
 
     } else if (key === 'vehicle') {
       renderVehicleStep();
@@ -742,8 +918,9 @@ function initNewReservationModal() {
     openClasses.clear();
     customerResults = [];
     customerSearchTerm = '';
+    calMonth = null;
     Object.assign(form, {
-      source, pickup_scheduled_at: '', rental_end_at: '', assigned_vehicle_id: null, weekly_rate: null,
+      source, pickup_scheduled_at: '', rental_end_at: '', pickup_time: '10:00 AM', return_time: '10:00 AM', assigned_vehicle_id: null, weekly_rate: null,
       total_due_at_pickup: '', customer_mode: 'existing', first_name: '', last_name: '', phone: '', email: '',
       dob: '', license_number: '', address: '', license_file: null, insurance_type: null, insurance_private_file: null, insurance_policy_file: null,
     });
