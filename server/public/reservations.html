@@ -66,10 +66,11 @@
       <button class="resv-modal__close" id="resv-modal-close">&times;</button>
     </div>
     <div class="resv-steps">
-      <div class="resv-step-dot active" data-step="1"><span>1</span>Dates</div>
-      <div class="resv-step-dot" data-step="2"><span>2</span>Vehicle</div>
-      <div class="resv-step-dot" data-step="3"><span>3</span>Customer</div>
-      <div class="resv-step-dot" data-step="4"><span>4</span>Review</div>
+      <div class="resv-step-dot active" data-step="1"><span>1</span>Type</div>
+      <div class="resv-step-dot" data-step="2"><span>2</span>Dates</div>
+      <div class="resv-step-dot" data-step="3"><span>3</span>Vehicle</div>
+      <div class="resv-step-dot" data-step="4"><span>4</span>Customer</div>
+      <div class="resv-step-dot" data-step="5"><span>5</span>Review</div>
     </div>
     <div class="resv-modal__body" id="resv-modal-body"></div>
     <div class="resv-modal__footer">
@@ -154,6 +155,13 @@
 .resv-vehicle-card__right { text-align: right; margin-left: auto; }
 .resv-vehicle-card__price { font-weight: 700; }
 .resv-vehicle-card__price small { font-weight: 400; color: var(--text-muted); font-size: 0.72rem; }
+.resv-type-select {
+  width: 100%; padding: 12px 14px; border: 1.5px solid var(--gray-border); border-radius: 6px;
+  font-family: inherit; font-size: 0.92rem; font-weight: 600; background: #fff; cursor: pointer; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center; background-size: 14px;
+}
+.resv-type-select:focus { outline: none; border-color: var(--black); }
 </style>
 <script>
 let bookings = [];
@@ -248,6 +256,7 @@ function initNewReservationModal() {
   let vehicleSearch = '';
   const openClasses = new Set();
   const form = {
+    source: '',
     pickup_scheduled_at: '', rental_end_at: '',
     assigned_vehicle_id: null, weekly_rate: null, total_due_at_pickup: '',
     first_name: '', last_name: '', phone: '', email: '',
@@ -269,14 +278,27 @@ function initNewReservationModal() {
       dot.classList.toggle('active', Number(dot.dataset.step) === step);
     });
     backBtn.style.visibility = step === 1 ? 'hidden' : 'visible';
-    nextBtn.textContent = step === 4 ? 'Create Reservation' : 'Next';
+    nextBtn.textContent = step === 5 ? 'Create Reservation' : 'Next';
   }
 
   function renderStep() {
     showError('');
     setStepDots();
-    modalEl.classList.toggle('resv-modal--wide', step === 2);
+    modalEl.classList.toggle('resv-modal--wide', step === 3);
     if (step === 1) {
+      body.innerHTML = `
+        <div class="field">
+          <label>Booking Source</label>
+          <select class="resv-type-select" id="f-source">
+            <option value="" disabled ${form.source ? '' : 'selected'}>Select booking type...</option>
+            <option value="online" ${form.source === 'online' ? 'selected' : ''}>Online</option>
+            <option value="in_person" ${form.source === 'in_person' ? 'selected' : ''}>In-Person</option>
+          </select>
+        </div>
+        <div style="font-size:0.78rem;color:var(--text-muted);">Was this reservation made online by the customer, or in person?</div>
+      `;
+      document.getElementById('f-source').addEventListener('change', (e) => { form.source = e.target.value; });
+    } else if (step === 2) {
       const minPickup = todayStr(0);
       const maxPickup = todayStr(3);
       const minReturn = form.pickup_scheduled_at ? new Date(new Date(form.pickup_scheduled_at).getTime() + 7 * 86400000).toISOString().slice(0, 10) : '';
@@ -297,7 +319,7 @@ function initNewReservationModal() {
         renderStep();
       });
       document.getElementById('f-return').addEventListener('change', (e) => { form.rental_end_at = e.target.value; });
-    } else if (step === 2) {
+    } else if (step === 3) {
       const search = vehicleSearch.trim().toLowerCase();
       const filtered = vehicles.filter(v =>
         !search || `${v.make} ${v.model} ${v.year}`.toLowerCase().includes(search)
@@ -378,7 +400,7 @@ function initNewReservationModal() {
           renderStep();
         });
       });
-    } else if (step === 3) {
+    } else if (step === 4) {
       body.innerHTML = `
         <div class="field"><label>First Name</label><input id="f-first" value="${form.first_name}"></div>
         <div class="field"><label>Last Name</label><input id="f-last" value="${form.last_name}"></div>
@@ -392,9 +414,10 @@ function initNewReservationModal() {
           form[map[key]] = e.target.value;
         });
       });
-    } else if (step === 4) {
+    } else if (step === 5) {
       const v = vehicles.find(x => x.id === form.assigned_vehicle_id);
       body.innerHTML = `
+        <div class="resv-review-row"><span>Booking Source</span><span>${form.source === 'online' ? 'Online' : 'In-Person'}</span></div>
         <div class="resv-review-row"><span>Customer</span><span>${form.first_name} ${form.last_name}</span></div>
         <div class="resv-review-row"><span>Contact</span><span>${form.phone} · ${form.email}</span></div>
         <div class="resv-review-row"><span>Vehicle</span><span>${v ? `${v.year} ${v.make} ${v.model}` : '—'}</span></div>
@@ -408,13 +431,15 @@ function initNewReservationModal() {
 
   function validateStep() {
     if (step === 1) {
+      if (!form.source) return 'Select a booking source';
+    } else if (step === 2) {
       if (!form.pickup_scheduled_at) return 'Select a pickup date';
       if (!form.rental_end_at) return 'Select a return date';
       const minReturn = new Date(new Date(form.pickup_scheduled_at).getTime() + 7 * 86400000);
       if (new Date(form.rental_end_at) < minReturn) return 'Rental must be at least one week';
-    } else if (step === 2) {
-      if (!form.assigned_vehicle_id) return 'Select a vehicle';
     } else if (step === 3) {
+      if (!form.assigned_vehicle_id) return 'Select a vehicle';
+    } else if (step === 4) {
       if (!form.first_name || !form.last_name || !form.phone || !form.email) return 'All customer fields are required';
     }
     return null;
@@ -425,7 +450,7 @@ function initNewReservationModal() {
     vehicleSearch = '';
     openClasses.clear();
     Object.assign(form, {
-      pickup_scheduled_at: '', rental_end_at: '', assigned_vehicle_id: null, weekly_rate: null,
+      source: '', pickup_scheduled_at: '', rental_end_at: '', assigned_vehicle_id: null, weekly_rate: null,
       total_due_at_pickup: '', first_name: '', last_name: '', phone: '', email: '',
     });
     overlay.style.display = 'flex';
@@ -444,7 +469,7 @@ function initNewReservationModal() {
   nextBtn.addEventListener('click', async () => {
     const err = validateStep();
     if (err) { showError(err); return; }
-    if (step < 4) { step++; renderStep(); return; }
+    if (step < 5) { step++; renderStep(); return; }
 
     nextBtn.disabled = true;
     try {

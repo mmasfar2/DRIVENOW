@@ -254,7 +254,7 @@ router.post('/manual-booking', requireAuth, (req, res) => {
   const {
     first_name, last_name, phone, email,
     assigned_vehicle_id, weekly_rate, total_due_at_pickup,
-    pickup_scheduled_at, rental_end_at,
+    pickup_scheduled_at, rental_end_at, source,
   } = req.body;
 
   if (!first_name || !last_name || !phone || !email) {
@@ -267,12 +267,14 @@ router.post('/manual-booking', requireAuth, (req, res) => {
   const vehicle = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(assigned_vehicle_id);
   if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
 
+  const bookingSource = source === 'online' ? 'manual_booking_online' : 'manual_booking_in_person';
+
   const result = db.prepare(`
     INSERT INTO applications
       (first_name, last_name, phone, email, consent_background, stage, status,
        assigned_vehicle_id, weekly_rate, total_due_at_pickup, pickup_scheduled_at, rental_end_at, source)
-    VALUES (?, ?, ?, ?, 1, 6, 'active', ?, ?, ?, ?, ?, 'manual_booking')
-  `).run(first_name, last_name, phone, email, assigned_vehicle_id, weekly_rate, total_due_at_pickup || null, pickup_scheduled_at, rental_end_at);
+    VALUES (?, ?, ?, ?, 1, 6, 'active', ?, ?, ?, ?, ?, ?)
+  `).run(first_name, last_name, phone, email, assigned_vehicle_id, weekly_rate, total_due_at_pickup || null, pickup_scheduled_at, rental_end_at, bookingSource);
 
   const appId = result.lastInsertRowid;
   db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ?").run(assigned_vehicle_id);
