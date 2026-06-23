@@ -403,6 +403,10 @@ function initNewReservationModal() {
   }
   function currentKey() { return getSteps()[step - 1]; }
 
+  function fmtExact(n) {
+    return '$' + Number(n || 0).toFixed(2);
+  }
+
   function todayStr(offsetDays = 0) {
     const d = new Date();
     d.setDate(d.getDate() + offsetDays);
@@ -861,8 +865,8 @@ function initNewReservationModal() {
         <div class="resv-review-row"><span>Vehicle</span><span>${v ? `${v.year} ${v.make} ${v.model}` : '—'}</span></div>
         <div class="resv-review-row"><span>Pickup</span><span>${form.pickup_scheduled_at}</span></div>
         <div class="resv-review-row"><span>Return</span><span>${form.rental_end_at}</span></div>
-        <div class="resv-review-row"><span>Weekly Rate</span><span>${fmtMoney(form.weekly_rate)}</span></div>
-        <div class="resv-review-row"><span>Due at Pickup</span><span>${form.total_due_at_pickup ? fmtMoney(form.total_due_at_pickup) : '—'}</span></div>
+        <div class="resv-review-row"><span>Weekly Rate</span><span>${fmtExact(form.weekly_rate)}</span></div>
+        <div class="resv-review-row"><span>Due at Pickup</span><span>${form.total_due_at_pickup ? fmtExact(form.total_due_at_pickup) : '—'}</span></div>
       `;
       return;
     }
@@ -897,9 +901,9 @@ function initNewReservationModal() {
           </div>
         </div>
         <div class="resv-review-panel__body">
-          <div class="resv-review-row"><span>Vehicle (${days}d &times; $${(form.weekly_rate / 7).toFixed(2)}/d)</span><span>${fmtMoney(subtotal)}</span></div>
-          <div class="resv-review-row"><span>Sales Tax (7.25%)</span><span>${fmtMoney(salesTax)}</span></div>
-          <div class="resv-review-row--total"><span>Total</span><span>${fmtMoney(total)}</span></div>
+          <div class="resv-review-row"><span>Vehicle (${days}d &times; ${fmtExact(form.weekly_rate / 7)}/d)</span><span>${fmtExact(subtotal)}</span></div>
+          <div class="resv-review-row"><span>Sales Tax (7.25%)</span><span>${fmtExact(salesTax)}</span></div>
+          <div class="resv-review-row--total"><span>Total</span><span>${fmtExact(total)}</span></div>
         </div>
       </div>
     `;
