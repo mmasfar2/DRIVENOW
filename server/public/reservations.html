@@ -897,7 +897,7 @@ function initNewReservationModal() {
           </div>
         </div>
         <div class="resv-review-panel__body">
-          <div class="resv-review-row"><span>Vehicle (${days}d &times; ${fmtMoney(form.weekly_rate / 7)}/d)</span><span>${fmtMoney(subtotal)}</span></div>
+          <div class="resv-review-row"><span>Vehicle (${days}d &times; $${(form.weekly_rate / 7).toFixed(2)}/d)</span><span>${fmtMoney(subtotal)}</span></div>
           <div class="resv-review-row"><span>Sales Tax (7.25%)</span><span>${fmtMoney(salesTax)}</span></div>
           <div class="resv-review-row--total"><span>Total</span><span>${fmtMoney(total)}</span></div>
         </div>
