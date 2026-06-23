@@ -13,6 +13,9 @@ a { text-decoration: none; color: inherit; }
 .login-logo span { opacity: 0.4; }
 .login-sub { text-align: center; color: var(--text-muted); font-size: 0.85rem; margin-bottom: 32px; }
 .field { margin-bottom: 18px; }
+.field-row { display: flex; gap: 16px; }
+.field-row .field { flex: 1; min-width: 0; }
+@media (max-width: 520px) { .field-row { flex-direction: column; gap: 0; } }
 .field label { display: block; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; color: #444; }
 .field input, .field select, .field textarea {
   width: 100%; padding: 12px 14px; border: 1.5px solid var(--gray-border); border-radius: 4px; font-family: inherit; font-size: 0.95rem;

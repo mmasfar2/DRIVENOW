@@ -341,13 +341,15 @@ function initNewReservationModal() {
       const maxPickup = todayStr(3);
       const minReturn = form.pickup_scheduled_at ? new Date(new Date(form.pickup_scheduled_at).getTime() + 7 * 86400000).toISOString().slice(0, 10) : '';
       body.innerHTML = `
-        <div class="field">
-          <label>Pickup Date</label>
-          <input type="date" id="f-pickup" min="${minPickup}" max="${maxPickup}" value="${form.pickup_scheduled_at}">
-        </div>
-        <div class="field">
-          <label>Return Date</label>
-          <input type="date" id="f-return" min="${minReturn || minPickup}" value="${form.rental_end_at}" ${form.pickup_scheduled_at ? '' : 'disabled'}>
+        <div class="field-row">
+          <div class="field">
+            <label>Pickup Date</label>
+            <input type="date" id="f-pickup" min="${minPickup}" max="${maxPickup}" value="${form.pickup_scheduled_at}">
+          </div>
+          <div class="field">
+            <label>Return Date</label>
+            <input type="date" id="f-return" min="${minReturn || minPickup}" value="${form.rental_end_at}" ${form.pickup_scheduled_at ? '' : 'disabled'}>
+          </div>
         </div>
         <div style="font-size:0.78rem;color:var(--text-muted);">Pickup must be within 3 days of today. Minimum rental length is one week.</div>
       `;
@@ -488,10 +490,14 @@ function initNewReservationModal() {
 
   function renderSimpleCustomerForm() {
     body.innerHTML = `
-      <div class="field"><label>First Name</label><input id="f-first" value="${form.first_name}"></div>
-      <div class="field"><label>Last Name</label><input id="f-last" value="${form.last_name}"></div>
-      <div class="field"><label>Phone</label><input id="f-phone" value="${form.phone}"></div>
-      <div class="field"><label>Email</label><input id="f-email" value="${form.email}"></div>
+      <div class="field-row">
+        <div class="field"><label>First Name</label><input id="f-first" value="${form.first_name}"></div>
+        <div class="field"><label>Last Name</label><input id="f-last" value="${form.last_name}"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Phone</label><input id="f-phone" value="${form.phone}"></div>
+        <div class="field"><label>Email</label><input id="f-email" value="${form.email}"></div>
+      </div>
       <div class="field"><label>Total Due at Pickup (optional)</label><input id="f-total" type="number" value="${form.total_due_at_pickup}"></div>
     `;
     ['first', 'last', 'phone', 'email', 'total'].forEach(key => {
@@ -551,15 +557,21 @@ function initNewReservationModal() {
       });
     } else if (form.customer_mode === 'new') {
       customerBody.innerHTML = `
-        <div class="field"><label>Full Name</label><input id="f-fullname" value="${[form.first_name, form.last_name].filter(Boolean).join(' ')}"></div>
-        <div class="field"><label>Phone</label><input id="f-phone" value="${form.phone}"></div>
-        <div class="field"><label>Email</label><input id="f-email" value="${form.email}"></div>
-        <div class="field"><label>Date of Birth</label><input type="date" id="f-dob" value="${form.dob}"></div>
-        <div class="field">
-          <label>Driver License Upload</label>
-          ${uploadBoxHtml('f-license', form.license_file)}
+        <div class="field-row">
+          <div class="field"><label>Full Name</label><input id="f-fullname" value="${[form.first_name, form.last_name].filter(Boolean).join(' ')}"></div>
+          <div class="field"><label>Date of Birth</label><input type="date" id="f-dob" value="${form.dob}"></div>
         </div>
-        <div class="field"><label>Driver License #</label><input id="f-licnum" value="${form.license_number}"></div>
+        <div class="field-row">
+          <div class="field"><label>Phone</label><input id="f-phone" value="${form.phone}"></div>
+          <div class="field"><label>Email</label><input id="f-email" value="${form.email}"></div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Driver License Upload</label>
+            ${uploadBoxHtml('f-license', form.license_file)}
+          </div>
+          <div class="field"><label>Driver License #</label><input id="f-licnum" value="${form.license_number}"></div>
+        </div>
         <div class="field"><label>Current Address</label><input id="f-address" value="${form.address}"></div>
       `;
       document.getElementById('f-fullname').addEventListener('input', (e) => {
