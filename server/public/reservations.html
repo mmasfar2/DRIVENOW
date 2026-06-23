@@ -570,13 +570,14 @@ function initNewReservationModal() {
     } else if (form.customer_mode === 'new') {
       customerBody.innerHTML = `
         <div class="field-row">
-          <div class="field"><label>Full Name</label><input id="f-fullname" value="${[form.first_name, form.last_name].filter(Boolean).join(' ')}"></div>
-          <div class="field"><label>Date of Birth</label><input type="date" id="f-dob" value="${form.dob}"></div>
+          <div class="field"><label>First Name</label><input id="f-first" value="${form.first_name}"></div>
+          <div class="field"><label>Last Name</label><input id="f-last" value="${form.last_name}"></div>
         </div>
         <div class="field-row">
           <div class="field"><label>Phone</label><input id="f-phone" value="${form.phone}"></div>
           <div class="field"><label>Email</label><input id="f-email" value="${form.email}"></div>
         </div>
+        <div class="field"><label>Date of Birth</label><input type="date" id="f-dob" value="${form.dob}"></div>
         <div class="field-row">
           <div class="field">
             <label>Driver License Upload</label>
@@ -586,11 +587,8 @@ function initNewReservationModal() {
         </div>
         <div class="field"><label>Current Address</label><input id="f-address" value="${form.address}"></div>
       `;
-      document.getElementById('f-fullname').addEventListener('input', (e) => {
-        const parts = e.target.value.trim().split(/\s+/);
-        form.first_name = parts.shift() || '';
-        form.last_name = parts.join(' ');
-      });
+      document.getElementById('f-first').addEventListener('input', (e) => { form.first_name = e.target.value; });
+      document.getElementById('f-last').addEventListener('input', (e) => { form.last_name = e.target.value; });
       document.getElementById('f-phone').addEventListener('input', (e) => { form.phone = e.target.value; });
       document.getElementById('f-email').addEventListener('input', (e) => { form.email = e.target.value; });
       document.getElementById('f-dob').addEventListener('input', (e) => { form.dob = e.target.value; });
