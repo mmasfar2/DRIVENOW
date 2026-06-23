@@ -630,19 +630,7 @@ function initNewReservationModal() {
   }
 
   function validateStep() {
-    const key = currentKey();
-    if (key === 'dates') {
-      if (!form.pickup_scheduled_at) return 'Select a pickup date';
-      if (!form.rental_end_at) return 'Select a return date';
-      const minReturn = new Date(new Date(form.pickup_scheduled_at).getTime() + 7 * 86400000);
-      if (new Date(form.rental_end_at) < minReturn) return 'Rental must be at least one week';
-    } else if (key === 'vehicle') {
-      if (!form.assigned_vehicle_id) return 'Select a vehicle';
-    } else if (key === 'customer') {
-      if (!form.first_name || !form.last_name || !form.phone || !form.email) return 'All customer fields are required';
-    } else if (key === 'insurance') {
-      // optional — no validation required
-    }
+    // Validation disabled while just viewing/testing the booking flow.
     return null;
   }
 
