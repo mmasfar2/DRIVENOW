@@ -124,6 +124,8 @@
 .resv-vehicle-option.selected { border-color: var(--black); background: var(--gray-light); }
 .resv-review-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--gray-border); font-size: 0.88rem; }
 .resv-review-row:last-child { border-bottom: none; }
+.resv-review-row > span:first-child { color: var(--text-muted); }
+.resv-review-row > span:last-child { font-weight: 600; text-align: right; }
 
 .resv-modal--wide { width: 640px; }
 .resv-vsearch { display: flex; align-items: center; gap: 8px; padding: 0 14px; border: 1.5px solid var(--gray-border); border-radius: 6px; margin-bottom: 18px; }
@@ -221,9 +223,24 @@
   display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;
   background: var(--gray-light); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
 }
-.resv-review-panel__head a { font-size: 0.72rem; font-weight: 700; text-transform: none; letter-spacing: 0; color: var(--black); cursor: pointer; text-decoration: underline; }
+.resv-review-panel__head-links { display: flex; gap: 14px; }
+.resv-review-panel__head a {
+  font-size: 0.72rem; font-weight: 700; text-transform: none; letter-spacing: 0; color: var(--black);
+  cursor: pointer; text-decoration: underline;
+}
 .resv-review-panel__body { padding: 4px 16px; }
+.resv-review-row--total { display: flex; justify-content: space-between; padding-top: 10px; font-weight: 800; font-size: 0.95rem; }
 .resv-review-total { font-weight: 800; }
+.resv-review-note {
+  display: flex; gap: 10px; align-items: flex-start; border: 1.5px solid var(--gray-border); border-radius: 8px;
+  background: var(--gray-light); padding: 14px 16px; margin-top: 4px; font-size: 0.82rem;
+}
+.resv-review-note__icon {
+  width: 22px; height: 22px; min-width: 22px; border-radius: 50%; background: var(--black); color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 0.78rem;
+}
+.resv-review-note strong { display: block; margin-bottom: 2px; }
+.resv-review-note span.muted { color: var(--text-muted); }
 </style>
 <script>
 let bookings = [];
@@ -667,10 +684,18 @@ function initNewReservationModal() {
 
     const { days, subtotal, salesTax, total } = computePricing();
     form.total_due_at_pickup = total;
+    const steps = getSteps();
+    const jump = (key) => { const i = steps.indexOf(key); if (i !== -1) { step = i + 1; renderStep(); } };
 
     body.innerHTML = `
       <div class="resv-review-panel">
-        <div class="resv-review-panel__head"><span>Dates & Vehicle</span></div>
+        <div class="resv-review-panel__head">
+          <span>Dates &amp; Vehicle</span>
+          <div class="resv-review-panel__head-links">
+            <a id="rv-edit-dates">Edit dates</a>
+            <a id="rv-edit-vehicle">Change vehicle</a>
+          </div>
+        </div>
         <div class="resv-review-panel__body">
           <div class="resv-review-row"><span>Pickup</span><span>${fmtDate(form.pickup_scheduled_at)}</span></div>
           <div class="resv-review-row"><span>Return</span><span>${fmtDate(form.rental_end_at)}</span></div>
@@ -680,15 +705,30 @@ function initNewReservationModal() {
         </div>
       </div>
       <div class="resv-review-panel">
-        <div class="resv-review-panel__head"><span>Pricing</span></div>
+        <div class="resv-review-panel__head">
+          <span>Pricing</span>
+          <div class="resv-review-panel__head-links">
+            <a id="rv-edit-dates2">Edit dates</a>
+          </div>
+        </div>
         <div class="resv-review-panel__body">
           <div class="resv-review-row"><span>Vehicle (${days}d &times; ${fmtMoney(form.weekly_rate / 7)}/d)</span><span>${fmtMoney(subtotal)}</span></div>
           <div class="resv-review-row"><span>Sales Tax (7.25%)</span><span>${fmtMoney(salesTax)}</span></div>
           <div class="resv-review-row"><span>Subtotal (excl. tax)</span><span>${fmtMoney(subtotal)}</span></div>
-          <div class="resv-review-row resv-review-total"><span>Estimated Total</span><span>${fmtMoney(total)}</span></div>
+          <div class="resv-review-row--total"><span>Estimated Total</span><span>${fmtMoney(total)}</span></div>
+        </div>
+      </div>
+      <div class="resv-review-note">
+        <div class="resv-review-note__icon">&#9993;</div>
+        <div>
+          <strong>Verification link will be emailed to ${form.email || '—'}</strong>
+          <span class="muted">The customer will complete: license upload &rarr; insurance &rarr; contract signing &rarr; payment.</span>
         </div>
       </div>
     `;
+    document.getElementById('rv-edit-dates').addEventListener('click', () => jump('dates'));
+    document.getElementById('rv-edit-dates2').addEventListener('click', () => jump('dates'));
+    document.getElementById('rv-edit-vehicle').addEventListener('click', () => jump('vehicle'));
   }
 
   function validateStep() {
