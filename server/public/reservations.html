@@ -50,7 +50,7 @@
   <div class="panel" style="padding:0;">
     <div style="display:flex;gap:4px;padding:0 20px;border-bottom:1px solid var(--gray-border);overflow-x:auto;">
       <button class="resv-tab active" data-bucket="all">All Bookings</button>
-      <button class="resv-tab" data-bucket="upcoming">Upcoming</button>
+      <button class="resv-tab" data-bucket="upcoming">Pending Check In</button>
       <button class="resv-tab" data-bucket="on_rental">On Rental</button>
       <button class="resv-tab" data-bucket="pending_payment">Pending Payment</button>
       <button class="resv-tab" data-bucket="completed">Completed</button>
@@ -59,7 +59,23 @@
       <input id="r-search" placeholder="Search by name, email, phone, or car..." style="flex:1;min-width:220px;padding:10px 14px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;">
       <span id="r-count" style="align-self:center;color:var(--text-muted);font-size:0.85rem;white-space:nowrap;"></span>
     </div>
-    <div id="r-list" style="padding:0 20px 20px;"></div>
+    <div style="overflow-x:auto;">
+      <table class="resv-table">
+        <thead>
+          <tr>
+            <th style="width:36px;"><input type="checkbox" id="r-check-all"></th>
+            <th>Res #</th>
+            <th>Customer</th>
+            <th>Vehicle</th>
+            <th>Pickup</th>
+            <th>Return</th>
+            <th>Stage</th>
+            <th style="width:36px;"></th>
+          </tr>
+        </thead>
+        <tbody id="r-list"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 </div>
@@ -86,11 +102,31 @@
 .resv-tab { padding: 14px 16px; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
 .resv-tab:hover { color: var(--black); }
 .resv-tab.active { color: var(--black); border-bottom-color: var(--black); }
-.resv-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--gray-border); gap: 16px; flex-wrap: wrap; }
-.resv-row:last-child { border-bottom: none; }
 .resv-row__name { font-weight: 700; font-size: 0.92rem; }
 .resv-row__sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
-.resv-row__right { display: flex; align-items: center; gap: 16px; }
+
+.resv-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+.resv-table th {
+  text-align: left; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-muted); padding: 12px 12px; border-bottom: 1px solid var(--gray-border); white-space: nowrap;
+}
+.resv-table td { padding: 14px 12px; border-bottom: 1px solid var(--gray-border); vertical-align: middle; }
+.resv-table tbody tr:last-child td { border-bottom: none; }
+.resv-table tbody tr:hover { background: var(--gray-light); }
+.resv-table__resnum { font-weight: 700; color: var(--text-muted); }
+.resv-table__vehicle { display: flex; align-items: center; gap: 8px; }
+.resv-table__vehicle-icon {
+  width: 28px; height: 28px; border-radius: 6px; background: var(--gray-light); display: flex;
+  align-items: center; justify-content: center; color: var(--text-muted);
+}
+.resv-table__date { font-weight: 600; }
+.resv-table__time { font-size: 0.76rem; color: var(--text-muted); }
+.resv-table__owed { font-size: 0.76rem; color: #c0392b; margin-top: 2px; }
+.resv-table__view {
+  display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px;
+  color: var(--text-muted); text-decoration: none;
+}
+.resv-table__view:hover { background: var(--gray-light); color: var(--black); }
 
 .resv-modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex;
@@ -292,7 +328,7 @@ let bookings = [];
 let activeBucket = 'all';
 
 const bucketLabels = {
-  upcoming: { text: 'Upcoming', cls: 'badge-reserved' },
+  upcoming: { text: 'Pending Check In', cls: 'badge-reserved' },
   on_rental: { text: 'On Rental', cls: 'badge-rented' },
   pending_payment: { text: 'Pending Payment', cls: 'badge-rejected' },
   completed: { text: 'Completed', cls: 'badge-completed' },
@@ -312,27 +348,35 @@ function renderList() {
 
   document.getElementById('r-count').textContent = `${filtered.length} reservation${filtered.length === 1 ? '' : 's'}`;
 
-  document.getElementById('r-list').innerHTML = filtered.length
-    ? filtered.map(b => {
-        const label = bucketLabels[b.bucket];
-        return `
-          <div class="resv-row">
-            <div>
-              <div class="resv-row__name">${b.first_name} ${b.last_name}</div>
-              <div class="resv-row__sub">${b.year} ${b.make} ${b.model} · ${fmtDate(b.updated_at)}</div>
-            </div>
-            <div class="resv-row__right">
-              <div style="text-align:right;">
-                <div style="font-weight:700;">${fmtMoney(b.weekly_rate)}<span style="font-weight:400;color:var(--text-muted);font-size:0.78rem;"> /wk</span></div>
-                ${b.bucket === 'pending_payment' ? `<div class="resv-row__sub">Invoiced ${fmtMoney(b.invoice_amount)}</div>` : ''}
-              </div>
-              <span class="badge ${label.cls}">${label.text}</span>
-              <a href="application.html?id=${b.id}" class="btn btn-sm btn-outline">View</a>
-            </div>
+  const listEl = document.getElementById('r-list');
+  if (!filtered.length) {
+    listEl.innerHTML = `<tr><td colspan="8"><div class="empty-state">${icon('calendar', 36)}<div style="font-size:1rem;font-weight:700;color:var(--black);">No Bookings Found</div><span>No reservations match your current filter. Try changing the filter or check back later.</span></div></td></tr>`;
+    return;
+  }
+
+  listEl.innerHTML = filtered.map(b => {
+    const label = bucketLabels[b.bucket];
+    return `
+      <tr>
+        <td><input type="checkbox"></td>
+        <td class="resv-table__resnum">#${String(b.id).padStart(3, '0')}</td>
+        <td><div class="resv-row__name">${b.first_name} ${b.last_name}</div></td>
+        <td>
+          <div class="resv-table__vehicle">
+            <div class="resv-table__vehicle-icon">${icon('car', 16)}</div>
+            <span>${b.year} ${b.make} ${b.model}</span>
           </div>
-        `;
-      }).join('')
-    : `<div class="empty-state">${icon('calendar', 36)}<div style="font-size:1rem;font-weight:700;color:var(--black);">No Bookings Found</div><span>No reservations match your current filter. Try changing the filter or check back later.</span></div>`;
+        </td>
+        <td><div class="resv-table__date">${fmtDate(b.pickup_scheduled_at)}</div></td>
+        <td><div class="resv-table__date">${fmtDate(b.rental_end_at)}</div></td>
+        <td>
+          <span class="badge ${label.cls}">${label.text}</span>
+          ${b.bucket === 'pending_payment' ? `<div class="resv-table__owed">${fmtMoney(b.invoice_amount)} owed</div>` : ''}
+        </td>
+        <td><a href="application.html?id=${b.id}" class="resv-table__view" title="View">${icon('eye', 16)}</a></td>
+      </tr>
+    `;
+  }).join('');
 }
 
 (async () => {

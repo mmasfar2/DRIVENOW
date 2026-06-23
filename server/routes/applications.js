@@ -224,7 +224,7 @@ router.patch('/:id', requireAuth, (req, res) => {
 router.get('/bookings/all', requireAuth, (req, res) => {
   const rows = db.prepare(`
     SELECT a.id, a.first_name, a.last_name, a.phone, a.email, a.weekly_rate, a.total_due_at_pickup,
-           a.payment_status, a.invoice_amount, a.invoice_sent_at, a.pickup_scheduled_at, a.status, a.updated_at,
+           a.payment_status, a.invoice_amount, a.invoice_sent_at, a.pickup_scheduled_at, a.rental_end_at, a.status, a.updated_at,
            v.id as vehicle_id, v.make, v.model, v.year, v.status as vehicle_status
     FROM applications a
     JOIN vehicles v ON v.id = a.assigned_vehicle_id
