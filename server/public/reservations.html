@@ -65,13 +65,7 @@
       <div class="resv-modal__title">New Reservation</div>
       <button class="resv-modal__close" id="resv-modal-close">&times;</button>
     </div>
-    <div class="resv-steps">
-      <div class="resv-step-dot active" data-step="1"><span>1</span>Type</div>
-      <div class="resv-step-dot" data-step="2"><span>2</span>Dates</div>
-      <div class="resv-step-dot" data-step="3"><span>3</span>Vehicle</div>
-      <div class="resv-step-dot" data-step="4"><span>4</span>Customer</div>
-      <div class="resv-step-dot" data-step="5"><span>5</span>Review</div>
-    </div>
+    <div class="resv-steps" id="resv-steps"></div>
     <div class="resv-modal__body" id="resv-modal-body"></div>
     <div class="resv-modal__footer">
       <button class="btn btn-outline btn-sm" id="resv-back-btn">Back</button>
@@ -162,6 +156,37 @@
   background-repeat: no-repeat; background-position: right 14px center; background-size: 14px;
 }
 .resv-type-select:focus { outline: none; border-color: var(--black); }
+
+.resv-toggle-row { display: flex; gap: 10px; margin-bottom: 18px; }
+.resv-toggle-btn {
+  flex: 1; padding: 11px 14px; border: 1.5px solid var(--gray-border); border-radius: 6px;
+  background: #fff; font-weight: 700; font-size: 0.85rem; cursor: pointer; color: var(--text-muted);
+}
+.resv-toggle-btn.active { border-color: var(--black); background: var(--black); color: #fff; }
+.resv-customer-result {
+  display: flex; justify-content: space-between; align-items: center; padding: 10px 12px;
+  border: 1.5px solid var(--gray-border); border-radius: 6px; margin-bottom: 8px; cursor: pointer;
+}
+.resv-customer-result:hover { border-color: var(--black); }
+.resv-customer-result.selected { border-color: var(--black); background: var(--gray-light); }
+.resv-upload-box {
+  border: 1.5px dashed var(--gray-border); border-radius: 6px; padding: 16px; text-align: center;
+  font-size: 0.82rem; color: var(--text-muted); cursor: pointer; background: var(--gray-light);
+}
+.resv-upload-box:hover { border-color: var(--black); }
+.resv-upload-box.has-file { color: var(--black); font-weight: 600; }
+.resv-upload-box input { display: none; }
+.resv-upload-box.disabled { cursor: not-allowed; opacity: 0.6; }
+.resv-insurance-row { margin-bottom: 18px; }
+.resv-insurance-row__label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; color: #444; }
+.resv-review-panel { border: 1.5px solid var(--gray-border); border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+.resv-review-panel__head {
+  display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;
+  background: var(--gray-light); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.resv-review-panel__head a { font-size: 0.72rem; font-weight: 700; text-transform: none; letter-spacing: 0; color: var(--black); cursor: pointer; text-decoration: underline; }
+.resv-review-panel__body { padding: 4px 16px; }
+.resv-review-total { font-weight: 800; }
 </style>
 <script>
 let bookings = [];
@@ -250,17 +275,33 @@ function initNewReservationModal() {
   const backBtn = document.getElementById('resv-back-btn');
   const nextBtn = document.getElementById('resv-next-btn');
   const errorEl = document.getElementById('resv-error');
+  const stepsEl = document.getElementById('resv-steps');
+
+  const STEP_LABELS = { type: 'Type', dates: 'Dates', customer: 'Customer', vehicle: 'Vehicle', insurance: 'Insurance', review: 'Review' };
 
   let step = 1;
   let vehicles = [];
   let vehicleSearch = '';
   const openClasses = new Set();
+  let customerResults = [];
+  let customerSearchTerm = '';
+  let customerSearchTimer = null;
+
   const form = {
     source: '',
     pickup_scheduled_at: '', rental_end_at: '',
     assigned_vehicle_id: null, weekly_rate: null, total_due_at_pickup: '',
-    first_name: '', last_name: '', phone: '', email: '',
+    customer_mode: '', first_name: '', last_name: '', phone: '', email: '',
+    dob: '', license_number: '', address: '',
+    license_file: null, insurance_private_file: null, insurance_policy_file: null,
   };
+
+  function getSteps() {
+    return form.source === 'online'
+      ? ['type', 'dates', 'vehicle', 'customer', 'review']
+      : ['type', 'dates', 'customer', 'vehicle', 'insurance', 'review'];
+  }
+  function currentKey() { return getSteps()[step - 1]; }
 
   function todayStr(offsetDays = 0) {
     const d = new Date();
@@ -274,18 +315,21 @@ function initNewReservationModal() {
   }
 
   function setStepDots() {
-    document.querySelectorAll('.resv-step-dot').forEach(dot => {
-      dot.classList.toggle('active', Number(dot.dataset.step) === step);
-    });
+    const keys = getSteps();
+    stepsEl.innerHTML = keys.map((key, i) => `
+      <div class="resv-step-dot ${i + 1 === step ? 'active' : ''}"><span>${i + 1}</span>${STEP_LABELS[key]}</div>
+    `).join('');
     backBtn.style.visibility = step === 1 ? 'hidden' : 'visible';
-    nextBtn.textContent = step === 5 ? 'Create Reservation' : 'Next';
+    nextBtn.textContent = step === keys.length ? 'Create Reservation' : 'Next';
   }
 
   function renderStep() {
     showError('');
     setStepDots();
-    modalEl.classList.toggle('resv-modal--wide', step === 3);
-    if (step === 1) {
+    const key = currentKey();
+    modalEl.classList.toggle('resv-modal--wide', key === 'vehicle');
+
+    if (key === 'type') {
       body.innerHTML = `
         <div class="field">
           <label>Booking Source</label>
@@ -298,7 +342,8 @@ function initNewReservationModal() {
         <div style="font-size:0.78rem;color:var(--text-muted);">Was this reservation made online by the customer, or in person?</div>
       `;
       document.getElementById('f-source').addEventListener('change', (e) => { form.source = e.target.value; });
-    } else if (step === 2) {
+
+    } else if (key === 'dates') {
       const minPickup = todayStr(0);
       const maxPickup = todayStr(3);
       const minReturn = form.pickup_scheduled_at ? new Date(new Date(form.pickup_scheduled_at).getTime() + 7 * 86400000).toISOString().slice(0, 10) : '';
@@ -319,105 +364,234 @@ function initNewReservationModal() {
         renderStep();
       });
       document.getElementById('f-return').addEventListener('change', (e) => { form.rental_end_at = e.target.value; });
-    } else if (step === 3) {
-      const search = vehicleSearch.trim().toLowerCase();
-      const filtered = vehicles.filter(v =>
-        !search || `${v.make} ${v.model} ${v.year}`.toLowerCase().includes(search)
-      );
 
-      const classes = {};
-      filtered.forEach(v => {
-        const key = `${v.make} ${v.model}`;
-        (classes[key] = classes[key] || []).push(v);
-      });
-      const classKeys = Object.keys(classes);
-      if (classKeys.length && openClasses.size === 0) classKeys.forEach(k => openClasses.add(k));
+    } else if (key === 'vehicle') {
+      renderVehicleStep();
 
+    } else if (key === 'customer') {
+      if (form.source === 'online') {
+        renderSimpleCustomerForm();
+      } else {
+        renderInPersonCustomerStep();
+      }
+
+    } else if (key === 'insurance') {
       body.innerHTML = `
-        <div class="resv-vsearch">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input id="f-vsearch" placeholder="Search by make, model, or year..." value="${vehicleSearch}">
+        <div class="resv-insurance-row">
+          <div class="resv-insurance-row__label">Private</div>
+          ${uploadBoxHtml('f-insurance-private', form.insurance_private_file)}
         </div>
-        <div class="resv-class-label">Vehicle Classes</div>
-        ${classKeys.length ? classKeys.map(key => {
-          const list = classes[key];
-          const available = list.filter(v => v.status === 'available').length;
-          const minRate = Math.min(...list.map(v => v.weekly_rate));
-          const open = openClasses.has(key);
-          return `
-            <div class="resv-class-card">
-              <div class="resv-class-card__head" data-class="${key}">
-                <div>
-                  <div class="resv-class-card__name">${key}</div>
-                  <div class="resv-class-card__meta">
-                    <span class="badge badge-available">${available} available</span>
-                    <span style="font-size:0.76rem;color:var(--text-muted);">${list.length} total</span>
-                  </div>
-                </div>
-                <div style="display:flex;align-items:center;">
-                  <div class="resv-class-card__price">${fmtMoney(minRate)}<small>/week</small></div>
-                  <span class="resv-class-card__chevron ${open ? 'open' : ''}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+        <div class="resv-insurance-row">
+          <div class="resv-insurance-row__label">Our Policies</div>
+          ${uploadBoxHtml('f-insurance-policies', form.insurance_policy_file)}
+        </div>
+        <div class="resv-insurance-row">
+          <div class="resv-insurance-row__label">Third Party Insurance</div>
+          <div class="resv-upload-box disabled">Not available yet</div>
+        </div>
+      `;
+      bindUploadBox('f-insurance-private', (file) => { form.insurance_private_file = file; renderStep(); });
+      bindUploadBox('f-insurance-policies', (file) => { form.insurance_policy_file = file; renderStep(); });
+
+    } else if (key === 'review') {
+      renderReviewStep();
+    }
+  }
+
+  function uploadBoxHtml(id, file) {
+    return `
+      <label class="resv-upload-box ${file ? 'has-file' : ''}" id="${id}-box">
+        ${file ? `Selected: ${file.name}` : 'Click to upload a file'}
+        <input type="file" id="${id}">
+      </label>
+    `;
+  }
+  function bindUploadBox(id, onChange) {
+    document.getElementById(id).addEventListener('change', (e) => { onChange(e.target.files[0] || null); });
+  }
+
+  function renderVehicleStep() {
+    const search = vehicleSearch.trim().toLowerCase();
+    const filtered = vehicles.filter(v =>
+      !search || `${v.make} ${v.model} ${v.year}`.toLowerCase().includes(search)
+    );
+
+    const classes = {};
+    filtered.forEach(v => {
+      const key = `${v.make} ${v.model}`;
+      (classes[key] = classes[key] || []).push(v);
+    });
+    const classKeys = Object.keys(classes);
+    if (classKeys.length && openClasses.size === 0) classKeys.forEach(k => openClasses.add(k));
+
+    body.innerHTML = `
+      <div class="resv-vsearch">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="f-vsearch" placeholder="Search by make, model, or year..." value="${vehicleSearch}">
+      </div>
+      <div class="resv-class-label">Vehicle Classes</div>
+      ${classKeys.length ? classKeys.map(key => {
+        const list = classes[key];
+        const available = list.filter(v => v.status === 'available').length;
+        const minRate = Math.min(...list.map(v => v.weekly_rate));
+        const open = openClasses.has(key);
+        return `
+          <div class="resv-class-card">
+            <div class="resv-class-card__head" data-class="${key}">
+              <div>
+                <div class="resv-class-card__name">${key}</div>
+                <div class="resv-class-card__meta">
+                  <span class="badge badge-available">${available} available</span>
+                  <span style="font-size:0.76rem;color:var(--text-muted);">${list.length} total</span>
                 </div>
               </div>
-              <div class="resv-class-card__body" style="display:${open ? 'block' : 'none'};">
-                ${list.map(v => `
-                  <div class="resv-vehicle-card ${form.assigned_vehicle_id === v.id ? 'selected' : ''}" data-id="${v.id}">
-                    <div class="resv-vehicle-card__thumb">${v.photo_path ? `<img src="/uploads/${v.photo_path}">` : icon('car', 24)}</div>
-                    <div>
-                      <div class="resv-vehicle-card__name">${v.year} ${v.make} ${v.model}</div>
-                      <div class="resv-vehicle-card__sub">${v.notes || 'No additional notes'}</div>
-                    </div>
-                    <div class="resv-vehicle-card__right">
-                      <div class="resv-vehicle-card__price">${fmtMoney(v.weekly_rate)}<small> /wk</small></div>
-                      <span class="badge badge-${v.status === 'available' ? 'available' : v.status === 'reserved' ? 'reserved' : 'rented'}" style="margin-top:4px;display:inline-block;">${v.status}</span>
-                    </div>
-                  </div>
-                `).join('')}
+              <div style="display:flex;align-items:center;">
+                <div class="resv-class-card__price">${fmtMoney(minRate)}<small>/week</small></div>
+                <span class="resv-class-card__chevron ${open ? 'open' : ''}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
               </div>
             </div>
-          `;
-        }).join('') : `<div class="empty-state">${icon('car', 32)}<span>No vehicles match your search</span></div>`}
-      `;
+            <div class="resv-class-card__body" style="display:${open ? 'block' : 'none'};">
+              ${list.map(v => `
+                <div class="resv-vehicle-card ${form.assigned_vehicle_id === v.id ? 'selected' : ''}" data-id="${v.id}">
+                  <div class="resv-vehicle-card__thumb">${v.photo_path ? `<img src="/uploads/${v.photo_path}">` : icon('car', 24)}</div>
+                  <div>
+                    <div class="resv-vehicle-card__name">${v.year} ${v.make} ${v.model}</div>
+                    <div class="resv-vehicle-card__sub">${v.notes || 'No additional notes'}</div>
+                  </div>
+                  <div class="resv-vehicle-card__right">
+                    <div class="resv-vehicle-card__price">${fmtMoney(v.weekly_rate)}<small> /wk</small></div>
+                    <span class="badge badge-${v.status === 'available' ? 'available' : v.status === 'reserved' ? 'reserved' : 'rented'}" style="margin-top:4px;display:inline-block;">${v.status}</span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }).join('') : `<div class="empty-state">${icon('car', 32)}<span>No vehicles match your search</span></div>`}
+    `;
 
-      document.getElementById('f-vsearch').addEventListener('input', (e) => {
-        vehicleSearch = e.target.value;
+    document.getElementById('f-vsearch').addEventListener('input', (e) => {
+      vehicleSearch = e.target.value;
+      renderStep();
+      document.getElementById('f-vsearch').focus();
+    });
+    body.querySelectorAll('.resv-class-card__head').forEach(el => {
+      el.addEventListener('click', () => {
+        const key = el.dataset.class;
+        if (openClasses.has(key)) openClasses.delete(key); else openClasses.add(key);
         renderStep();
-        document.getElementById('f-vsearch').focus();
       });
-      body.querySelectorAll('.resv-class-card__head').forEach(el => {
+    });
+    body.querySelectorAll('.resv-vehicle-card').forEach(el => {
+      el.addEventListener('click', () => {
+        const v = vehicles.find(x => x.id === Number(el.dataset.id));
+        if (v.status !== 'available') return;
+        form.assigned_vehicle_id = v.id;
+        form.weekly_rate = v.weekly_rate;
+        renderStep();
+      });
+    });
+  }
+
+  function renderSimpleCustomerForm() {
+    body.innerHTML = `
+      <div class="field"><label>First Name</label><input id="f-first" value="${form.first_name}"></div>
+      <div class="field"><label>Last Name</label><input id="f-last" value="${form.last_name}"></div>
+      <div class="field"><label>Phone</label><input id="f-phone" value="${form.phone}"></div>
+      <div class="field"><label>Email</label><input id="f-email" value="${form.email}"></div>
+      <div class="field"><label>Total Due at Pickup (optional)</label><input id="f-total" type="number" value="${form.total_due_at_pickup}"></div>
+    `;
+    ['first', 'last', 'phone', 'email', 'total'].forEach(key => {
+      document.getElementById(`f-${key}`).addEventListener('input', (e) => {
+        const map = { first: 'first_name', last: 'last_name', phone: 'phone', email: 'email', total: 'total_due_at_pickup' };
+        form[map[key]] = e.target.value;
+      });
+    });
+  }
+
+  function renderInPersonCustomerStep() {
+    body.innerHTML = `
+      <div class="resv-toggle-row">
+        <button class="resv-toggle-btn ${form.customer_mode === 'existing' ? 'active' : ''}" id="f-mode-existing">Existing</button>
+        <button class="resv-toggle-btn ${form.customer_mode === 'new' ? 'active' : ''}" id="f-mode-new">New</button>
+      </div>
+      <div id="f-customer-body"></div>
+    `;
+    document.getElementById('f-mode-existing').addEventListener('click', () => { form.customer_mode = 'existing'; renderStep(); });
+    document.getElementById('f-mode-new').addEventListener('click', () => { form.customer_mode = 'new'; renderStep(); });
+
+    const customerBody = document.getElementById('f-customer-body');
+    if (form.customer_mode === 'existing') {
+      customerBody.innerHTML = `
+        <div class="field"><label>Search Customers</label><input id="f-csearch" placeholder="Name, phone, or email..." value="${customerSearchTerm}"></div>
+        <div id="f-cresults">${customerResults.length ? customerResults.map(c => `
+          <div class="resv-customer-result ${form.email === c.email ? 'selected' : ''}" data-id="${c.id}">
+            <div>
+              <div style="font-weight:700;">${c.first_name} ${c.last_name}</div>
+              <div style="font-size:0.78rem;color:var(--text-muted);">${c.phone} · ${c.email}</div>
+            </div>
+          </div>
+        `).join('') : (customerSearchTerm ? `<div class="empty-state"><span>No matching customers</span></div>` : '')}</div>
+      `;
+      document.getElementById('f-csearch').addEventListener('input', (e) => {
+        customerSearchTerm = e.target.value;
+        clearTimeout(customerSearchTimer);
+        customerSearchTimer = setTimeout(async () => {
+          customerResults = customerSearchTerm.trim() ? await api(`/api/applications/customers/search?q=${encodeURIComponent(customerSearchTerm.trim())}`) : [];
+          renderStep();
+          document.getElementById('f-csearch').focus();
+        }, 250);
+      });
+      document.querySelectorAll('.resv-customer-result').forEach(el => {
         el.addEventListener('click', () => {
-          const key = el.dataset.class;
-          if (openClasses.has(key)) openClasses.delete(key); else openClasses.add(key);
+          const c = customerResults.find(x => x.id === Number(el.dataset.id));
+          Object.assign(form, { first_name: c.first_name, last_name: c.last_name, phone: c.phone, email: c.email });
           renderStep();
         });
       });
-      body.querySelectorAll('.resv-vehicle-card').forEach(el => {
-        el.addEventListener('click', () => {
-          const v = vehicles.find(x => x.id === Number(el.dataset.id));
-          if (v.status !== 'available') return;
-          form.assigned_vehicle_id = v.id;
-          form.weekly_rate = v.weekly_rate;
-          renderStep();
-        });
-      });
-    } else if (step === 4) {
-      body.innerHTML = `
-        <div class="field"><label>First Name</label><input id="f-first" value="${form.first_name}"></div>
-        <div class="field"><label>Last Name</label><input id="f-last" value="${form.last_name}"></div>
+    } else if (form.customer_mode === 'new') {
+      customerBody.innerHTML = `
+        <div class="field"><label>Full Name</label><input id="f-fullname" value="${[form.first_name, form.last_name].filter(Boolean).join(' ')}"></div>
         <div class="field"><label>Phone</label><input id="f-phone" value="${form.phone}"></div>
         <div class="field"><label>Email</label><input id="f-email" value="${form.email}"></div>
-        <div class="field"><label>Total Due at Pickup (optional)</label><input id="f-total" type="number" value="${form.total_due_at_pickup}"></div>
+        <div class="field"><label>Date of Birth</label><input type="date" id="f-dob" value="${form.dob}"></div>
+        <div class="field">
+          <label>Driver License Upload</label>
+          ${uploadBoxHtml('f-license', form.license_file)}
+        </div>
+        <div class="field"><label>Driver License #</label><input id="f-licnum" value="${form.license_number}"></div>
+        <div class="field"><label>Current Address</label><input id="f-address" value="${form.address}"></div>
       `;
-      ['first', 'last', 'phone', 'email', 'total'].forEach(key => {
-        document.getElementById(`f-${key}`).addEventListener('input', (e) => {
-          const map = { first: 'first_name', last: 'last_name', phone: 'phone', email: 'email', total: 'total_due_at_pickup' };
-          form[map[key]] = e.target.value;
-        });
+      document.getElementById('f-fullname').addEventListener('input', (e) => {
+        const parts = e.target.value.trim().split(/\s+/);
+        form.first_name = parts.shift() || '';
+        form.last_name = parts.join(' ');
       });
-    } else if (step === 5) {
-      const v = vehicles.find(x => x.id === form.assigned_vehicle_id);
+      document.getElementById('f-phone').addEventListener('input', (e) => { form.phone = e.target.value; });
+      document.getElementById('f-email').addEventListener('input', (e) => { form.email = e.target.value; });
+      document.getElementById('f-dob').addEventListener('input', (e) => { form.dob = e.target.value; });
+      document.getElementById('f-licnum').addEventListener('input', (e) => { form.license_number = e.target.value; });
+      document.getElementById('f-address').addEventListener('input', (e) => { form.address = e.target.value; });
+      bindUploadBox('f-license', (file) => { form.license_file = file; renderStep(); });
+    }
+  }
+
+  function computePricing() {
+    const days = (form.pickup_scheduled_at && form.rental_end_at)
+      ? Math.round((new Date(form.rental_end_at) - new Date(form.pickup_scheduled_at)) / 86400000)
+      : 0;
+    const dailyRate = form.weekly_rate ? form.weekly_rate / 7 : 0;
+    const subtotal = Math.round(dailyRate * days * 100) / 100;
+    const salesTax = Math.round(subtotal * 0.0725 * 100) / 100;
+    const total = Math.round((subtotal + salesTax) * 100) / 100;
+    return { days, subtotal, salesTax, total };
+  }
+
+  function renderReviewStep() {
+    const v = vehicles.find(x => x.id === form.assigned_vehicle_id);
+    if (form.source === 'online') {
       body.innerHTML = `
-        <div class="resv-review-row"><span>Booking Source</span><span>${form.source === 'online' ? 'Online' : 'In-Person'}</span></div>
+        <div class="resv-review-row"><span>Booking Source</span><span>Online</span></div>
         <div class="resv-review-row"><span>Customer</span><span>${form.first_name} ${form.last_name}</span></div>
         <div class="resv-review-row"><span>Contact</span><span>${form.phone} · ${form.email}</span></div>
         <div class="resv-review-row"><span>Vehicle</span><span>${v ? `${v.year} ${v.make} ${v.model}` : '—'}</span></div>
@@ -426,21 +600,50 @@ function initNewReservationModal() {
         <div class="resv-review-row"><span>Weekly Rate</span><span>${fmtMoney(form.weekly_rate)}</span></div>
         <div class="resv-review-row"><span>Due at Pickup</span><span>${form.total_due_at_pickup ? fmtMoney(form.total_due_at_pickup) : '—'}</span></div>
       `;
+      return;
     }
+
+    const { days, subtotal, salesTax, total } = computePricing();
+    form.total_due_at_pickup = total;
+
+    body.innerHTML = `
+      <div class="resv-review-panel">
+        <div class="resv-review-panel__head"><span>Dates & Vehicle</span></div>
+        <div class="resv-review-panel__body">
+          <div class="resv-review-row"><span>Pickup</span><span>${fmtDate(form.pickup_scheduled_at)}</span></div>
+          <div class="resv-review-row"><span>Return</span><span>${fmtDate(form.rental_end_at)}</span></div>
+          <div class="resv-review-row"><span>Duration</span><span>${days} days</span></div>
+          <div class="resv-review-row"><span>Vehicle</span><span>${v ? `${v.year} ${v.make} ${v.model}` : '—'}</span></div>
+          <div class="resv-review-row"><span>Customer</span><span>${form.first_name} ${form.last_name}</span></div>
+        </div>
+      </div>
+      <div class="resv-review-panel">
+        <div class="resv-review-panel__head"><span>Pricing</span></div>
+        <div class="resv-review-panel__body">
+          <div class="resv-review-row"><span>Vehicle (${days}d &times; ${fmtMoney(form.weekly_rate / 7)}/d)</span><span>${fmtMoney(subtotal)}</span></div>
+          <div class="resv-review-row"><span>Sales Tax (7.25%)</span><span>${fmtMoney(salesTax)}</span></div>
+          <div class="resv-review-row"><span>Subtotal (excl. tax)</span><span>${fmtMoney(subtotal)}</span></div>
+          <div class="resv-review-row resv-review-total"><span>Estimated Total</span><span>${fmtMoney(total)}</span></div>
+        </div>
+      </div>
+    `;
   }
 
   function validateStep() {
-    if (step === 1) {
+    const key = currentKey();
+    if (key === 'type') {
       if (!form.source) return 'Select a booking source';
-    } else if (step === 2) {
+    } else if (key === 'dates') {
       if (!form.pickup_scheduled_at) return 'Select a pickup date';
       if (!form.rental_end_at) return 'Select a return date';
       const minReturn = new Date(new Date(form.pickup_scheduled_at).getTime() + 7 * 86400000);
       if (new Date(form.rental_end_at) < minReturn) return 'Rental must be at least one week';
-    } else if (step === 3) {
+    } else if (key === 'vehicle') {
       if (!form.assigned_vehicle_id) return 'Select a vehicle';
-    } else if (step === 4) {
+    } else if (key === 'customer') {
       if (!form.first_name || !form.last_name || !form.phone || !form.email) return 'All customer fields are required';
+    } else if (key === 'insurance') {
+      // optional — no validation required
     }
     return null;
   }
@@ -449,9 +652,12 @@ function initNewReservationModal() {
     step = 1;
     vehicleSearch = '';
     openClasses.clear();
+    customerResults = [];
+    customerSearchTerm = '';
     Object.assign(form, {
       source: '', pickup_scheduled_at: '', rental_end_at: '', assigned_vehicle_id: null, weekly_rate: null,
-      total_due_at_pickup: '', first_name: '', last_name: '', phone: '', email: '',
+      total_due_at_pickup: '', customer_mode: '', first_name: '', last_name: '', phone: '', email: '',
+      dob: '', license_number: '', address: '', license_file: null, insurance_private_file: null, insurance_policy_file: null,
     });
     overlay.style.display = 'flex';
     try {
@@ -469,11 +675,23 @@ function initNewReservationModal() {
   nextBtn.addEventListener('click', async () => {
     const err = validateStep();
     if (err) { showError(err); return; }
-    if (step < 5) { step++; renderStep(); return; }
+    const totalSteps = getSteps().length;
+    if (step < totalSteps) { step++; renderStep(); return; }
 
     nextBtn.disabled = true;
     try {
-      await api('/api/applications/manual-booking', { method: 'POST', body: JSON.stringify(form) });
+      const fd = new FormData();
+      ['source', 'pickup_scheduled_at', 'rental_end_at', 'assigned_vehicle_id', 'weekly_rate',
+       'total_due_at_pickup', 'first_name', 'last_name', 'phone', 'email', 'dob', 'license_number', 'address']
+        .forEach(k => fd.append(k, form[k] ?? ''));
+      if (form.license_file) fd.append('license', form.license_file);
+      if (form.insurance_private_file) fd.append('insurance_private', form.insurance_private_file);
+      if (form.insurance_policy_file) fd.append('insurance_policies', form.insurance_policy_file);
+
+      const res = await fetch('/api/applications/manual-booking', { method: 'POST', body: fd });
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(resData.error || 'Request failed');
+
       overlay.style.display = 'none';
       const data = await api('/api/applications/bookings/all');
       bookings = data.bookings;

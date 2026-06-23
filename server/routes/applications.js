@@ -249,12 +249,35 @@ router.get('/bookings/all', requireAuth, (req, res) => {
   res.json({ bookings, stats: { totalBookings, upcoming, onRental, outstandingBalance } });
 });
 
+// ── AUTHED: Search existing customers by name/phone/email (for manual booking) ──
+router.get('/customers/search', requireAuth, (req, res) => {
+  const term = `%${(req.query.q || '').toLowerCase()}%`;
+  const rows = db.prepare(`
+    SELECT id, first_name, last_name, phone, email, license_number, address, dob
+    FROM applications
+    WHERE lower(first_name) LIKE ? OR lower(last_name) LIKE ? OR lower(email) LIKE ? OR lower(phone) LIKE ?
+    ORDER BY created_at DESC LIMIT 10
+  `).all(term, term, term, term);
+  res.json(rows);
+});
+
 // ── AUTHED: Manual Booking — VA/owner creates a reservation directly ──
-router.post('/manual-booking', requireAuth, (req, res) => {
+const uploadManual = multer({
+  storage: multer.diskStorage({
+    destination: UPLOADS_DIR,
+    filename: (req, file, cb) => {
+      cb(null, `${Date.now()}-${file.fieldname}-${file.originalname}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+}).fields([{ name: 'license' }, { name: 'insurance_private' }, { name: 'insurance_policies' }]);
+
+router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
   const {
     first_name, last_name, phone, email,
     assigned_vehicle_id, weekly_rate, total_due_at_pickup,
     pickup_scheduled_at, rental_end_at, source,
+    dob, license_number, address,
   } = req.body;
 
   if (!first_name || !last_name || !phone || !email) {
@@ -268,13 +291,21 @@ router.post('/manual-booking', requireAuth, (req, res) => {
   if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
 
   const bookingSource = source === 'online' ? 'manual_booking_online' : 'manual_booking_in_person';
+  const licensePath = req.files?.license?.[0]?.filename || null;
+  const insurancePrivatePath = req.files?.insurance_private?.[0]?.filename || null;
+  const insurancePolicyPath = req.files?.insurance_policies?.[0]?.filename || null;
 
   const result = db.prepare(`
     INSERT INTO applications
       (first_name, last_name, phone, email, consent_background, stage, status,
-       assigned_vehicle_id, weekly_rate, total_due_at_pickup, pickup_scheduled_at, rental_end_at, source)
-    VALUES (?, ?, ?, ?, 1, 6, 'active', ?, ?, ?, ?, ?, ?)
-  `).run(first_name, last_name, phone, email, assigned_vehicle_id, weekly_rate, total_due_at_pickup || null, pickup_scheduled_at, rental_end_at, bookingSource);
+       assigned_vehicle_id, weekly_rate, total_due_at_pickup, pickup_scheduled_at, rental_end_at, source,
+       dob, license_number, address, license_path, insurance_path, insurance_private_path)
+    VALUES (?, ?, ?, ?, 1, 6, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    first_name, last_name, phone, email, assigned_vehicle_id, weekly_rate, total_due_at_pickup || null,
+    pickup_scheduled_at, rental_end_at, bookingSource,
+    dob || null, license_number || null, address || null, licensePath, insurancePolicyPath, insurancePrivatePath
+  );
 
   const appId = result.lastInsertRowid;
   db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ?").run(assigned_vehicle_id);
