@@ -274,7 +274,7 @@
   cursor: pointer; text-decoration: underline;
 }
 .resv-review-panel__body { padding: 4px 16px; }
-.resv-review-row--total { display: flex; justify-content: space-between; padding-top: 10px; font-weight: 800; font-size: 0.95rem; }
+.resv-review-row--total { display: flex; justify-content: space-between; padding-top: 10px; padding-left: 16px; font-weight: 800; font-size: 0.95rem; }
 .resv-review-total { font-weight: 800; }
 .resv-review-note {
   display: flex; gap: 10px; align-items: flex-start; border: 1.5px solid var(--gray-border); border-radius: 8px;
@@ -899,8 +899,7 @@ function initNewReservationModal() {
         <div class="resv-review-panel__body">
           <div class="resv-review-row"><span>Vehicle (${days}d &times; ${fmtMoney(form.weekly_rate / 7)}/d)</span><span>${fmtMoney(subtotal)}</span></div>
           <div class="resv-review-row"><span>Sales Tax (7.25%)</span><span>${fmtMoney(salesTax)}</span></div>
-          <div class="resv-review-row"><span>Subtotal (excl. tax)</span><span>${fmtMoney(subtotal)}</span></div>
-          <div class="resv-review-row--total"><span>Estimated Total</span><span>${fmtMoney(total)}</span></div>
+          <div class="resv-review-row--total"><span>Total</span><span>${fmtMoney(total)}</span></div>
         </div>
       </div>
     `;
