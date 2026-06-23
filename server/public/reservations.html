@@ -163,6 +163,7 @@
   background: #fff; font-weight: 700; font-size: 0.85rem; cursor: pointer; color: var(--text-muted);
 }
 .resv-toggle-btn.active { border-color: var(--black); background: var(--black); color: #fff; }
+.resv-toggle-btn { display: flex; align-items: center; justify-content: center; gap: 6px; }
 .resv-customer-result {
   display: flex; justify-content: space-between; align-items: center; padding: 10px 12px;
   border: 1.5px solid var(--gray-border); border-radius: 6px; margin-bottom: 8px; cursor: pointer;
@@ -291,7 +292,7 @@ function initNewReservationModal() {
     source: '',
     pickup_scheduled_at: '', rental_end_at: '',
     assigned_vehicle_id: null, weekly_rate: null, total_due_at_pickup: '',
-    customer_mode: '', first_name: '', last_name: '', phone: '', email: '',
+    customer_mode: 'existing', first_name: '', last_name: '', phone: '', email: '',
     dob: '', license_number: '', address: '',
     license_file: null, insurance_private_file: null, insurance_policy_file: null,
   };
@@ -510,9 +511,13 @@ function initNewReservationModal() {
   }
 
   function renderInPersonCustomerStep() {
+    if (!form.customer_mode) form.customer_mode = 'existing';
     body.innerHTML = `
       <div class="resv-toggle-row">
-        <button class="resv-toggle-btn ${form.customer_mode === 'existing' ? 'active' : ''}" id="f-mode-existing">Existing</button>
+        <button class="resv-toggle-btn ${form.customer_mode === 'existing' ? 'active' : ''}" id="f-mode-existing">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Existing
+        </button>
         <button class="resv-toggle-btn ${form.customer_mode === 'new' ? 'active' : ''}" id="f-mode-new">New</button>
       </div>
       <div id="f-customer-body"></div>
@@ -523,7 +528,10 @@ function initNewReservationModal() {
     const customerBody = document.getElementById('f-customer-body');
     if (form.customer_mode === 'existing') {
       customerBody.innerHTML = `
-        <div class="field"><label>Search Customers</label><input id="f-csearch" placeholder="Name, phone, or email..." value="${customerSearchTerm}"></div>
+        <div class="resv-vsearch">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="f-csearch" placeholder="Search by name, email, phone" value="${customerSearchTerm}">
+        </div>
         <div id="f-cresults">${customerResults.length ? customerResults.map(c => `
           <div class="resv-customer-result ${form.email === c.email ? 'selected' : ''}" data-id="${c.id}">
             <div>
@@ -656,7 +664,7 @@ function initNewReservationModal() {
     customerSearchTerm = '';
     Object.assign(form, {
       source: '', pickup_scheduled_at: '', rental_end_at: '', assigned_vehicle_id: null, weekly_rate: null,
-      total_due_at_pickup: '', customer_mode: '', first_name: '', last_name: '', phone: '', email: '',
+      total_due_at_pickup: '', customer_mode: 'existing', first_name: '', last_name: '', phone: '', email: '',
       dob: '', license_number: '', address: '', license_file: null, insurance_private_file: null, insurance_policy_file: null,
     });
     overlay.style.display = 'flex';
