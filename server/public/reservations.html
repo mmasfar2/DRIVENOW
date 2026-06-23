@@ -114,6 +114,8 @@
 }
 .resv-step-dot.active { color: var(--black); border-bottom-color: var(--black); }
 .resv-step-dot.active span { background: var(--black); color: #fff; }
+.resv-step-dot.done { color: var(--black); border-bottom-color: var(--black); }
+.resv-step-dot.done span { background: #fff; color: var(--black); border: 1.5px solid var(--black); }
 .resv-modal__body { padding: 22px; overflow-y: auto; flex: 1; }
 .resv-modal__footer { display: flex; align-items: center; gap: 12px; padding: 16px 22px; border-top: 1px solid var(--gray-border); }
 .resv-vehicle-option {
@@ -259,7 +261,8 @@
 }
 .resv-insurance-option__label { font-size: 0.88rem; font-weight: 600; }
 .resv-insurance-option__sub { font-size: 0.74rem; color: var(--text-muted); margin-top: 2px; }
-.resv-insurance-upload { margin-top: 4px; }
+.resv-insurance-upload { margin-top: 14px; margin-bottom: 48px; display: flex; justify-content: center; }
+.resv-insurance-upload .resv-upload-box { width: 60%; }
 .resv-review-panel { border: 1.5px solid var(--gray-border); border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
 .resv-review-panel__head {
   display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;
@@ -566,9 +569,15 @@ function initNewReservationModal() {
 
   function setStepDots() {
     const keys = getSteps();
-    stepsEl.innerHTML = keys.map((key, i) => `
-      <div class="resv-step-dot ${i + 1 === step ? 'active' : ''}"><span>${i + 1}</span>${STEP_LABELS[key]}</div>
-    `).join('');
+    stepsEl.innerHTML = keys.map((key, i) => {
+      const done = i + 1 < step;
+      const active = i + 1 === step;
+      return `
+        <div class="resv-step-dot ${active ? 'active' : ''} ${done ? 'done' : ''}">
+          <span>${done ? '&#10003;' : i + 1}</span>${STEP_LABELS[key]}
+        </div>
+      `;
+    }).join('');
     backBtn.style.visibility = step === 1 ? 'hidden' : 'visible';
     nextBtn.textContent = step === keys.length ? 'Create Reservation' : 'Next';
   }
@@ -892,13 +901,6 @@ function initNewReservationModal() {
           <div class="resv-review-row"><span>Sales Tax (7.25%)</span><span>${fmtMoney(salesTax)}</span></div>
           <div class="resv-review-row"><span>Subtotal (excl. tax)</span><span>${fmtMoney(subtotal)}</span></div>
           <div class="resv-review-row--total"><span>Estimated Total</span><span>${fmtMoney(total)}</span></div>
-        </div>
-      </div>
-      <div class="resv-review-note">
-        <div class="resv-review-note__icon">&#9993;</div>
-        <div>
-          <strong>Verification link will be emailed to ${form.email || '—'}</strong>
-          <span class="muted">The customer will complete: license upload &rarr; insurance &rarr; contract signing &rarr; payment.</span>
         </div>
       </div>
     `;
