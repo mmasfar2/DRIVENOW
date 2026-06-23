@@ -118,6 +118,19 @@ CREATE TABLE IF NOT EXISTS vehicle_maintenance (
   FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
 );
 
+CREATE TABLE IF NOT EXISTS waitlist (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  email TEXT,
+  desired_vehicle TEXT,
+  notes TEXT,
+  status TEXT NOT NULL DEFAULT 'waiting', -- waiting | contacted | fulfilled | cancelled
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS maintenance_photos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   maintenance_id INTEGER NOT NULL,

@@ -19,6 +19,7 @@ function icon(name, size = 18) {
 const SIDEBAR_LINKS = [
   { key: 'dashboard', label: 'Dashboard', href: 'dashboard.html' },
   { key: 'reservations', label: 'Reservations', href: 'reservations.html' },
+  { key: 'waitlist', label: 'Waitlist', href: 'waitlist.html' },
   { key: 'leads', label: 'Leads', href: 'leads.html' },
   { key: 'automation', label: 'Automation', href: 'automation.html' },
   { key: 'fleet', label: 'Fleet Management', href: 'fleet-admin.html' },

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Waitlist — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+.wl-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+.wl-tab { padding: 8px 16px; border-radius: 4px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #888; cursor: pointer; background: var(--gray-light); }
+.wl-tab.active { background: var(--black); color: #fff; }
+.badge-waiting { background: #fff3e0; color: #e65100; }
+.badge-contacted { background: #e3f2fd; color: #1565c0; }
+.badge-fulfilled { background: #e8f5e9; color: #2e7d32; }
+.badge-cancelled { background: #ffebee; color: #c62828; }
+</style>
+</head>
+<body>
+
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
+<div class="page">
+  <div class="page-title">Waitlist</div>
+  <div class="page-sub">Customers who wanted a car when none were available.</div>
+
+  <div class="cards-row" style="grid-template-columns: repeat(4, 1fr);">
+    <div class="stat-card"><div class="stat-card__label">Total Waiting</div><div class="stat-card__value" id="stat-waiting">—</div></div>
+    <div class="stat-card"><div class="stat-card__label">Contacted</div><div class="stat-card__value" id="stat-contacted">—</div></div>
+    <div class="stat-card"><div class="stat-card__label">Fulfilled</div><div class="stat-card__value green" id="stat-fulfilled">—</div></div>
+    <div class="stat-card"><div class="stat-card__label">Cancelled</div><div class="stat-card__value orange" id="stat-cancelled">—</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Add to Waitlist</div>
+    <div class="field-row">
+      <div class="field"><label>First Name</label><input id="new-first" placeholder="Jane"></div>
+      <div class="field"><label>Last Name</label><input id="new-last" placeholder="Doe"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Phone</label><input id="new-phone" placeholder="(555) 555-5555"></div>
+      <div class="field"><label>Email</label><input id="new-email" placeholder="jane@example.com"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Desired Vehicle</label><input id="new-vehicle" placeholder="e.g. Honda Accord, any sedan"></div>
+      <div class="field"><label>Notes</label><input id="new-notes" placeholder="Optional"></div>
+    </div>
+    <button class="btn" onclick="addEntry()">Add to Waitlist</button>
+  </div>
+
+  <div class="panel" style="padding:0;">
+    <div style="padding:24px 24px 0;">
+      <div class="wl-tabs">
+        <div class="wl-tab active" data-status="">All</div>
+        <div class="wl-tab" data-status="waiting">Waiting</div>
+        <div class="wl-tab" data-status="contacted">Contacted</div>
+        <div class="wl-tab" data-status="fulfilled">Fulfilled</div>
+        <div class="wl-tab" data-status="cancelled">Cancelled</div>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr><th>Customer</th><th>Phone</th><th>Desired Vehicle</th><th>Notes</th><th>Added</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody id="wl-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<script src="js/admin-common.js"></script>
+<script>
+let entries = [];
+let activeStatus = '';
+
+async function load() {
+  entries = await api('/api/waitlist');
+  renderStats();
+  render();
+}
+
+function renderStats() {
+  document.getElementById('stat-waiting').textContent = entries.filter(e => e.status === 'waiting').length;
+  document.getElementById('stat-contacted').textContent = entries.filter(e => e.status === 'contacted').length;
+  document.getElementById('stat-fulfilled').textContent = entries.filter(e => e.status === 'fulfilled').length;
+  document.getElementById('stat-cancelled').textContent = entries.filter(e => e.status === 'cancelled').length;
+}
+
+function render() {
+  const filtered = activeStatus ? entries.filter(e => e.status === activeStatus) : entries;
+  document.getElementById('wl-table-body').innerHTML = filtered.length ? filtered.map(e => `
+    <tr>
+      <td><strong>${e.first_name} ${e.last_name}</strong>${e.email ? `<div style="font-size:0.75rem;color:#888;">${e.email}</div>` : ''}</td>
+      <td>${e.phone}</td>
+      <td>${e.desired_vehicle || '—'}</td>
+      <td>${e.notes || '—'}</td>
+      <td>${fmtDate(e.created_at)}</td>
+      <td>
+        <select onchange="updateStatus(${e.id}, this.value)" style="padding:6px 10px;border:1.5px solid #e0e0e0;border-radius:4px;">
+          <option value="waiting" ${e.status === 'waiting' ? 'selected' : ''}>Waiting</option>
+          <option value="contacted" ${e.status === 'contacted' ? 'selected' : ''}>Contacted</option>
+          <option value="fulfilled" ${e.status === 'fulfilled' ? 'selected' : ''}>Fulfilled</option>
+          <option value="cancelled" ${e.status === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+        </select>
+      </td>
+      <td><button class="btn btn-sm btn-outline" onclick="removeEntry(${e.id})">Remove</button></td>
+    </tr>
+  `).join('') : '<tr><td colspan="7" style="text-align:center;color:#888;padding:32px;">No one on the waitlist yet.</td></tr>';
+}
+
+async function addEntry() {
+  const first_name = document.getElementById('new-first').value;
+  const last_name = document.getElementById('new-last').value;
+  const phone = document.getElementById('new-phone').value;
+  const email = document.getElementById('new-email').value;
+  const desired_vehicle = document.getElementById('new-vehicle').value;
+  const notes = document.getElementById('new-notes').value;
+  if (!first_name || !last_name || !phone) { alert('First name, last name, and phone are required'); return; }
+  await api('/api/waitlist', { method: 'POST', body: JSON.stringify({ first_name, last_name, phone, email, desired_vehicle, notes }) });
+  ['new-first', 'new-last', 'new-phone', 'new-email', 'new-vehicle', 'new-notes'].forEach(id => document.getElementById(id).value = '');
+  load();
+}
+
+async function updateStatus(id, status) {
+  await api(`/api/waitlist/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+  load();
+}
+
+async function removeEntry(id) {
+  if (!confirm('Remove this entry from the waitlist?')) return;
+  await api(`/api/waitlist/${id}`, { method: 'DELETE' });
+  load();
+}
+
+document.querySelectorAll('.wl-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.wl-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    activeStatus = tab.dataset.status;
+    render();
+  });
+});
+
+(async () => {
+  renderSidebar('waitlist');
+  await requireLogin();
+  load();
+})();
+</script>
+</body>
+</html>
