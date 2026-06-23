@@ -198,6 +198,24 @@
 .resv-upload-box.disabled { cursor: not-allowed; opacity: 0.6; }
 .resv-insurance-row { margin-bottom: 18px; }
 .resv-insurance-row__label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; color: #444; }
+.resv-insurance-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+.resv-insurance-option {
+  display: flex; align-items: center; gap: 12px; border: 1.5px solid var(--gray-border); border-radius: 6px;
+  padding: 14px 16px; cursor: pointer; background: #fff; transition: 0.15s;
+}
+.resv-insurance-option:hover { border-color: var(--black); }
+.resv-insurance-option.selected { border-color: var(--black); background: var(--gray-light); }
+.resv-insurance-option.disabled { cursor: not-allowed; opacity: 0.55; }
+.resv-insurance-option__dot {
+  width: 16px; height: 16px; min-width: 16px; border-radius: 50%; border: 1.5px solid var(--gray-border); position: relative;
+}
+.resv-insurance-option.selected .resv-insurance-option__dot { border-color: var(--black); }
+.resv-insurance-option.selected .resv-insurance-option__dot::after {
+  content: ''; position: absolute; top: 3px; left: 3px; width: 8px; height: 8px; border-radius: 50%; background: var(--black);
+}
+.resv-insurance-option__label { font-size: 0.88rem; font-weight: 600; }
+.resv-insurance-option__sub { font-size: 0.74rem; color: var(--text-muted); margin-top: 2px; }
+.resv-insurance-upload { margin-top: 4px; }
 .resv-review-panel { border: 1.5px solid var(--gray-border); border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
 .resv-review-panel__head {
   display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;
@@ -383,22 +401,40 @@ function initNewReservationModal() {
       }
 
     } else if (key === 'insurance') {
+      const options = [
+        { id: 'private', label: 'Private', sub: 'Customer’s own insurance policy' },
+        { id: 'our_policies', label: 'Our Policies', sub: 'Insurance provided by DriveNow' },
+        { id: 'third_party', label: 'Third Party Insurance', sub: 'Not available yet', disabled: true },
+      ];
       body.innerHTML = `
-        <div class="resv-insurance-row">
-          <div class="resv-insurance-row__label">Private</div>
-          ${uploadBoxHtml('f-insurance-private', form.insurance_private_file)}
+        <div class="resv-insurance-options">
+          ${options.map(o => `
+            <div class="resv-insurance-option ${form.insurance_type === o.id ? 'selected' : ''} ${o.disabled ? 'disabled' : ''}" data-id="${o.id}" ${o.disabled ? 'data-disabled="1"' : ''}>
+              <div class="resv-insurance-option__dot"></div>
+              <div>
+                <div class="resv-insurance-option__label">${o.label}</div>
+                <div class="resv-insurance-option__sub">${o.sub}</div>
+              </div>
+            </div>
+          `).join('')}
         </div>
-        <div class="resv-insurance-row">
-          <div class="resv-insurance-row__label">Our Policies</div>
-          ${uploadBoxHtml('f-insurance-policies', form.insurance_policy_file)}
-        </div>
-        <div class="resv-insurance-row">
-          <div class="resv-insurance-row__label">Third Party Insurance</div>
-          <div class="resv-upload-box disabled">Not available yet</div>
-        </div>
+        <div class="resv-insurance-upload" id="f-insurance-upload"></div>
       `;
-      bindUploadBox('f-insurance-private', (file) => { form.insurance_private_file = file; renderStep(); });
-      bindUploadBox('f-insurance-policies', (file) => { form.insurance_policy_file = file; renderStep(); });
+      document.querySelectorAll('.resv-insurance-option').forEach(el => {
+        el.addEventListener('click', () => {
+          if (el.dataset.disabled) return;
+          form.insurance_type = el.dataset.id;
+          renderStep();
+        });
+      });
+      const uploadSlot = document.getElementById('f-insurance-upload');
+      if (form.insurance_type === 'private') {
+        uploadSlot.innerHTML = uploadBoxHtml('f-insurance-private', form.insurance_private_file);
+        bindUploadBox('f-insurance-private', (file) => { form.insurance_private_file = file; renderStep(); });
+      } else if (form.insurance_type === 'our_policies') {
+        uploadSlot.innerHTML = uploadBoxHtml('f-insurance-policies', form.insurance_policy_file);
+        bindUploadBox('f-insurance-policies', (file) => { form.insurance_policy_file = file; renderStep(); });
+      }
 
     } else if (key === 'review') {
       renderReviewStep();
@@ -665,7 +701,7 @@ function initNewReservationModal() {
     Object.assign(form, {
       source, pickup_scheduled_at: '', rental_end_at: '', assigned_vehicle_id: null, weekly_rate: null,
       total_due_at_pickup: '', customer_mode: 'existing', first_name: '', last_name: '', phone: '', email: '',
-      dob: '', license_number: '', address: '', license_file: null, insurance_private_file: null, insurance_policy_file: null,
+      dob: '', license_number: '', address: '', license_file: null, insurance_type: null, insurance_private_file: null, insurance_policy_file: null,
     });
     overlay.style.display = 'flex';
     try {
