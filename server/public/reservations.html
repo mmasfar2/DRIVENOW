@@ -408,17 +408,24 @@ function initNewReservationModal() {
       ];
       body.innerHTML = `
         <div class="resv-insurance-options">
-          ${options.map(o => `
-            <div class="resv-insurance-option ${form.insurance_type === o.id ? 'selected' : ''} ${o.disabled ? 'disabled' : ''}" data-id="${o.id}" ${o.disabled ? 'data-disabled="1"' : ''}>
-              <div class="resv-insurance-option__dot"></div>
+          ${options.map(o => {
+            let uploadHtml = '';
+            if (form.insurance_type === o.id && o.id === 'private') uploadHtml = uploadBoxHtml('f-insurance-private', form.insurance_private_file);
+            else if (form.insurance_type === o.id && o.id === 'our_policies') uploadHtml = uploadBoxHtml('f-insurance-policies', form.insurance_policy_file);
+            return `
               <div>
-                <div class="resv-insurance-option__label">${o.label}</div>
-                <div class="resv-insurance-option__sub">${o.sub}</div>
+                <div class="resv-insurance-option ${form.insurance_type === o.id ? 'selected' : ''} ${o.disabled ? 'disabled' : ''}" data-id="${o.id}" ${o.disabled ? 'data-disabled="1"' : ''}>
+                  <div class="resv-insurance-option__dot"></div>
+                  <div>
+                    <div class="resv-insurance-option__label">${o.label}</div>
+                    <div class="resv-insurance-option__sub">${o.sub}</div>
+                  </div>
+                </div>
+                ${uploadHtml ? `<div class="resv-insurance-upload">${uploadHtml}</div>` : ''}
               </div>
-            </div>
-          `).join('')}
+            `;
+          }).join('')}
         </div>
-        <div class="resv-insurance-upload" id="f-insurance-upload"></div>
       `;
       document.querySelectorAll('.resv-insurance-option').forEach(el => {
         el.addEventListener('click', () => {
@@ -427,12 +434,9 @@ function initNewReservationModal() {
           renderStep();
         });
       });
-      const uploadSlot = document.getElementById('f-insurance-upload');
       if (form.insurance_type === 'private') {
-        uploadSlot.innerHTML = uploadBoxHtml('f-insurance-private', form.insurance_private_file);
         bindUploadBox('f-insurance-private', (file) => { form.insurance_private_file = file; renderStep(); });
       } else if (form.insurance_type === 'our_policies') {
-        uploadSlot.innerHTML = uploadBoxHtml('f-insurance-policies', form.insurance_policy_file);
         bindUploadBox('f-insurance-policies', (file) => { form.insurance_policy_file = file; renderStep(); });
       }
 
