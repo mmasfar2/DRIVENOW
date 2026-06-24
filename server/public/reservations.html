@@ -617,17 +617,27 @@ async function openPaymentModal(bookingId) {
   const salesTax = Math.round(subtotal * SALES_TAX_RATE * 100) / 100;
 
   paymentBreakdownItems = [
-    { key: 'daily', label: `Rental Charge (${days || 0}d)`, amount: subtotal, checked: true },
-    { key: 'highway', label: 'Highway Tax (8%, included in rate)', amount: highwayTaxAmount, checked: true },
-    { key: 'sales', label: 'Sales Tax (7.25%)', amount: salesTax, checked: true },
+    { key: 'daily', type: 'rate', days, rate: Math.round(dailyRateExact * 100) / 100, checked: true },
+    { key: 'highway', type: 'amount', label: 'Highway Tax (8%, included in rate)', amount: highwayTaxAmount, checked: true },
+    { key: 'sales', type: 'amount', label: 'Sales Tax (7.25%)', amount: salesTax, checked: true },
   ];
 
   renderPaymentBreakdown();
   renderPaymentLog();
 }
 
+function getItemAmount(item) {
+  return item.type === 'rate'
+    ? Math.round(item.days * item.rate * 100) / 100
+    : Number(item.amount || 0);
+}
+
+function getItemLabel(item) {
+  return item.type === 'rate' ? `Lease Rate (${item.days} x ${item.rate})` : item.label;
+}
+
 function getInvoiceTotal() {
-  return Math.round(paymentBreakdownItems.filter(i => i.checked).reduce((sum, i) => sum + Number(i.amount || 0), 0) * 100) / 100;
+  return Math.round(paymentBreakdownItems.filter(i => i.checked).reduce((sum, i) => sum + getItemAmount(i), 0) * 100) / 100;
 }
 
 function renderPaymentBreakdown() {
@@ -640,8 +650,8 @@ function renderPaymentBreakdown() {
     ${paymentBreakdownItems.map((item, i) => `
       <div class="payment-breakdown-row">
         <input type="checkbox" class="pb-checkbox" data-i="${i}" ${item.checked ? 'checked' : ''}>
-        <div class="payment-breakdown-row__label">${item.label}</div>
-        <input type="number" step="0.01" class="pb-amount" data-i="${i}" value="${item.amount}">
+        <div class="payment-breakdown-row__label" id="pb-label-${i}">${getItemLabel(item)}</div>
+        <input type="text" inputmode="decimal" class="pb-amount" data-i="${i}" value="${item.type === 'rate' ? item.rate : item.amount}">
       </div>
     `).join('')}
   `;
@@ -654,7 +664,11 @@ function renderPaymentBreakdown() {
   });
   box.querySelectorAll('.pb-amount').forEach(inp => {
     inp.addEventListener('input', () => {
-      paymentBreakdownItems[Number(inp.dataset.i)].amount = Number(inp.value) || 0;
+      const item = paymentBreakdownItems[Number(inp.dataset.i)];
+      const value = Number(inp.value) || 0;
+      if (item.type === 'rate') item.rate = value;
+      else item.amount = value;
+      document.getElementById(`pb-label-${inp.dataset.i}`).textContent = getItemLabel(item);
       document.getElementById('invoice-total-display').textContent = `Invoice Total: ${fmtMoney(getInvoiceTotal())}`;
     });
   });
