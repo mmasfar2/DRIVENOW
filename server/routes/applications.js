@@ -222,9 +222,45 @@ router.post('/:id/payments', requireAuth, (req, res) => {
   res.status(201).json({ ok: true });
 });
 
+// ── AUTHED: Full reservation detail (booking + vehicle + payments + notes) ──
+router.get('/:id/detail', requireAuth, (req, res) => {
+  const row = db.prepare(`
+    SELECT a.*, v.id as vehicle_id, v.make, v.model, v.year, v.status as vehicle_status,
+           v.vin, v.license_plate, v.color, v.fuel_type, v.transmission
+    FROM applications a
+    LEFT JOIN vehicles v ON v.id = a.assigned_vehicle_id
+    WHERE a.id = ?
+  `).get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+
+  const payments = db.prepare('SELECT * FROM payments WHERE application_id = ? ORDER BY paid_at DESC, id DESC').all(req.params.id);
+  const notes = db.prepare('SELECT * FROM booking_notes WHERE application_id = ? ORDER BY created_at DESC').all(req.params.id);
+  const paidTotal = Math.round(payments.reduce((sum, p) => sum + Number(p.amount), 0) * 100) / 100;
+  const charge = row.invoice_amount || row.total_due_at_pickup || 0;
+  const owed = row.status === 'active' ? Math.max(0, Math.round((charge - paidTotal) * 100) / 100) : 0;
+
+  res.json({ ...row, payments, paid_total: paidTotal, owed, notes });
+});
+
+// ── AUTHED: Booking notes (internal, VA/owner only) ──
+router.get('/:id/notes', requireAuth, (req, res) => {
+  const rows = db.prepare('SELECT * FROM booking_notes WHERE application_id = ? ORDER BY created_at DESC').all(req.params.id);
+  res.json(rows);
+});
+
+router.post('/:id/notes', requireAuth, (req, res) => {
+  const { note } = req.body;
+  if (!note || !note.trim()) return res.status(400).json({ error: 'Note text is required' });
+  const id = req.params.id;
+  const app = db.prepare('SELECT id FROM applications WHERE id = ?').get(id);
+  if (!app) return res.status(404).json({ error: 'Not found' });
+  db.prepare('INSERT INTO booking_notes (application_id, note) VALUES (?, ?)').run(id, note.trim());
+  res.status(201).json({ ok: true });
+});
+
 // ── AUTHED: General notes / edit ──
 router.patch('/:id', requireAuth, (req, res) => {
-  const allowed = ['first_name', 'last_name', 'phone', 'email', 'address', 'occupation', 'intended_use', 'rental_end_at'];
+  const allowed = ['first_name', 'last_name', 'phone', 'email', 'address', 'occupation', 'intended_use', 'rental_end_at', 'odometer_out', 'odometer_in', 'pickup_location', 'dropoff_location'];
   const updates = [];
   const params = [];
   for (const key of allowed) {

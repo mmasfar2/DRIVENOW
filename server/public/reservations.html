@@ -415,7 +415,7 @@ function renderList() {
   listEl.innerHTML = filtered.map(b => {
     const owed = b.owed || 0;
     return `
-      <tr>
+      <tr class="resv-table__row" data-id="${b.id}" style="cursor:pointer;">
         <td><input type="checkbox"></td>
         <td class="resv-table__resnum">#${String(b.id).padStart(3, '0')}</td>
         <td><div class="resv-row__name">${b.first_name} ${b.last_name}</div></td>
@@ -441,7 +441,7 @@ function renderList() {
           <button class="btn btn-sm resv-table__pay-btn" data-id="${b.id}">Payment</button>
           <div class="resv-table__balance ${owed > 0 ? 'resv-table__balance--due' : ''}">${fmtMoney(owed)}</div>
         </td>
-        <td><a href="application.html?id=${b.id}" class="resv-table__view" title="View">${icon('eye', 16)}</a></td>
+        <td><a href="reservation-detail.html?id=${b.id}" class="resv-table__view" title="View">${icon('eye', 16)}</a></td>
       </tr>
     `;
   }).join('');
@@ -464,7 +464,13 @@ function renderList() {
     });
   });
   document.querySelectorAll('.resv-table__pay-btn').forEach(btn => {
-    btn.addEventListener('click', () => openPaymentModal(Number(btn.dataset.id)));
+    btn.addEventListener('click', (e) => { e.stopPropagation(); openPaymentModal(Number(btn.dataset.id)); });
+  });
+  document.querySelectorAll('.resv-table__row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('input, button, a')) return;
+      window.location.href = `reservation-detail.html?id=${row.dataset.id}`;
+    });
   });
 }
 

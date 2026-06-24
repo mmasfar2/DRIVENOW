@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reservation Detail — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
+<div class="page">
+  <a href="reservations.html" style="font-size:0.82rem;color:#888;">← Back to Reservations</a>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:12px;">
+    <div>
+      <div class="page-title" id="rd-title" style="margin-bottom:4px;">Loading…</div>
+      <div class="page-sub" style="margin-bottom:0;" id="rd-created"></div>
+    </div>
+    <span class="badge" id="rd-status-badge"></span>
+  </div>
+
+  <div class="rd-tabs">
+    <div class="rd-tab active" data-tab="details">Details</div>
+    <div class="rd-tab" data-tab="communications">Communications</div>
+    <div class="rd-tab" data-tab="financials">Financials</div>
+    <div class="rd-tab" data-tab="inspection">Inspection</div>
+    <div class="rd-tab" data-tab="documents">Documents</div>
+  </div>
+
+  <div id="rd-panel-details">
+    <div class="panel">
+      <div class="panel-title">Booking Summary</div>
+      <div class="rd-summary-grid">
+        <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Pickup</div><div class="info-row__val" id="rd-pickup"></div></div>
+        <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Return</div><div class="info-row__val" id="rd-return"></div></div>
+        <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Duration</div><div class="info-row__val" id="rd-duration"></div></div>
+        <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Odometer Out</div><div class="info-row__val" id="rd-odo-out"></div></div>
+        <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Odometer In</div><div class="info-row__val" id="rd-odo-in"></div></div>
+        <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Miles Driven</div><div class="info-row__val" id="rd-miles"></div></div>
+      </div>
+      <div id="rd-charges"></div>
+    </div>
+
+    <div class="rd-cols">
+      <div class="panel">
+        <div class="panel-title">Customer</div>
+        <div class="info-row"><div class="info-row__label">Name</div><div class="info-row__val" id="rd-cust-name"></div></div>
+        <div class="info-row"><div class="info-row__label">Email</div><div class="info-row__val" id="rd-cust-email"></div></div>
+        <div class="info-row"><div class="info-row__label">Phone</div><div class="info-row__val" id="rd-cust-phone"></div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Vehicle</div>
+        <div class="info-row"><div class="info-row__label">Vehicle</div><div class="info-row__val" id="rd-veh-name"></div></div>
+        <div class="info-row"><div class="info-row__label">License Plate</div><div class="info-row__val" id="rd-veh-plate"></div></div>
+        <div class="info-row"><div class="info-row__label">VIN</div><div class="info-row__val" id="rd-veh-vin"></div></div>
+        <div class="info-row"><div class="info-row__label">Color</div><div class="info-row__val" id="rd-veh-color"></div></div>
+        <div class="info-row"><div class="info-row__label">Fuel</div><div class="info-row__val" id="rd-veh-fuel"></div></div>
+        <div class="info-row"><div class="info-row__label">Transmission</div><div class="info-row__val" id="rd-veh-trans"></div></div>
+        <div class="info-row"><div class="info-row__label">Pickup Location</div><div class="info-row__val" id="rd-veh-pickup-loc"></div></div>
+        <div class="info-row"><div class="info-row__label">Drop-off Location</div><div class="info-row__val" id="rd-veh-dropoff-loc"></div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Booking Notes</div>
+      <div class="field">
+        <textarea id="rd-note-input" rows="2" placeholder="Add an internal note…"></textarea>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:18px;">
+        <button class="btn" id="rd-note-save">Save Note</button>
+      </div>
+      <div id="rd-notes-list"></div>
+    </div>
+  </div>
+
+  <div id="rd-panel-financials" style="display:none;">
+    <div class="panel">
+      <div class="panel-title">Payment Log</div>
+      <table>
+        <thead><tr><th>Date Paid</th><th style="text-align:right;">Amount Paid</th></tr></thead>
+        <tbody id="rd-payment-log-body"></tbody>
+      </table>
+      <div id="rd-rate-breakdown" class="payment-rate-breakdown"></div>
+      <div class="payment-log-actions">
+        <button class="btn btn-outline" id="rd-send-invoice-btn">Send Invoice</button>
+        <button class="btn" id="rd-add-payment-btn">Add Payment</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rd-panel-communications" style="display:none;">
+    <div class="panel"><div class="panel-title">Communications</div><p class="rd-empty">Communication history with this customer will appear here once messaging is wired up.</p></div>
+  </div>
+
+  <div id="rd-panel-inspection" style="display:none;">
+    <div class="panel"><div class="panel-title">Inspection</div><p class="rd-empty">Pickup/return vehicle condition reports will appear here.</p></div>
+  </div>
+
+  <div id="rd-panel-documents" style="display:none;">
+    <div class="panel"><div class="panel-title">Documents</div><p class="rd-empty">Signed agreements, uploaded license, and insurance documents will appear here.</p></div>
+  </div>
+</div>
+</div>
+</div>
+
+<div id="add-payment-overlay" class="simple-modal-overlay" style="display:none;">
+  <div class="simple-modal">
+    <div class="simple-modal__header">
+      <div class="simple-modal__title">Add Payment</div>
+      <button class="simple-modal__close" id="add-payment-close">&times;</button>
+    </div>
+    <div class="simple-modal__body">
+      <div class="field"><label>Date Paid</label><input type="date" id="ap-date"></div>
+      <div class="field"><label>Amount Paid ($)</label><input type="number" id="ap-amount" step="0.01"></div>
+      <button class="btn btn-block" id="ap-submit">Save Payment</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/admin-common.js"></script>
+<script>
+const id = new URLSearchParams(window.location.search).get('id');
+const HIGHWAY_TAX_RATE = 0.08;
+const SALES_TAX_RATE = 0.0725;
+let booking, paymentBreakdownItems = [];
+
+function fmtExact(n) {
+  return '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function load() {
+  booking = await api(`/api/applications/${id}/detail`);
+  render();
+}
+
+function statusLabel(b) {
+  if (b.status === 'rejected') return { text: 'Rejected', cls: 'rejected' };
+  if (b.status === 'completed') return { text: 'Completed', cls: 'completed' };
+  if (b.payment_status === 'unpaid' && b.invoice_amount) return { text: 'Awaiting Payment', cls: 'reserved' };
+  if (b.vehicle_status === 'rented') return { text: 'Active Rental', cls: 'rented' };
+  if (b.vehicle_status === 'reserved') return { text: 'Upcoming', cls: 'reserved' };
+  return { text: 'Awaiting Customer', cls: 'active' };
+}
+
+function render() {
+  document.getElementById('rd-title').textContent = `Reservation #${String(booking.id).padStart(3, '0')} — ${booking.first_name} ${booking.last_name}`;
+  document.getElementById('rd-created').textContent = `Created ${fmtDate(booking.created_at)}`;
+  const s = statusLabel(booking);
+  const badge = document.getElementById('rd-status-badge');
+  badge.textContent = s.text;
+  badge.className = `badge badge-${s.cls}`;
+
+  document.getElementById('rd-pickup').textContent = booking.pickup_scheduled_at ? fmtDate(booking.pickup_scheduled_at) : '—';
+  document.getElementById('rd-return').textContent = booking.rental_end_at ? fmtDate(booking.rental_end_at) : '—';
+  const days = (booking.pickup_scheduled_at && booking.rental_end_at)
+    ? Math.round((new Date(booking.rental_end_at) - new Date(booking.pickup_scheduled_at)) / 86400000)
+    : 0;
+  document.getElementById('rd-duration').textContent = days ? `${days} day${days === 1 ? '' : 's'}` : '—';
+  document.getElementById('rd-odo-out').textContent = booking.odometer_out != null ? `${Number(booking.odometer_out).toLocaleString()} mi` : '—';
+  document.getElementById('rd-odo-in').textContent = booking.odometer_in != null ? `${Number(booking.odometer_in).toLocaleString()} mi` : '—';
+  document.getElementById('rd-miles').textContent = (booking.odometer_out != null && booking.odometer_in != null)
+    ? `${(booking.odometer_in - booking.odometer_out).toLocaleString()} mi` : '—';
+
+  const weeklyRate = booking.weekly_rate || 0;
+  const dailyRateExact = weeklyRate / 7;
+  const subtotal = Math.round(dailyRateExact * days * 100) / 100;
+  const salesTax = Math.round(subtotal * SALES_TAX_RATE * 100) / 100;
+  const total = booking.invoice_amount || booking.total_due_at_pickup || Math.round((subtotal + salesTax) * 100) / 100;
+
+  document.getElementById('rd-charges').innerHTML = `
+    <div class="rd-charge-row"><span>Lease Rate (${days}d x ${fmtExact(Math.round(dailyRateExact * 100) / 100)}/d)</span><span>${fmtExact(subtotal)}</span></div>
+    <div class="rd-charge-row"><span>Sales Tax (7.25%)</span><span>${fmtExact(salesTax)}</span></div>
+    <div class="rd-charge-row--total"><span>Total</span><span>${fmtExact(total)}</span></div>
+    <div class="rd-charge-row--collected"><span>Collected</span><span>${fmtExact(booking.paid_total)}</span></div>
+    <div class="rd-charge-row--balance"><span>Balance Owed</span><span>${fmtExact(booking.owed)}</span></div>
+  `;
+
+  document.getElementById('rd-cust-name').textContent = `${booking.first_name} ${booking.last_name}`;
+  document.getElementById('rd-cust-email').textContent = booking.email || '—';
+  document.getElementById('rd-cust-phone').textContent = booking.phone || '—';
+
+  document.getElementById('rd-veh-name').textContent = booking.vehicle_id ? `${booking.year} ${booking.make} ${booking.model}` : '—';
+  document.getElementById('rd-veh-plate').textContent = booking.license_plate || '—';
+  document.getElementById('rd-veh-vin').textContent = booking.vin || '—';
+  document.getElementById('rd-veh-color').textContent = booking.color || '—';
+  document.getElementById('rd-veh-fuel').textContent = booking.fuel_type || '—';
+  document.getElementById('rd-veh-trans').textContent = booking.transmission || '—';
+  document.getElementById('rd-veh-pickup-loc').textContent = booking.pickup_location || '—';
+  document.getElementById('rd-veh-dropoff-loc').textContent = booking.dropoff_location || '—';
+
+  renderNotes();
+  renderPaymentLog();
+  initBreakdown();
+  renderBreakdown();
+}
+
+function renderNotes() {
+  const box = document.getElementById('rd-notes-list');
+  box.innerHTML = booking.notes.length
+    ? booking.notes.map(n => `<div class="rd-note">${n.note}<div class="rd-note__time">${fmtDate(n.created_at)}</div></div>`).join('')
+    : '<p class="rd-empty">No notes yet</p>';
+}
+
+document.getElementById('rd-note-save').addEventListener('click', async () => {
+  const val = document.getElementById('rd-note-input').value;
+  if (!val.trim()) return;
+  await api(`/api/applications/${id}/notes`, { method: 'POST', body: JSON.stringify({ note: val }) });
+  document.getElementById('rd-note-input').value = '';
+  booking.notes = await api(`/api/applications/${id}/notes`);
+  renderNotes();
+});
+
+function renderPaymentLog() {
+  const body = document.getElementById('rd-payment-log-body');
+  body.innerHTML = booking.payments.length
+    ? booking.payments.map(p => `<tr><td>${fmtDate(p.paid_at)}</td><td style="text-align:right;font-weight:600;">${fmtExact(p.amount)}</td></tr>`).join('')
+    : `<tr><td colspan="2" style="text-align:center;color:#888;padding:24px;">No payments recorded yet.</td></tr>`;
+}
+
+function initBreakdown() {
+  const days = (booking.pickup_scheduled_at && booking.rental_end_at)
+    ? Math.round((new Date(booking.rental_end_at) - new Date(booking.pickup_scheduled_at)) / 86400000)
+    : 0;
+  const dailyRate = Math.round(((booking.weekly_rate || 0) / 7) * 100) / 100;
+  paymentBreakdownItems = [
+    { key: 'daily', type: 'rate', days, rate: dailyRate, checked: true },
+    { key: 'highway', type: 'amount', label: 'Highway Tax (8%, included in rate)', amount: 0, checked: true },
+    { key: 'sales', type: 'amount', label: 'Sales Tax (7.25%)', amount: 0, checked: true },
+  ];
+  recalcTaxes();
+}
+
+function getItemAmount(item) {
+  return item.type === 'rate' ? Math.round(item.days * item.rate * 100) / 100 : Number(item.amount || 0);
+}
+function getItemLabel(item) {
+  return item.type === 'rate' ? `Lease Rate (${item.days}d x ${item.rate}/d)` : item.label;
+}
+function recalcTaxes() {
+  const daily = paymentBreakdownItems.find(i => i.key === 'daily');
+  const highway = paymentBreakdownItems.find(i => i.key === 'highway');
+  const sales = paymentBreakdownItems.find(i => i.key === 'sales');
+  const subtotal = getItemAmount(daily);
+  highway.amount = Math.round((subtotal - subtotal / (1 + HIGHWAY_TAX_RATE)) * 100) / 100;
+  sales.amount = Math.round(subtotal * SALES_TAX_RATE * 100) / 100;
+}
+function getInvoiceTotal() {
+  return Math.round(paymentBreakdownItems.filter(i => i.checked).reduce((sum, i) => sum + getItemAmount(i), 0) * 100) / 100;
+}
+function getPaidTotal() {
+  return Math.round(booking.payments.reduce((sum, p) => sum + Number(p.amount || 0), 0) * 100) / 100;
+}
+function getBalanceDue() {
+  return Math.max(0, Math.round((getInvoiceTotal() - getPaidTotal()) * 100) / 100);
+}
+function updateInvoiceTotals() {
+  document.getElementById('invoice-total-display').textContent = `Invoice Total: ${fmtExact(getInvoiceTotal())}`;
+  document.getElementById('balance-due-display').textContent = `Balance Due: ${fmtExact(getBalanceDue())}`;
+}
+
+function renderBreakdown() {
+  const box = document.getElementById('rd-rate-breakdown');
+  box.innerHTML = `
+    <div class="payment-breakdown-header">
+      <div>Invoice Adjustments</div>
+      <div>
+        <div id="invoice-total-display">Invoice Total: ${fmtExact(getInvoiceTotal())}</div>
+        <div id="balance-due-display" class="payment-breakdown-header__balance">Balance Due: ${fmtExact(getBalanceDue())}</div>
+      </div>
+    </div>
+    ${paymentBreakdownItems.map((item, i) => `
+      <div class="payment-breakdown-row">
+        <input type="checkbox" class="pb-checkbox" data-i="${i}" ${item.checked ? 'checked' : ''}>
+        <div class="payment-breakdown-row__label" id="pb-label-${i}">${getItemLabel(item)}</div>
+        <input type="text" inputmode="decimal" class="pb-amount" id="pb-input-${i}" data-i="${i}" value="${item.type === 'rate' ? item.rate : item.amount}">
+      </div>
+    `).join('')}
+  `;
+
+  box.querySelectorAll('.pb-checkbox').forEach(cb => {
+    cb.addEventListener('change', () => {
+      paymentBreakdownItems[Number(cb.dataset.i)].checked = cb.checked;
+      updateInvoiceTotals();
+    });
+  });
+  box.querySelectorAll('.pb-amount').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const item = paymentBreakdownItems[Number(inp.dataset.i)];
+      const value = Number(inp.value) || 0;
+      if (item.type === 'rate') {
+        item.rate = value;
+        document.getElementById(`pb-label-${inp.dataset.i}`).textContent = getItemLabel(item);
+        recalcTaxes();
+        const highwayI = paymentBreakdownItems.findIndex(i => i.key === 'highway');
+        const salesI = paymentBreakdownItems.findIndex(i => i.key === 'sales');
+        document.getElementById(`pb-input-${highwayI}`).value = paymentBreakdownItems[highwayI].amount;
+        document.getElementById(`pb-input-${salesI}`).value = paymentBreakdownItems[salesI].amount;
+      } else {
+        item.amount = value;
+      }
+      updateInvoiceTotals();
+    });
+  });
+}
+
+document.querySelectorAll('.rd-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.rd-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    ['details', 'communications', 'financials', 'inspection', 'documents'].forEach(name => {
+      document.getElementById(`rd-panel-${name}`).style.display = name === tab.dataset.tab ? '' : 'none';
+    });
+  });
+});
+
+document.getElementById('rd-send-invoice-btn').addEventListener('click', async () => {
+  const amount = prompt('Invoice amount ($):', getInvoiceTotal() || '');
+  if (amount === null || !amount) return;
+  await api(`/api/applications/${id}/invoice`, { method: 'POST', body: JSON.stringify({ invoice_amount: amount }) });
+  await load();
+});
+
+document.getElementById('rd-add-payment-btn').addEventListener('click', () => {
+  document.getElementById('ap-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('ap-amount').value = '';
+  document.getElementById('add-payment-overlay').style.display = 'flex';
+});
+document.getElementById('add-payment-close').addEventListener('click', () => {
+  document.getElementById('add-payment-overlay').style.display = 'none';
+});
+document.getElementById('add-payment-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'add-payment-overlay') e.target.style.display = 'none';
+});
+document.getElementById('ap-submit').addEventListener('click', async () => {
+  const amount = document.getElementById('ap-amount').value;
+  const paid_at = document.getElementById('ap-date').value;
+  if (!amount || Number(amount) <= 0) { alert('Enter a valid amount'); return; }
+  await api(`/api/applications/${id}/payments`, { method: 'POST', body: JSON.stringify({ amount, paid_at }) });
+  document.getElementById('add-payment-overlay').style.display = 'none';
+  await load();
+});
+
+(async () => {
+  renderSidebar('reservations');
+  await requireLogin();
+  load();
+})();
+</script>
+</body>
+</html>

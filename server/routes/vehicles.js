@@ -45,7 +45,7 @@ router.post('/', requireAuth, (req, res) => {
 });
 
 router.patch('/:id', requireAuth, (req, res) => {
-  const allowed = ['make', 'model', 'year', 'weekly_rate', 'status', 'notes'];
+  const allowed = ['make', 'model', 'year', 'weekly_rate', 'status', 'notes', 'vin', 'license_plate', 'color', 'fuel_type', 'transmission'];
   const updates = [];
   const params = [];
   for (const key of allowed) {

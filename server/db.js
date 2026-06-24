@@ -171,10 +171,48 @@ if (!existingCols.includes('insurance_private_path')) {
   db.exec('ALTER TABLE applications ADD COLUMN insurance_private_path TEXT');
 }
 
+if (!existingCols.includes('odometer_out')) {
+  db.exec('ALTER TABLE applications ADD COLUMN odometer_out REAL');
+}
+if (!existingCols.includes('odometer_in')) {
+  db.exec('ALTER TABLE applications ADD COLUMN odometer_in REAL');
+}
+if (!existingCols.includes('pickup_location')) {
+  db.exec('ALTER TABLE applications ADD COLUMN pickup_location TEXT');
+}
+if (!existingCols.includes('dropoff_location')) {
+  db.exec('ALTER TABLE applications ADD COLUMN dropoff_location TEXT');
+}
+
 const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);
 if (!vehicleCols.includes('photo_path')) {
   db.exec('ALTER TABLE vehicles ADD COLUMN photo_path TEXT');
 }
+if (!vehicleCols.includes('vin')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN vin TEXT');
+}
+if (!vehicleCols.includes('license_plate')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN license_plate TEXT');
+}
+if (!vehicleCols.includes('color')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN color TEXT');
+}
+if (!vehicleCols.includes('fuel_type')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN fuel_type TEXT');
+}
+if (!vehicleCols.includes('transmission')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN transmission TEXT');
+}
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS booking_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  application_id INTEGER NOT NULL,
+  note TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (application_id) REFERENCES applications(id)
+);
+`);
 
 // Seed owner account if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
