@@ -176,6 +176,7 @@ tr:hover td { background: var(--gray-light); }
 .payment-rate-breakdown { margin-top: 18px; padding-top: 14px; border-top: 2px solid var(--gray-border); }
 .payment-breakdown-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 12px; }
 .payment-breakdown-header #invoice-total-display { color: var(--black); font-size: 0.85rem; }
+.payment-breakdown-header__balance { color: #c0392b; font-size: 0.9rem; font-weight: 800; margin-top: 4px; text-align: right; }
 .payment-breakdown-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
 .payment-breakdown-row__label { flex: 1; font-size: 0.85rem; }
 .payment-breakdown-row .pb-checkbox { width: 16px; height: 16px; flex-shrink: 0; }

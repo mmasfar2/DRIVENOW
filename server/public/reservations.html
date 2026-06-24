@@ -648,12 +648,28 @@ function getInvoiceTotal() {
   return Math.round(paymentBreakdownItems.filter(i => i.checked).reduce((sum, i) => sum + getItemAmount(i), 0) * 100) / 100;
 }
 
+function getPaidTotal() {
+  return Math.round(paymentLog.reduce((sum, p) => sum + Number(p.amount || 0), 0) * 100) / 100;
+}
+
+function getBalanceDue() {
+  return Math.max(0, Math.round((getInvoiceTotal() - getPaidTotal()) * 100) / 100);
+}
+
+function updateInvoiceTotals() {
+  document.getElementById('invoice-total-display').textContent = `Invoice Total: ${fmtMoney(getInvoiceTotal())}`;
+  document.getElementById('balance-due-display').textContent = `Balance Due: ${fmtMoney(getBalanceDue())}`;
+}
+
 function renderPaymentBreakdown() {
   const box = document.getElementById('payment-rate-breakdown');
   box.innerHTML = `
     <div class="payment-breakdown-header">
       <div>Invoice Adjustments</div>
-      <div id="invoice-total-display">Invoice Total: ${fmtMoney(getInvoiceTotal())}</div>
+      <div>
+        <div id="invoice-total-display">Invoice Total: ${fmtMoney(getInvoiceTotal())}</div>
+        <div id="balance-due-display" class="payment-breakdown-header__balance">Balance Due: ${fmtMoney(getBalanceDue())}</div>
+      </div>
     </div>
     ${paymentBreakdownItems.map((item, i) => `
       <div class="payment-breakdown-row">
@@ -667,7 +683,7 @@ function renderPaymentBreakdown() {
   box.querySelectorAll('.pb-checkbox').forEach(cb => {
     cb.addEventListener('change', () => {
       paymentBreakdownItems[Number(cb.dataset.i)].checked = cb.checked;
-      document.getElementById('invoice-total-display').textContent = `Invoice Total: ${fmtMoney(getInvoiceTotal())}`;
+      updateInvoiceTotals();
     });
   });
   box.querySelectorAll('.pb-amount').forEach(inp => {
@@ -685,7 +701,7 @@ function renderPaymentBreakdown() {
       } else {
         item.amount = value;
       }
-      document.getElementById('invoice-total-display').textContent = `Invoice Total: ${fmtMoney(getInvoiceTotal())}`;
+      updateInvoiceTotals();
     });
   });
 }
@@ -729,6 +745,15 @@ document.getElementById('ap-submit').addEventListener('click', async () => {
   document.getElementById('add-payment-overlay').style.display = 'none';
   paymentLog = await api(`/api/applications/${paymentBooking.id}/payments`);
   renderPaymentLog();
+  updateInvoiceTotals();
+
+  const data = await api('/api/applications/bookings/all');
+  bookings = data.bookings;
+  document.getElementById('r-total').textContent = data.stats.totalBookings;
+  document.getElementById('r-upcoming').textContent = data.stats.upcoming;
+  document.getElementById('r-rental').textContent = data.stats.onRental;
+  document.getElementById('r-balance').textContent = fmtMoney(data.stats.outstandingBalance);
+  renderList();
 });
 
 (async () => {
