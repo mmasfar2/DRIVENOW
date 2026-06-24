@@ -1270,7 +1270,8 @@ function initNewReservationModal() {
           </div>
         </div>
         <div class="resv-review-panel__body">
-          <div class="resv-review-row"><span>Vehicle (${days}d &times; ${fmtExact(dailyRate)}/d)</span><span>${fmtExact(subtotal)}</span></div>
+          <div class="resv-review-row"><span>Vehicle Rental (${days} day${days === 1 ? '' : 's'})</span><span>${fmtExact(subtotal)}</span></div>
+          <div class="resv-review-row" style="font-size:0.78rem;color:#888;"><span>~${fmtExact(dailyRate)}/day average</span><span></span></div>
           <div class="resv-review-row"><span>Sales Tax (7.25%)</span><span>${fmtExact(salesTax)}</span></div>
           <div class="resv-review-row--total"><span>Total</span><span>${fmtExact(total)}</span></div>
         </div>
