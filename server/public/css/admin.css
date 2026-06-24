@@ -163,6 +163,17 @@ tr:hover td { background: var(--gray-light); }
 .list-item:last-child { border-bottom: none; }
 .list-item__sub { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }
 
+/* Simple modal (reusable small popup forms) */
+.simple-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.simple-modal { background: var(--white); border-radius: 10px; width: 380px; max-width: 92vw; overflow: hidden; }
+.simple-modal__header { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; border-bottom: 1px solid var(--gray-border); }
+.simple-modal__title { font-weight: 800; font-size: 1.05rem; }
+.simple-modal__close { background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text-muted); line-height: 1; }
+.simple-modal__body { padding: 22px; }
+
+/* Payment log */
+.payment-log-actions { display: flex; justify-content: center; gap: 14px; margin-top: 18px; }
+
 .action-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .action-tile { display: flex; align-items: center; gap: 14px; background: var(--white); border: 1px solid var(--gray-border); border-radius: 10px; padding: 18px 20px; transition: 0.15s; }
 .action-tile:hover { border-color: var(--black); }

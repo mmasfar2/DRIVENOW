@@ -203,6 +203,25 @@ router.post('/:id/payment', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── AUTHED: Payment Log — manually recorded payments for a booking ──
+router.get('/:id/payments', requireAuth, (req, res) => {
+  const rows = db.prepare('SELECT * FROM payments WHERE application_id = ? ORDER BY paid_at DESC, id DESC').all(req.params.id);
+  res.json(rows);
+});
+
+router.post('/:id/payments', requireAuth, (req, res) => {
+  const { amount, paid_at } = req.body;
+  const id = req.params.id;
+  const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
+  if (!app) return res.status(404).json({ error: 'Not found' });
+  if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'A valid amount is required' });
+
+  db.prepare('INSERT INTO payments (application_id, amount, paid_at) VALUES (?, ?, ?)')
+    .run(id, amount, paid_at || new Date().toISOString().slice(0, 10));
+  logActivity(id, `Payment of $${amount} recorded`);
+  res.status(201).json({ ok: true });
+});
+
 // ── AUTHED: General notes / edit ──
 router.patch('/:id', requireAuth, (req, res) => {
   const allowed = ['first_name', 'last_name', 'phone', 'email', 'address', 'occupation', 'intended_use', 'rental_end_at'];
