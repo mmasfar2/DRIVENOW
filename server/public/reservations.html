@@ -413,7 +413,7 @@ function renderList() {
   }
 
   listEl.innerHTML = filtered.map(b => {
-    const owed = (b.payment_status === 'unpaid' && b.invoice_amount) ? b.invoice_amount : 0;
+    const owed = b.owed || 0;
     return `
       <tr>
         <td><input type="checkbox"></td>

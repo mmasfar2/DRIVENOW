@@ -244,7 +244,8 @@ router.get('/bookings/all', requireAuth, (req, res) => {
   const rows = db.prepare(`
     SELECT a.id, a.first_name, a.last_name, a.phone, a.email, a.weekly_rate, a.total_due_at_pickup,
            a.payment_status, a.invoice_amount, a.invoice_sent_at, a.pickup_scheduled_at, a.rental_end_at, a.status, a.updated_at,
-           v.id as vehicle_id, v.make, v.model, v.year, v.status as vehicle_status
+           v.id as vehicle_id, v.make, v.model, v.year, v.status as vehicle_status,
+           COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.application_id = a.id), 0) as paid_total
     FROM applications a
     JOIN vehicles v ON v.id = a.assigned_vehicle_id
     WHERE a.assigned_vehicle_id IS NOT NULL
@@ -252,18 +253,20 @@ router.get('/bookings/all', requireAuth, (req, res) => {
   `).all();
 
   const bookings = rows.map(r => {
+    const charge = r.invoice_amount || r.total_due_at_pickup || 0;
+    const owed = r.status === 'active' ? Math.max(0, Math.round((charge - r.paid_total) * 100) / 100) : 0;
     let bucket;
     if (r.payment_status === 'unpaid' && r.invoice_amount) bucket = 'pending_payment';
     else if (r.vehicle_status === 'rented') bucket = 'on_rental';
     else if (r.vehicle_status === 'reserved') bucket = 'upcoming';
     else bucket = 'completed';
-    return { ...r, bucket };
+    return { ...r, owed, bucket };
   });
 
   const totalBookings = bookings.length;
   const upcoming = bookings.filter(b => b.bucket === 'upcoming').length;
   const onRental = bookings.filter(b => b.bucket === 'on_rental').length;
-  const outstandingBalance = bookings.filter(b => b.bucket === 'pending_payment').reduce((sum, b) => sum + (b.invoice_amount || 0), 0);
+  const outstandingBalance = bookings.reduce((sum, b) => sum + b.owed, 0);
 
   res.json({ bookings, stats: { totalBookings, upcoming, onRental, outstandingBalance } });
 });
