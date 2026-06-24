@@ -173,6 +173,7 @@ tr:hover td { background: var(--gray-light); }
 
 /* Payment log */
 .payment-log-actions { display: flex; justify-content: center; gap: 14px; margin-top: 18px; }
+.payment-rate-breakdown { margin-bottom: 18px; padding-bottom: 6px; border-bottom: 2px solid var(--gray-border); }
 
 .action-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .action-tile { display: flex; align-items: center; gap: 14px; background: var(--white); border: 1px solid var(--gray-border); border-radius: 10px; padding: 18px 20px; transition: 0.15s; }

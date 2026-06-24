@@ -114,6 +114,7 @@
       <button class="resv-modal__close" id="payment-modal-close">&times;</button>
     </div>
     <div class="resv-modal__body">
+      <div id="payment-rate-breakdown" class="payment-rate-breakdown"></div>
       <table>
         <thead><tr><th>Date Paid</th><th style="text-align:right;">Amount Paid</th></tr></thead>
         <tbody id="payment-log-body"></tbody>
@@ -600,7 +601,31 @@ async function openPaymentModal(bookingId) {
   if (!paymentBooking) return;
   document.getElementById('payment-modal-overlay').style.display = 'flex';
   paymentLog = await api(`/api/applications/${bookingId}/payments`);
+  renderPaymentBreakdown();
   renderPaymentLog();
+}
+
+function renderPaymentBreakdown() {
+  const box = document.getElementById('payment-rate-breakdown');
+  const weeklyRate = paymentBooking.weekly_rate || 0;
+  const HIGHWAY_TAX_RATE = 0.08;
+  const SALES_TAX_RATE = 0.0725;
+
+  const dailyRate = Math.round((weeklyRate / 7) * 100) / 100;
+  const highwayTaxAmount = Math.round((weeklyRate - weeklyRate / (1 + HIGHWAY_TAX_RATE)) * 100) / 100;
+
+  const days = (paymentBooking.pickup_scheduled_at && paymentBooking.rental_end_at)
+    ? Math.round((new Date(paymentBooking.rental_end_at) - new Date(paymentBooking.pickup_scheduled_at)) / 86400000)
+    : 0;
+  const subtotal = Math.round(dailyRate * days * 100) / 100;
+  const salesTax = Math.round(subtotal * SALES_TAX_RATE * 100) / 100;
+
+  box.innerHTML = `
+    <div class="info-row"><div class="info-row__label">Weekly Rate</div><div class="info-row__val">${fmtMoney(weeklyRate)}/wk <span style="color:#888;font-weight:400;">(incl. 8% highway tax)</span></div></div>
+    <div class="info-row"><div class="info-row__label">Daily Rate</div><div class="info-row__val">${fmtMoney(dailyRate)}/day</div></div>
+    <div class="info-row"><div class="info-row__label">Highway Tax (included above)</div><div class="info-row__val">${fmtMoney(highwayTaxAmount)}/wk</div></div>
+    <div class="info-row"><div class="info-row__label">Sales Tax (7.25%, added at checkout)</div><div class="info-row__val">${fmtMoney(salesTax)}</div></div>
+  `;
 }
 
 function renderPaymentLog() {
