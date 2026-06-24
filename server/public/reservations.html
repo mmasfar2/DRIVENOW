@@ -1069,11 +1069,11 @@ function initNewReservationModal() {
     const days = (form.pickup_scheduled_at && form.rental_end_at)
       ? Math.round((new Date(form.rental_end_at) - new Date(form.pickup_scheduled_at)) / 86400000)
       : 0;
-    const dailyRate = form.weekly_rate ? form.weekly_rate / 7 : 0;
+    const dailyRate = form.weekly_rate ? Math.round((form.weekly_rate / 7) * 100) / 100 : 0;
     const subtotal = Math.round(dailyRate * days * 100) / 100;
     const salesTax = Math.round(subtotal * 0.0725 * 100) / 100;
     const total = Math.round((subtotal + salesTax) * 100) / 100;
-    return { days, subtotal, salesTax, total };
+    return { days, dailyRate, subtotal, salesTax, total };
   }
 
   function renderReviewStep() {
@@ -1092,7 +1092,7 @@ function initNewReservationModal() {
       return;
     }
 
-    const { days, subtotal, salesTax, total } = computePricing();
+    const { days, dailyRate, subtotal, salesTax, total } = computePricing();
     form.total_due_at_pickup = total;
     const steps = getSteps();
     const jump = (key) => { const i = steps.indexOf(key); if (i !== -1) { step = i + 1; renderStep(); } };
@@ -1122,7 +1122,7 @@ function initNewReservationModal() {
           </div>
         </div>
         <div class="resv-review-panel__body">
-          <div class="resv-review-row"><span>Vehicle (${days}d &times; ${fmtExact(form.weekly_rate / 7)}/d)</span><span>${fmtExact(subtotal)}</span></div>
+          <div class="resv-review-row"><span>Vehicle (${days}d &times; ${fmtExact(dailyRate)}/d)</span><span>${fmtExact(subtotal)}</span></div>
           <div class="resv-review-row"><span>Sales Tax (7.25%)</span><span>${fmtExact(salesTax)}</span></div>
           <div class="resv-review-row--total"><span>Total</span><span>${fmtExact(total)}</span></div>
         </div>
