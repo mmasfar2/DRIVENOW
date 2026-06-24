@@ -205,7 +205,7 @@ router.post('/:id/payment', requireAuth, (req, res) => {
 
 // ── AUTHED: General notes / edit ──
 router.patch('/:id', requireAuth, (req, res) => {
-  const allowed = ['first_name', 'last_name', 'phone', 'email', 'address', 'occupation', 'intended_use'];
+  const allowed = ['first_name', 'last_name', 'phone', 'email', 'address', 'occupation', 'intended_use', 'rental_end_at'];
   const updates = [];
   const params = [];
   for (const key of allowed) {
