@@ -606,17 +606,19 @@ async function openPaymentModal(bookingId) {
   const weeklyRate = paymentBooking.weekly_rate || 0;
   const HIGHWAY_TAX_RATE = 0.08;
   const SALES_TAX_RATE = 0.0725;
-  const dailyRate = Math.round((weeklyRate / 7) * 100) / 100;
-  const highwayTaxAmount = Math.round((weeklyRate - weeklyRate / (1 + HIGHWAY_TAX_RATE)) * 100) / 100;
   const days = (paymentBooking.pickup_scheduled_at && paymentBooking.rental_end_at)
     ? Math.round((new Date(paymentBooking.rental_end_at) - new Date(paymentBooking.pickup_scheduled_at)) / 86400000)
     : 0;
-  const subtotal = Math.round(dailyRate * days * 100) / 100;
+  // Compute from the exact (unrounded) daily rate, rounding only once at the end —
+  // this is what keeps the math exact instead of drifting a few cents from chained rounding.
+  const dailyRateExact = weeklyRate / 7;
+  const subtotal = Math.round(dailyRateExact * days * 100) / 100;
+  const highwayTaxAmount = Math.round((subtotal - subtotal / (1 + HIGHWAY_TAX_RATE)) * 100) / 100;
   const salesTax = Math.round(subtotal * SALES_TAX_RATE * 100) / 100;
 
   paymentBreakdownItems = [
-    { key: 'daily', label: `Daily Rate (${days || 0}d)`, amount: subtotal, checked: true },
-    { key: 'highway', label: 'Highway Tax (8%, included in weekly rate)', amount: highwayTaxAmount, checked: true },
+    { key: 'daily', label: `Rental Charge (${days || 0}d)`, amount: subtotal, checked: true },
+    { key: 'highway', label: 'Highway Tax (8%, included in rate)', amount: highwayTaxAmount, checked: true },
     { key: 'sales', label: 'Sales Tax (7.25%)', amount: salesTax, checked: true },
   ];
 
@@ -1212,8 +1214,11 @@ function initNewReservationModal() {
     const days = (form.pickup_scheduled_at && form.rental_end_at)
       ? Math.round((new Date(form.rental_end_at) - new Date(form.pickup_scheduled_at)) / 86400000)
       : 0;
-    const dailyRate = form.weekly_rate ? Math.round((form.weekly_rate / 7) * 100) / 100 : 0;
-    const subtotal = Math.round(dailyRate * days * 100) / 100;
+    // Compute subtotal from the exact (unrounded) daily rate so the charged total is
+    // always exactly proportional to the weekly rate — round once, at the end, not per-day.
+    const dailyRateExact = form.weekly_rate ? form.weekly_rate / 7 : 0;
+    const dailyRate = Math.round(dailyRateExact * 100) / 100; // display only
+    const subtotal = Math.round(dailyRateExact * days * 100) / 100;
     const salesTax = Math.round(subtotal * 0.0725 * 100) / 100;
     const total = Math.round((subtotal + salesTax) * 100) / 100;
     return { days, dailyRate, subtotal, salesTax, total };
