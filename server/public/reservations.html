@@ -114,11 +114,11 @@
       <button class="resv-modal__close" id="payment-modal-close">&times;</button>
     </div>
     <div class="resv-modal__body">
-      <div id="payment-rate-breakdown" class="payment-rate-breakdown"></div>
       <table>
         <thead><tr><th>Date Paid</th><th style="text-align:right;">Amount Paid</th></tr></thead>
         <tbody id="payment-log-body"></tbody>
       </table>
+      <div id="payment-rate-breakdown" class="payment-rate-breakdown"></div>
       <div class="payment-log-actions">
         <button class="btn btn-outline" id="pl-send-invoice-btn">Send Invoice</button>
         <button class="btn" id="pl-add-payment-btn">Add Payment</button>
@@ -595,37 +595,67 @@ document.getElementById('extend-modal-overlay').addEventListener('click', (e) =>
 
 let paymentBooking = null;
 let paymentLog = [];
+let paymentBreakdownItems = [];
 
 async function openPaymentModal(bookingId) {
   paymentBooking = bookings.find(b => b.id === bookingId);
   if (!paymentBooking) return;
   document.getElementById('payment-modal-overlay').style.display = 'flex';
   paymentLog = await api(`/api/applications/${bookingId}/payments`);
-  renderPaymentBreakdown();
-  renderPaymentLog();
-}
 
-function renderPaymentBreakdown() {
-  const box = document.getElementById('payment-rate-breakdown');
   const weeklyRate = paymentBooking.weekly_rate || 0;
   const HIGHWAY_TAX_RATE = 0.08;
   const SALES_TAX_RATE = 0.0725;
-
   const dailyRate = Math.round((weeklyRate / 7) * 100) / 100;
   const highwayTaxAmount = Math.round((weeklyRate - weeklyRate / (1 + HIGHWAY_TAX_RATE)) * 100) / 100;
-
   const days = (paymentBooking.pickup_scheduled_at && paymentBooking.rental_end_at)
     ? Math.round((new Date(paymentBooking.rental_end_at) - new Date(paymentBooking.pickup_scheduled_at)) / 86400000)
     : 0;
   const subtotal = Math.round(dailyRate * days * 100) / 100;
   const salesTax = Math.round(subtotal * SALES_TAX_RATE * 100) / 100;
 
+  paymentBreakdownItems = [
+    { key: 'daily', label: `Daily Rate (${days || 0}d)`, amount: subtotal, checked: true },
+    { key: 'highway', label: 'Highway Tax (8%, included in weekly rate)', amount: highwayTaxAmount, checked: true },
+    { key: 'sales', label: 'Sales Tax (7.25%)', amount: salesTax, checked: true },
+  ];
+
+  renderPaymentBreakdown();
+  renderPaymentLog();
+}
+
+function getInvoiceTotal() {
+  return Math.round(paymentBreakdownItems.filter(i => i.checked).reduce((sum, i) => sum + Number(i.amount || 0), 0) * 100) / 100;
+}
+
+function renderPaymentBreakdown() {
+  const box = document.getElementById('payment-rate-breakdown');
   box.innerHTML = `
-    <div class="info-row"><div class="info-row__label">Weekly Rate</div><div class="info-row__val">${fmtMoney(weeklyRate)}/wk <span style="color:#888;font-weight:400;">(incl. 8% highway tax)</span></div></div>
-    <div class="info-row"><div class="info-row__label">Daily Rate</div><div class="info-row__val">${fmtMoney(dailyRate)}/day</div></div>
-    <div class="info-row"><div class="info-row__label">Highway Tax (included above)</div><div class="info-row__val">${fmtMoney(highwayTaxAmount)}/wk</div></div>
-    <div class="info-row"><div class="info-row__label">Sales Tax (7.25%, added at checkout)</div><div class="info-row__val">${fmtMoney(salesTax)}</div></div>
+    <div class="payment-breakdown-header">
+      <div>Invoice Adjustments</div>
+      <div id="invoice-total-display">Invoice Total: ${fmtMoney(getInvoiceTotal())}</div>
+    </div>
+    ${paymentBreakdownItems.map((item, i) => `
+      <div class="payment-breakdown-row">
+        <input type="checkbox" class="pb-checkbox" data-i="${i}" ${item.checked ? 'checked' : ''}>
+        <div class="payment-breakdown-row__label">${item.label}</div>
+        <input type="number" step="0.01" class="pb-amount" data-i="${i}" value="${item.amount}">
+      </div>
+    `).join('')}
   `;
+
+  box.querySelectorAll('.pb-checkbox').forEach(cb => {
+    cb.addEventListener('change', () => {
+      paymentBreakdownItems[Number(cb.dataset.i)].checked = cb.checked;
+      document.getElementById('invoice-total-display').textContent = `Invoice Total: ${fmtMoney(getInvoiceTotal())}`;
+    });
+  });
+  box.querySelectorAll('.pb-amount').forEach(inp => {
+    inp.addEventListener('input', () => {
+      paymentBreakdownItems[Number(inp.dataset.i)].amount = Number(inp.value) || 0;
+      document.getElementById('invoice-total-display').textContent = `Invoice Total: ${fmtMoney(getInvoiceTotal())}`;
+    });
+  });
 }
 
 function renderPaymentLog() {
@@ -643,7 +673,7 @@ document.getElementById('payment-modal-overlay').addEventListener('click', (e) =
 });
 
 document.getElementById('pl-send-invoice-btn').addEventListener('click', async () => {
-  const amount = prompt('Invoice amount ($):', paymentBooking.total_due_at_pickup || paymentBooking.invoice_amount || '');
+  const amount = prompt('Invoice amount ($):', getInvoiceTotal() || '');
   if (amount === null || !amount) return;
   await api(`/api/applications/${paymentBooking.id}/invoice`, { method: 'POST', body: JSON.stringify({ invoice_amount: amount }) });
 });

@@ -173,7 +173,13 @@ tr:hover td { background: var(--gray-light); }
 
 /* Payment log */
 .payment-log-actions { display: flex; justify-content: center; gap: 14px; margin-top: 18px; }
-.payment-rate-breakdown { margin-bottom: 18px; padding-bottom: 6px; border-bottom: 2px solid var(--gray-border); }
+.payment-rate-breakdown { margin-top: 18px; padding-top: 14px; border-top: 2px solid var(--gray-border); }
+.payment-breakdown-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 12px; }
+.payment-breakdown-header #invoice-total-display { color: var(--black); font-size: 0.85rem; }
+.payment-breakdown-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.payment-breakdown-row__label { flex: 1; font-size: 0.85rem; }
+.payment-breakdown-row .pb-checkbox { width: 16px; height: 16px; flex-shrink: 0; }
+.payment-breakdown-row .pb-amount { width: 100px; padding: 6px 8px; border: 1.5px solid var(--gray-border); border-radius: 4px; font-family: inherit; font-size: 0.85rem; text-align: right; }
 
 .action-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .action-tile { display: flex; align-items: center; gap: 14px; background: var(--white); border: 1px solid var(--gray-border); border-radius: 10px; padding: 18px 20px; transition: 0.15s; }
