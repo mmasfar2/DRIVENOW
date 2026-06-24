@@ -201,6 +201,22 @@ tr:hover td { background: var(--gray-light); }
 .rd-veh-photos img { width: 100%; max-width: 260px; height: 150px; object-fit: cover; border-radius: 6px; background: var(--gray-light); }
 .rd-veh-photos__empty { color: var(--text-muted); font-size: 0.8rem; background: var(--gray-light); border-radius: 6px; padding: 14px; width: 100%; text-align: center; }
 
+.cd-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.cd-header__left { display: flex; gap: 16px; align-items: center; }
+.cd-avatar { width: 56px; height: 56px; border-radius: 50%; background: var(--black); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem; flex-shrink: 0; }
+.cd-header__name { display: flex; align-items: center; gap: 10px; font-size: 1.2rem; font-weight: 800; }
+.cd-header__contact { color: var(--text-muted); font-size: 0.85rem; margin-top: 4px; }
+.cd-header__meta { color: var(--text-muted); font-size: 0.78rem; margin-top: 4px; }
+.cd-header__actions { display: flex; gap: 10px; flex-shrink: 0; }
+.cd-stat-sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; }
+.cd-tag { display: inline-flex; align-items: center; gap: 6px; background: var(--gray-light); border-radius: 14px; padding: 5px 10px; font-size: 0.8rem; margin: 0 6px 6px 0; }
+.cd-tag button { border: none; background: none; cursor: pointer; color: var(--text-muted); font-size: 0.9rem; line-height: 1; padding: 0; }
+.cd-tag button:hover { color: #c62828; }
+.cd-booking-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--gray-border); text-decoration: none; color: inherit; }
+.cd-booking-row:last-child { border-bottom: none; }
+.cd-booking-row:hover { background: var(--gray-light); }
+.cd-booking-row__icon { width: 36px; height: 36px; border-radius: 8px; background: var(--gray-light); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
 .action-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .action-tile { display: flex; align-items: center; gap: 14px; background: var(--white); border: 1px solid var(--gray-border); border-radius: 10px; padding: 18px 20px; transition: 0.15s; }
 .action-tile:hover { border-color: var(--black); }

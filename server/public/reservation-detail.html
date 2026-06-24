@@ -191,7 +191,7 @@ function render() {
     <div class="rd-charge-row--balance"><span>Balance Owed</span><span>${fmtExact(booking.owed)}</span></div>
   `;
 
-  document.getElementById('rd-cust-name').textContent = `${booking.first_name} ${booking.last_name}`;
+  document.getElementById('rd-cust-name').innerHTML = `<a href="customer-detail.html?email=${encodeURIComponent(booking.email)}" style="color:inherit;">${booking.first_name} ${booking.last_name}</a>`;
   document.getElementById('rd-cust-email').textContent = booking.email || '—';
   document.getElementById('rd-cust-phone').textContent = booking.phone || '—';
 

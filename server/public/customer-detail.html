@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Customer Detail — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
+<div class="page">
+  <a href="#" id="cd-back" style="font-size:0.82rem;color:#888;">← Back</a>
+
+  <div class="panel cd-header">
+    <div class="cd-header__left">
+      <div class="cd-avatar" id="cd-avatar"></div>
+      <div>
+        <div class="cd-header__name">
+          <span id="cd-name"></span>
+          <span class="badge" id="cd-new-badge" style="display:none;">New</span>
+          <span class="badge badge-rejected" id="cd-blacklist-badge" style="display:none;">Blacklisted</span>
+        </div>
+        <div class="cd-header__contact">
+          <span id="cd-email"></span> &nbsp;·&nbsp; <span id="cd-phone"></span>
+        </div>
+        <div class="cd-header__meta" id="cd-meta"></div>
+      </div>
+    </div>
+    <div class="cd-header__actions">
+      <button class="btn btn-outline" id="cd-blacklist-btn"></button>
+      <button class="btn" id="cd-edit-btn">Edit</button>
+    </div>
+  </div>
+
+  <div class="rd-summary-grid" style="margin-bottom:20px;">
+    <div class="stat-card"><div class="stat-card__top"><div class="stat-card__label">Total Spent</div><div class="stat-card__icon icon-green">$</div></div><div class="stat-card__value" id="cd-total-spent">—</div><div class="cd-stat-sub" id="cd-completed-sub"></div></div>
+    <div class="stat-card"><div class="stat-card__top"><div class="stat-card__label">Total Bookings</div><div class="stat-card__icon icon-blue" id="cd-bookings-icon"></div></div><div class="stat-card__value" id="cd-total-bookings">—</div></div>
+    <div class="stat-card"><div class="stat-card__top"><div class="stat-card__label">Avg per Rental</div><div class="stat-card__icon icon-purple">$</div></div><div class="stat-card__value" id="cd-avg-rental">—</div><div class="cd-stat-sub">completed rentals only</div></div>
+    <div class="stat-card"><div class="stat-card__top"><div class="stat-card__label">Outstanding</div><div class="stat-card__icon icon-orange">!</div></div><div class="stat-card__value orange" id="cd-outstanding">—</div><div class="cd-stat-sub">across all bookings</div></div>
+  </div>
+
+  <div class="rd-cols">
+    <div class="panel">
+      <div class="panel-title">Contact Information</div>
+      <div id="cd-contact-view"></div>
+      <div id="cd-contact-edit" style="display:none;">
+        <div class="field-row"><div class="field"><label>First Name</label><input id="cd-f-first"></div><div class="field"><label>Last Name</label><input id="cd-f-last"></div></div>
+        <div class="field"><label>Phone</label><input id="cd-f-phone"></div>
+        <div class="field"><label>Address</label><input id="cd-f-address"></div>
+        <div class="field-row"><div class="field"><label>City</label><input id="cd-f-city"></div><div class="field"><label>State</label><input id="cd-f-state"></div></div>
+        <div class="field"><label>ZIP Code</label><input id="cd-f-zip"></div>
+        <div class="field"><label>Date of Birth</label><input type="date" id="cd-f-dob"></div>
+        <button class="btn" id="cd-save-btn">Save Changes</button>
+      </div>
+
+      <div class="panel" style="margin-top:24px;box-shadow:none;border-style:dashed;">
+        <div class="panel-title">Own Insurance</div>
+        <div id="cd-insurance"></div>
+      </div>
+
+      <div class="panel" style="margin-top:24px;box-shadow:none;border-style:dashed;">
+        <div class="panel-title">Tags</div>
+        <div id="cd-tags"></div>
+        <input id="cd-tag-input" placeholder="Add tag, press Enter" style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-border);border-radius:4px;margin-top:8px;">
+      </div>
+
+      <div class="panel" style="margin-top:24px;box-shadow:none;border-style:dashed;">
+        <div class="panel-title">Internal Notes</div>
+        <textarea id="cd-notes" rows="4" placeholder="Private notes visible only to your team…" style="width:100%;"></textarea>
+        <button class="btn btn-sm" id="cd-notes-save" style="margin-top:8px;">Save Note</button>
+      </div>
+
+      <div class="panel" style="margin-top:24px;box-shadow:none;border-style:dashed;">
+        <div class="panel-title">Marketing Consent History</div>
+        <p class="rd-empty">No consent events on file</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title"><span>Booking History</span><span class="panel-title__view-all" id="cd-booking-count"></span></div>
+      <div id="cd-bookings"></div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<script src="js/admin-common.js"></script>
+<script>
+const email = new URLSearchParams(window.location.search).get('email');
+let customer;
+
+function fmtExact(n) {
+  return '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+async function load() {
+  customer = await api(`/api/customers/by-email/${encodeURIComponent(email)}`);
+  render();
+}
+
+function render() {
+  document.getElementById('cd-name').textContent = `${customer.first_name} ${customer.last_name}`;
+  document.getElementById('cd-avatar').textContent = `${(customer.first_name || '?')[0]}${(customer.last_name || '?')[0]}`.toUpperCase();
+  document.getElementById('cd-email').textContent = customer.email;
+  document.getElementById('cd-phone').textContent = customer.phone || '—';
+  document.getElementById('cd-meta').textContent = `Customer since ${fmtDate(customer.created_at)} · Lead #${String(customer.leadId || 0).padStart(3, '0')}`;
+  document.getElementById('cd-new-badge').style.display = customer.isNew ? '' : 'none';
+  document.getElementById('cd-blacklist-badge').style.display = customer.blacklisted ? '' : 'none';
+  document.getElementById('cd-blacklist-btn').textContent = customer.blacklisted ? 'Remove Blacklist' : 'Blacklist';
+
+  document.getElementById('cd-total-spent').textContent = fmtExact(customer.stats.totalSpent);
+  document.getElementById('cd-completed-sub').textContent = `${customer.stats.completedRentals} completed rental${customer.stats.completedRentals === 1 ? '' : 's'}`;
+  document.getElementById('cd-total-bookings').textContent = customer.stats.totalBookings;
+  document.getElementById('cd-avg-rental').textContent = customer.stats.avgPerRental != null ? fmtExact(customer.stats.avgPerRental) : '—';
+  document.getElementById('cd-outstanding').textContent = fmtExact(customer.stats.outstanding);
+
+  document.getElementById('cd-contact-view').innerHTML = `
+    <div class="info-row"><div class="info-row__label">Email</div><div class="info-row__val">${customer.email}</div></div>
+    <div class="info-row"><div class="info-row__label">Phone</div><div class="info-row__val">${customer.phone || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">Address</div><div class="info-row__val">${customer.address || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">City</div><div class="info-row__val">${customer.city || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">State</div><div class="info-row__val">${customer.state || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">ZIP Code</div><div class="info-row__val">${customer.zip_code || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">Date of Birth</div><div class="info-row__val">${customer.dob ? fmtDate(customer.dob) : '—'}</div></div>
+  `;
+
+  const firstBooking = customer.bookings[customer.bookings.length - 1];
+  document.getElementById('cd-insurance').innerHTML = `
+    <div class="info-row"><div class="info-row__label">Status</div><div class="info-row__val"><span class="badge badge-reserved">Not Verified</span></div></div>
+    ${firstBooking ? `<a href="reservation-detail.html?id=${firstBooking.id}" style="font-size:0.82rem;">↗ From booking #${String(firstBooking.id).padStart(3, '0')}</a>` : ''}
+  `;
+
+  renderTags();
+
+  document.getElementById('cd-notes').value = customer.internal_notes || '';
+
+  document.getElementById('cd-booking-count').textContent = `${customer.bookings.length} booking${customer.bookings.length === 1 ? '' : 's'}`;
+  document.getElementById('cd-bookings').innerHTML = customer.bookings.length
+    ? customer.bookings.map(b => `
+      <a href="reservation-detail.html?id=${b.id}" class="cd-booking-row">
+        <div class="cd-booking-row__icon">${icon('car', 16)}</div>
+        <div style="flex:1;">
+          <div><strong>${b.year ? `${b.year} ${b.make} ${b.model}` : 'Application — no vehicle assigned'}</strong> <span class="badge badge-reserved">${b.stageLabel}</span></div>
+          <div style="color:var(--text-muted);font-size:0.8rem;">#${String(b.id).padStart(3, '0')} · ${b.pickup_scheduled_at ? fmtDate(b.pickup_scheduled_at) : '—'} – ${b.rental_end_at ? fmtDate(b.rental_end_at) : '—'}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-weight:800;">${fmtExact(b.charge)}</div>
+          ${b.owed > 0 ? `<div style="color:#c62828;font-size:0.78rem;">${fmtExact(b.owed)} owed</div>` : ''}
+        </div>
+      </a>
+    `).join('')
+    : '<p class="rd-empty">No bookings yet</p>';
+}
+
+function renderTags() {
+  const box = document.getElementById('cd-tags');
+  box.innerHTML = customer.tags.length
+    ? customer.tags.map(t => `<span class="cd-tag">${t.tag}<button data-id="${t.id}">×</button></span>`).join('')
+    : '<p class="rd-empty" style="padding:0;">No tags yet</p>';
+  box.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await api(`/api/customers/${customer.id}/tags/${btn.dataset.id}`, { method: 'DELETE' });
+      customer.tags = customer.tags.filter(t => t.id !== Number(btn.dataset.id));
+      renderTags();
+    });
+  });
+}
+
+document.getElementById('cd-tag-input').addEventListener('keydown', async (e) => {
+  if (e.key !== 'Enter' || !e.target.value.trim()) return;
+  await api(`/api/customers/${customer.id}/tags`, { method: 'POST', body: JSON.stringify({ tag: e.target.value.trim() }) });
+  e.target.value = '';
+  customer = await api(`/api/customers/by-email/${encodeURIComponent(email)}`);
+  renderTags();
+});
+
+document.getElementById('cd-notes-save').addEventListener('click', async () => {
+  await api(`/api/customers/${customer.id}`, { method: 'PATCH', body: JSON.stringify({ internal_notes: document.getElementById('cd-notes').value }) });
+});
+
+document.getElementById('cd-blacklist-btn').addEventListener('click', async () => {
+  await api(`/api/customers/${customer.id}`, { method: 'PATCH', body: JSON.stringify({ blacklisted: customer.blacklisted ? 0 : 1 }) });
+  await load();
+});
+
+document.getElementById('cd-edit-btn').addEventListener('click', () => {
+  const editing = document.getElementById('cd-contact-edit').style.display !== 'none';
+  if (editing) { document.getElementById('cd-contact-edit').style.display = 'none'; document.getElementById('cd-contact-view').style.display = ''; document.getElementById('cd-edit-btn').textContent = 'Edit'; return; }
+  document.getElementById('cd-f-first').value = customer.first_name || '';
+  document.getElementById('cd-f-last').value = customer.last_name || '';
+  document.getElementById('cd-f-phone').value = customer.phone || '';
+  document.getElementById('cd-f-address').value = customer.address || '';
+  document.getElementById('cd-f-city').value = customer.city || '';
+  document.getElementById('cd-f-state').value = customer.state || '';
+  document.getElementById('cd-f-zip').value = customer.zip_code || '';
+  document.getElementById('cd-f-dob').value = customer.dob ? customer.dob.slice(0, 10) : '';
+  document.getElementById('cd-contact-view').style.display = 'none';
+  document.getElementById('cd-contact-edit').style.display = '';
+  document.getElementById('cd-edit-btn').textContent = 'Cancel';
+});
+
+document.getElementById('cd-save-btn').addEventListener('click', async () => {
+  await api(`/api/customers/${customer.id}`, { method: 'PATCH', body: JSON.stringify({
+    first_name: document.getElementById('cd-f-first').value,
+    last_name: document.getElementById('cd-f-last').value,
+    phone: document.getElementById('cd-f-phone').value,
+    address: document.getElementById('cd-f-address').value,
+    city: document.getElementById('cd-f-city').value,
+    state: document.getElementById('cd-f-state').value,
+    zip_code: document.getElementById('cd-f-zip').value,
+    dob: document.getElementById('cd-f-dob').value || null,
+  })});
+  document.getElementById('cd-contact-edit').style.display = 'none';
+  document.getElementById('cd-contact-view').style.display = '';
+  document.getElementById('cd-edit-btn').textContent = 'Edit';
+  await load();
+});
+
+document.getElementById('cd-back').addEventListener('click', (e) => {
+  e.preventDefault();
+  if (window.history.length > 1) window.history.back();
+  else window.location.href = 'reservations.html';
+});
+
+(async () => {
+  renderSidebar('reservations');
+  document.getElementById('cd-bookings-icon').innerHTML = icon('calendar', 16);
+  await requireLogin();
+  load();
+})();
+</script>
+</body>
+</html>

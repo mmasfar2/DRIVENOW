@@ -220,7 +220,60 @@ CREATE TABLE IF NOT EXISTS booking_notes (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (application_id) REFERENCES applications(id)
 );
+
+CREATE TABLE IF NOT EXISTS customers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT UNIQUE NOT NULL,
+  first_name TEXT,
+  last_name TEXT,
+  phone TEXT,
+  address TEXT,
+  city TEXT,
+  state TEXT,
+  zip_code TEXT,
+  dob TEXT,
+  blacklisted INTEGER DEFAULT 0,
+  internal_notes TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS customer_tags (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id INTEGER NOT NULL,
+  tag TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (customer_id) REFERENCES customers(id)
+);
 `);
+
+// Backfill: build a customers record for every distinct email already in
+// applications, so existing leads/bookings get a profile retroactively.
+const existingCustomerEmails = new Set(db.prepare('SELECT lower(email) as e FROM customers').all().map(r => r.e));
+const distinctApplicants = db.prepare(`
+  SELECT first_name, last_name, phone, email, address, dob, MIN(created_at) as first_seen
+  FROM applications
+  WHERE email IS NOT NULL AND email != ''
+  GROUP BY lower(email)
+`).all();
+const insertCustomer = db.prepare(`
+  INSERT INTO customers (email, first_name, last_name, phone, address, dob, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+`);
+for (const a of distinctApplicants) {
+  if (existingCustomerEmails.has(a.email.toLowerCase())) continue;
+  insertCustomer.run(a.email, a.first_name, a.last_name, a.phone, a.address || null, a.dob || null, a.first_seen);
+}
+
+function upsertCustomer({ email, first_name, last_name, phone, address, dob }) {
+  if (!email) return;
+  const existing = db.prepare('SELECT id FROM customers WHERE lower(email) = lower(?)').get(email);
+  if (existing) return existing.id;
+  const result = db.prepare(`
+    INSERT INTO customers (email, first_name, last_name, phone, address, dob)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(email, first_name || null, last_name || null, phone || null, address || null, dob || null);
+  return result.lastInsertRowid;
+}
 
 // Backfill: any vehicle with a legacy single photo_path but no rows yet in
 // vehicle_photos gets that photo carried over so it isn't lost.
@@ -268,4 +321,4 @@ function queueMessage(applicationId, channel, to, body) {
     .run(applicationId, channel, to, body);
 }
 
-module.exports = { db, logActivity, queueMessage };
+module.exports = { db, logActivity, queueMessage, upsertCustomer };

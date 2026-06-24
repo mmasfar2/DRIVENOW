@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { db, logActivity, queueMessage } = require('../db');
+const { db, logActivity, queueMessage, upsertCustomer } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
 
@@ -37,6 +37,7 @@ router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (r
   `).run(first_name, last_name, phone, email, address || null, occupation || null, intended_use || null, license_number || null, license_state || null, licensePath, insurancePath);
 
   const appId = result.lastInsertRowid;
+  upsertCustomer({ email, first_name, last_name, phone, address });
   logActivity(appId, `New application submitted by ${first_name} ${last_name}`);
   queueMessage(appId, 'sms', phone, "We've received your application and are currently reviewing it.");
 
@@ -384,6 +385,7 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
 
   const appId = result.lastInsertRowid;
   db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ?").run(assigned_vehicle_id);
+  upsertCustomer({ email, first_name, last_name, phone, address, dob });
   logActivity(appId, `Manual reservation created for ${first_name} ${last_name} — ${vehicle.make} ${vehicle.model} at $${weekly_rate}/week`);
 
   res.status(201).json({ id: appId, message: 'Reservation created' });
