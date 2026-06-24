@@ -305,6 +305,18 @@ router.post('/:id/check-in', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── AUTHED: Unapprove an on-lease reservation — moves it back to Pending Check In ──
+router.delete('/:id/check-in', requireAuth, (req, res) => {
+  const id = req.params.id;
+  const app = db.prepare('SELECT assigned_vehicle_id FROM applications WHERE id = ?').get(id);
+  if (!app) return res.status(404).json({ error: 'Not found' });
+  if (app.assigned_vehicle_id) {
+    db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ?").run(app.assigned_vehicle_id);
+  }
+  logActivity(id, 'Reservation unapproved — moved back to pending check-in');
+  res.json({ ok: true });
+});
+
 // ── AUTHED: Bookings/Reservations — applications that have an assigned vehicle ──
 router.get('/bookings/all', requireAuth, (req, res) => {
   const rows = db.prepare(`

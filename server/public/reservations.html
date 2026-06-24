@@ -177,6 +177,10 @@
   background: #2e7d32; color: #fff; border: 1.5px solid #2e7d32; padding: 6px 12px; border-radius: 4px; font-size: 0.78rem; font-weight: 700; cursor: pointer;
 }
 .resv-table__complete-btn:hover { background: #256528; border-color: #256528; }
+.resv-table__unapprove-btn {
+  background: transparent; color: #c62828; border: 1.5px solid #c62828; padding: 6px 12px; border-radius: 4px; font-size: 0.78rem; font-weight: 700; cursor: pointer;
+}
+.resv-table__unapprove-btn:hover { background: #c62828; color: #fff; }
 .resv-table__balance { margin-top: 6px; font-size: 0.82rem; font-weight: 700; }
 .resv-table__balance--due { color: #c62828; }
 .resv-table__view {
@@ -449,6 +453,7 @@ function renderList() {
         </td>
         <td>
           ${b.bucket === 'upcoming' ? `<button class="btn btn-sm resv-table__complete-btn" data-id="${b.id}">Complete</button>` : ''}
+          ${b.bucket === 'on_rental' ? `<button class="btn btn-sm resv-table__unapprove-btn" data-id="${b.id}">Unapprove</button>` : ''}
         </td>
         <td><a href="reservation-detail.html?id=${b.id}" class="resv-table__view" title="View">${icon('eye', 16)}</a></td>
       </tr>
@@ -479,6 +484,13 @@ function renderList() {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       await api(`/api/applications/${btn.dataset.id}/check-in`, { method: 'POST' });
+      await reloadBookings();
+    });
+  });
+  document.querySelectorAll('.resv-table__unapprove-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await api(`/api/applications/${btn.dataset.id}/check-in`, { method: 'DELETE' });
       await reloadBookings();
     });
   });
