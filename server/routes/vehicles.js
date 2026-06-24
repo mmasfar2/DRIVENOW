@@ -25,13 +25,34 @@ router.get('/public', (req, res) => {
 });
 
 router.get('/', requireAuth, (req, res) => {
-  res.json(db.prepare('SELECT * FROM vehicles ORDER BY created_at DESC').all());
+  const rows = db.prepare('SELECT * FROM vehicles ORDER BY created_at DESC').all();
+  const withPhotos = rows.map(v => ({
+    ...v,
+    photos: db.prepare('SELECT * FROM vehicle_photos WHERE vehicle_id = ? ORDER BY created_at ASC').all(v.id),
+  }));
+  res.json(withPhotos);
 });
 
-router.post('/:id/photo', requireAuth, upload.single('photo'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No photo uploaded' });
-  db.prepare('UPDATE vehicles SET photo_path = ? WHERE id = ?').run(req.file.filename, req.params.id);
-  res.json({ ok: true, photo_path: req.file.filename });
+router.get('/:id/photos', requireAuth, (req, res) => {
+  res.json(db.prepare('SELECT * FROM vehicle_photos WHERE vehicle_id = ? ORDER BY created_at ASC').all(req.params.id));
+});
+
+router.post('/:id/photo', requireAuth, upload.array('photos', 20), (req, res) => {
+  const files = req.files && req.files.length ? req.files : (req.file ? [req.file] : []);
+  if (!files.length) return res.status(400).json({ error: 'No photo uploaded' });
+  const insert = db.prepare('INSERT INTO vehicle_photos (vehicle_id, photo_path) VALUES (?, ?)');
+  for (const file of files) insert.run(req.params.id, file.filename);
+  // Keep the legacy single-photo column pointed at the most recent upload —
+  // the public marketing site's fleet page only displays one cover photo.
+  db.prepare('UPDATE vehicles SET photo_path = ? WHERE id = ?').run(files[files.length - 1].filename, req.params.id);
+  res.json({ ok: true });
+});
+
+router.delete('/:id/photo/:photoId', requireAuth, (req, res) => {
+  db.prepare('DELETE FROM vehicle_photos WHERE id = ? AND vehicle_id = ?').run(req.params.photoId, req.params.id);
+  const latest = db.prepare('SELECT photo_path FROM vehicle_photos WHERE vehicle_id = ? ORDER BY created_at DESC LIMIT 1').get(req.params.id);
+  db.prepare('UPDATE vehicles SET photo_path = ? WHERE id = ?').run(latest ? latest.photo_path : null, req.params.id);
+  res.json({ ok: true });
 });
 
 router.post('/', requireAuth, (req, res) => {

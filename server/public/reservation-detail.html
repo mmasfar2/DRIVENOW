@@ -54,6 +54,7 @@
 
       <div class="panel">
         <div class="panel-title">Vehicle</div>
+        <div id="rd-veh-photos" class="rd-veh-photos"></div>
         <div class="info-row"><div class="info-row__label">Vehicle</div><div class="info-row__val" id="rd-veh-name"></div></div>
         <div class="info-row"><div class="info-row__label">License Plate</div><div class="info-row__val" id="rd-veh-plate"></div></div>
         <div class="info-row"><div class="info-row__label">VIN</div><div class="info-row__val" id="rd-veh-vin"></div></div>
@@ -132,9 +133,20 @@ function fmtExact(n) {
   return '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+let vehiclePhotos = [];
+
 async function load() {
   booking = await api(`/api/applications/${id}/detail`);
+  vehiclePhotos = booking.vehicle_id ? await api(`/api/vehicles/${booking.vehicle_id}/photos`) : [];
   render();
+}
+
+function renderVehiclePhotos() {
+  const box = document.getElementById('rd-veh-photos');
+  if (!booking.vehicle_id) { box.innerHTML = ''; return; }
+  box.innerHTML = vehiclePhotos.length
+    ? vehiclePhotos.map(p => `<img src="/uploads/${p.photo_path}" alt="">`).join('')
+    : '<div class="rd-veh-photos__empty">No photos uploaded yet — add some in Fleet Management.</div>';
 }
 
 function statusLabel(b) {
@@ -183,6 +195,7 @@ function render() {
   document.getElementById('rd-cust-email').textContent = booking.email || '—';
   document.getElementById('rd-cust-phone').textContent = booking.phone || '—';
 
+  renderVehiclePhotos();
   document.getElementById('rd-veh-name').textContent = booking.vehicle_id ? `${booking.year} ${booking.make} ${booking.model}` : '—';
   document.getElementById('rd-veh-plate').textContent = booking.license_plate || '—';
   document.getElementById('rd-veh-vin').textContent = booking.vin || '—';

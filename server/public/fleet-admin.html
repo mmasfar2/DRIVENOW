@@ -53,11 +53,18 @@ function render() {
   document.getElementById('fleet-table-body').innerHTML = vehicles.length ? vehicles.map(v => `
     <tr>
       <td>
-        <img src="${v.photo_path ? '/uploads/' + v.photo_path : ''}" alt=""
-          style="width:64px;height:48px;object-fit:cover;border-radius:4px;background:#eee;display:${v.photo_path ? 'block' : 'none'};">
-        <label class="btn btn-sm btn-outline" style="cursor:pointer;${v.photo_path ? 'margin-top:6px;' : ''}">
-          ${v.photo_path ? 'Replace' : 'Upload Photo'}
-          <input type="file" accept="image/*" style="display:none;" onchange="uploadPhoto(${v.id}, this)">
+        <div style="display:flex;flex-wrap:wrap;gap:4px;max-width:160px;${(v.photos || []).length ? 'margin-bottom:6px;' : ''}">
+          ${(v.photos || []).map(p => `
+            <div style="position:relative;">
+              <img src="/uploads/${p.photo_path}" alt="" style="width:48px;height:36px;object-fit:cover;border-radius:4px;background:#eee;">
+              <button onclick="removePhoto(${v.id}, ${p.id})" title="Remove photo"
+                style="position:absolute;top:-6px;right:-6px;width:16px;height:16px;border-radius:50%;border:none;background:#c62828;color:#fff;font-size:10px;line-height:16px;cursor:pointer;padding:0;">×</button>
+            </div>
+          `).join('')}
+        </div>
+        <label class="btn btn-sm btn-outline" style="cursor:pointer;">
+          Upload Photos
+          <input type="file" accept="image/*" multiple style="display:none;" onchange="uploadPhoto(${v.id}, this)">
         </label>
       </td>
       <td><strong>${v.year} ${v.make} ${v.model}</strong></td>
@@ -85,12 +92,18 @@ function render() {
 }
 
 async function uploadPhoto(id, input) {
-  const file = input.files[0];
-  if (!file) return;
+  const files = input.files;
+  if (!files.length) return;
   const formData = new FormData();
-  formData.append('photo', file);
+  Array.from(files).forEach(f => formData.append('photos', f));
   const res = await fetch(`/api/vehicles/${id}/photo`, { method: 'POST', body: formData });
   if (!res.ok) { alert('Photo upload failed'); return; }
+  load();
+}
+
+async function removePhoto(vehicleId, photoId) {
+  if (!confirm('Remove this photo?')) return;
+  await api(`/api/vehicles/${vehicleId}/photo/${photoId}`, { method: 'DELETE' });
   load();
 }
 

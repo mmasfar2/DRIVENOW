@@ -148,6 +148,14 @@ CREATE TABLE IF NOT EXISTS maintenance_photos (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (maintenance_id) REFERENCES vehicle_maintenance(id)
 );
+
+CREATE TABLE IF NOT EXISTS vehicle_photos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vehicle_id INTEGER NOT NULL,
+  photo_path TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
+);
 `);
 
 // Lightweight migration: add columns introduced after initial release
@@ -213,6 +221,17 @@ CREATE TABLE IF NOT EXISTS booking_notes (
   FOREIGN KEY (application_id) REFERENCES applications(id)
 );
 `);
+
+// Backfill: any vehicle with a legacy single photo_path but no rows yet in
+// vehicle_photos gets that photo carried over so it isn't lost.
+const vehiclesWithLegacyPhoto = db.prepare(`
+  SELECT id, photo_path FROM vehicles
+  WHERE photo_path IS NOT NULL
+    AND id NOT IN (SELECT DISTINCT vehicle_id FROM vehicle_photos)
+`).all();
+for (const v of vehiclesWithLegacyPhoto) {
+  db.prepare('INSERT INTO vehicle_photos (vehicle_id, photo_path) VALUES (?, ?)').run(v.id, v.photo_path);
+}
 
 // Seed owner account if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
