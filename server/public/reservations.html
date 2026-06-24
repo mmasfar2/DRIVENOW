@@ -38,7 +38,7 @@
       <div class="stat-card__value" id="r-upcoming">—</div>
     </div>
     <div class="stat-card">
-      <div class="stat-card__top"><div class="stat-card__label">On Rental</div><div class="stat-card__icon icon-green" id="icon-car1"></div></div>
+      <div class="stat-card__top"><div class="stat-card__label">On Lease</div><div class="stat-card__icon icon-green" id="icon-car1"></div></div>
       <div class="stat-card__value green" id="r-rental">—</div>
     </div>
     <div class="stat-card">
@@ -51,7 +51,7 @@
     <div style="display:flex;gap:4px;padding:0 20px;border-bottom:1px solid var(--gray-border);overflow-x:auto;">
       <button class="resv-tab active" data-bucket="all">All Bookings</button>
       <button class="resv-tab" data-bucket="upcoming">Pending Check In</button>
-      <button class="resv-tab" data-bucket="on_rental">On Rental</button>
+      <button class="resv-tab" data-bucket="on_rental">On Lease</button>
       <button class="resv-tab" data-bucket="pending_payment">Pending Payment</button>
       <button class="resv-tab" data-bucket="completed">Completed</button>
     </div>
@@ -70,6 +70,7 @@
             <th>Pickup</th>
             <th>Return</th>
             <th>Balance</th>
+            <th>Approval</th>
             <th style="width:36px;"></th>
           </tr>
         </thead>
@@ -172,6 +173,10 @@
   border-radius: 4px; background: #2e7d32; border: 2px solid #2e7d32; color: #fff;
 }
 .resv-table__pay-btn:hover { background: #256528; border-color: #256528; }
+.resv-table__complete-btn {
+  background: #2e7d32; color: #fff; border: 1.5px solid #2e7d32; padding: 6px 12px; border-radius: 4px; font-size: 0.78rem; font-weight: 700; cursor: pointer;
+}
+.resv-table__complete-btn:hover { background: #256528; border-color: #256528; }
 .resv-table__balance { margin-top: 6px; font-size: 0.82rem; font-weight: 700; }
 .resv-table__balance--due { color: #c62828; }
 .resv-table__view {
@@ -409,7 +414,7 @@ function renderList() {
 
   const listEl = document.getElementById('r-list');
   if (!filtered.length) {
-    listEl.innerHTML = `<tr><td colspan="8"><div class="empty-state">${icon('calendar', 36)}<div style="font-size:1rem;font-weight:700;color:var(--black);">No Bookings Found</div><span>No reservations match your current filter. Try changing the filter or check back later.</span></div></td></tr>`;
+    listEl.innerHTML = `<tr><td colspan="9"><div class="empty-state">${icon('calendar', 36)}<div style="font-size:1rem;font-weight:700;color:var(--black);">No Bookings Found</div><span>No reservations match your current filter. Try changing the filter or check back later.</span></div></td></tr>`;
     return;
   }
 
@@ -439,8 +444,11 @@ function renderList() {
           </div>
         </td>
         <td>
-          <button class="btn btn-sm resv-table__pay-btn" data-id="${b.id}">Payment</button>
+          ${b.bucket !== 'upcoming' ? `<button class="btn btn-sm resv-table__pay-btn" data-id="${b.id}">Payment</button>` : ''}
           <div class="resv-table__balance ${owed > 0 ? 'resv-table__balance--due' : ''}">${fmtMoney(owed)}</div>
+        </td>
+        <td>
+          ${b.bucket === 'upcoming' ? `<button class="btn btn-sm resv-table__complete-btn" data-id="${b.id}">Complete</button>` : ''}
         </td>
         <td><a href="reservation-detail.html?id=${b.id}" class="resv-table__view" title="View">${icon('eye', 16)}</a></td>
       </tr>
@@ -467,12 +475,29 @@ function renderList() {
   document.querySelectorAll('.resv-table__pay-btn').forEach(btn => {
     btn.addEventListener('click', (e) => { e.stopPropagation(); openPaymentModal(Number(btn.dataset.id)); });
   });
+  document.querySelectorAll('.resv-table__complete-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await api(`/api/applications/${btn.dataset.id}/check-in`, { method: 'POST' });
+      await reloadBookings();
+    });
+  });
   document.querySelectorAll('.resv-table__row').forEach(row => {
     row.addEventListener('click', (e) => {
       if (e.target.closest('input, button, a')) return;
       window.location.href = `reservation-detail.html?id=${row.dataset.id}`;
     });
   });
+}
+
+async function reloadBookings() {
+  const data = await api('/api/applications/bookings/all');
+  bookings = data.bookings;
+  document.getElementById('r-total').textContent = data.stats.totalBookings;
+  document.getElementById('r-upcoming').textContent = data.stats.upcoming;
+  document.getElementById('r-rental').textContent = data.stats.onRental;
+  document.getElementById('r-balance').textContent = fmtMoney(data.stats.outstandingBalance);
+  renderList();
 }
 
 document.addEventListener('click', () => {

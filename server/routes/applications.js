@@ -293,6 +293,18 @@ router.patch('/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── AUTHED: Approve an upcoming reservation — moves it from Pending Check In to On Lease ──
+router.post('/:id/check-in', requireAuth, (req, res) => {
+  const id = req.params.id;
+  const app = db.prepare('SELECT assigned_vehicle_id FROM applications WHERE id = ?').get(id);
+  if (!app) return res.status(404).json({ error: 'Not found' });
+  if (app.assigned_vehicle_id) {
+    db.prepare("UPDATE vehicles SET status = 'rented' WHERE id = ?").run(app.assigned_vehicle_id);
+  }
+  logActivity(id, 'Reservation approved — vehicle checked out, now on lease');
+  res.json({ ok: true });
+});
+
 // ── AUTHED: Bookings/Reservations — applications that have an assigned vehicle ──
 router.get('/bookings/all', requireAuth, (req, res) => {
   const rows = db.prepare(`
