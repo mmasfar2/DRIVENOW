@@ -15,7 +15,7 @@ function getProfile(email) {
 
   const bookings = db.prepare(`
     SELECT a.id, a.first_name, a.last_name, a.status, a.payment_status, a.invoice_amount, a.total_due_at_pickup,
-           a.pickup_scheduled_at, a.rental_end_at, a.created_at,
+           a.pickup_scheduled_at, a.rental_end_at, a.created_at, a.license_path, a.insurance_path,
            v.make, v.model, v.year, v.status as vehicle_status,
            COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.application_id = a.id), 0) as paid_total
     FROM applications a

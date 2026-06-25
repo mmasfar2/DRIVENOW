@@ -18,7 +18,7 @@ const upload = multer({
 
 // ── PUBLIC: Stage 1 — Customer Application Submission ──
 router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (req, res) => {
-  const { first_name, last_name, phone, email, address, occupation, intended_use, license_number, license_state, consent_background } = req.body;
+  const { first_name, last_name, phone, email, address, occupation, intended_use, license_number, license_state, consent_background, vehicle_class } = req.body;
 
   if (!first_name || !last_name || !phone || !email) {
     return res.status(400).json({ error: 'First name, last name, phone, and email are required' });
@@ -32,9 +32,9 @@ router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (r
 
   const result = db.prepare(`
     INSERT INTO applications
-      (first_name, last_name, phone, email, address, occupation, intended_use, license_number, license_state, license_path, insurance_path, consent_background, stage)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1)
-  `).run(first_name, last_name, phone, email, address || null, occupation || null, intended_use || null, license_number || null, license_state || null, licensePath, insurancePath);
+      (first_name, last_name, phone, email, address, occupation, intended_use, license_number, license_state, license_path, insurance_path, consent_background, vehicle_class, stage)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 1)
+  `).run(first_name, last_name, phone, email, address || null, occupation || null, intended_use || null, license_number || null, license_state || null, licensePath, insurancePath, vehicle_class || null);
 
   const appId = result.lastInsertRowid;
   upsertCustomer({ email, first_name, last_name, phone, address });

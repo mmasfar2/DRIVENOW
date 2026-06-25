@@ -58,7 +58,12 @@
       </div>
 
       <div class="panel" style="margin-top:24px;box-shadow:none;border-style:dashed;">
-        <div class="panel-title">Own Insurance</div>
+        <div class="panel-title">License Upload</div>
+        <div id="cd-license"></div>
+      </div>
+
+      <div class="panel" style="margin-top:24px;box-shadow:none;border-style:dashed;">
+        <div class="panel-title">Insurance</div>
         <div id="cd-insurance"></div>
       </div>
 
@@ -130,8 +135,15 @@ function render() {
   `;
 
   const firstBooking = customer.bookings[customer.bookings.length - 1];
+  const latestBooking = customer.bookings[0];
+
+  document.getElementById('cd-license').innerHTML = `
+    <div class="info-row"><div class="info-row__label">License</div><div class="info-row__val">${latestBooking && latestBooking.license_path ? `<a href="/uploads/${latestBooking.license_path}" target="_blank">View File</a>` : 'Not provided'}</div></div>
+  `;
+
   document.getElementById('cd-insurance').innerHTML = `
     <div class="info-row"><div class="info-row__label">Status</div><div class="info-row__val"><span class="badge badge-reserved">Not Verified</span></div></div>
+    <div class="info-row"><div class="info-row__label">Upload</div><div class="info-row__val">${latestBooking && latestBooking.insurance_path ? `<a href="/uploads/${latestBooking.insurance_path}" target="_blank">View File</a>` : 'Not provided'}</div></div>
     ${firstBooking ? `<a href="reservation-detail.html?id=${firstBooking.id}" style="font-size:0.82rem;">↗ From booking #${String(firstBooking.id).padStart(3, '0')}</a>` : ''}
   `;
 

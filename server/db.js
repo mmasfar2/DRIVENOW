@@ -191,6 +191,9 @@ if (!existingCols.includes('pickup_location')) {
 if (!existingCols.includes('dropoff_location')) {
   db.exec('ALTER TABLE applications ADD COLUMN dropoff_location TEXT');
 }
+if (!existingCols.includes('vehicle_class')) {
+  db.exec('ALTER TABLE applications ADD COLUMN vehicle_class TEXT');
+}
 
 const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);
 if (!vehicleCols.includes('photo_path')) {

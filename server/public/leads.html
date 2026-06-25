@@ -24,6 +24,11 @@
   </div>
 
   <div class="panel">
+    <div class="panel-title">New Leads</div>
+    <div id="new-leads-list"></div>
+  </div>
+
+  <div class="panel">
     <div class="panel-title">Pipeline Overview</div>
     <div class="pipeline-row" id="pipeline-row"></div>
   </div>
@@ -48,6 +53,19 @@
   renderSidebar('leads');
   await requireLogin();
   const data = await api('/api/dashboard/summary');
+  const newLeads = await api('/api/applications?stage=1&status=active');
+
+  document.getElementById('new-leads-list').innerHTML = newLeads.length
+    ? newLeads.map(l => `
+        <a href="customer-detail.html?email=${encodeURIComponent(l.email)}" class="cd-booking-row">
+          <div class="cd-booking-row__icon">${icon('users', 16)}</div>
+          <div style="flex:1;">
+            <div><strong>${l.first_name} ${l.last_name}</strong></div>
+            <div style="color:var(--text-muted);font-size:0.8rem;">${l.vehicle_class || 'Vehicle class not specified'} &middot; Applied ${fmtDate(l.created_at)}</div>
+          </div>
+        </a>
+      `).join('')
+    : '<p style="color:#888;font-size:0.85rem;">No new leads right now.</p>';
 
   document.getElementById('stat-total').textContent = data.counts.totalApplications;
   document.getElementById('stat-active').textContent = data.counts.activeApplications;
