@@ -538,7 +538,9 @@ function openExtendModal(bookingId) {
 
 function renderExtendCalendar() {
   const body = document.getElementById('extend-modal-body');
-  const minReturn = new Date(new Date(extendBooking.rental_end_at).getTime() + 86400000).toISOString().slice(0, 10);
+  const minReturn = extendBooking.pickup_scheduled_at
+    ? new Date(new Date(extendBooking.pickup_scheduled_at).getTime() + 86400000).toISOString().slice(0, 10)
+    : '0000-01-01';
 
   function monthGrid(monthDate) {
     const year = monthDate.getFullYear();
@@ -552,7 +554,9 @@ function renderExtendCalendar() {
       const disabled = dateStr < minReturn;
       const isCurrentReturn = dateStr === extendBooking.rental_end_at;
       const isNewReturn = dateStr === extendNewReturn;
-      const inRange = extendNewReturn && dateStr > extendBooking.rental_end_at && dateStr < extendNewReturn;
+      const rangeLow = extendNewReturn && extendNewReturn < extendBooking.rental_end_at ? extendNewReturn : extendBooking.rental_end_at;
+      const rangeHigh = extendNewReturn && extendNewReturn < extendBooking.rental_end_at ? extendBooking.rental_end_at : extendNewReturn;
+      const inRange = extendNewReturn && dateStr > rangeLow && dateStr < rangeHigh;
       const classes = ['resv-cal__day'];
       if (disabled && !isCurrentReturn) classes.push('disabled');
       if (inRange) classes.push('in-range');
@@ -575,7 +579,7 @@ function renderExtendCalendar() {
   }
 
   const nextMonth = new Date(extendCalMonth.getFullYear(), extendCalMonth.getMonth() + 1, 1);
-  const minMonth = new Date(extendBooking.rental_end_at);
+  const minMonth = new Date(extendBooking.pickup_scheduled_at || extendBooking.rental_end_at);
   const isAtMinMonth = extendCalMonth.getFullYear() === minMonth.getFullYear() && extendCalMonth.getMonth() === minMonth.getMonth();
   const extraDays = extendNewReturn
     ? Math.round((new Date(extendNewReturn) - new Date(extendBooking.rental_end_at)) / 86400000)
@@ -600,7 +604,7 @@ function renderExtendCalendar() {
         <button class="resv-cal__nav" id="ext-cal-next">&#8250;</button>
       </div>
       <div class="resv-cal__apply-row">
-        <div class="resv-cal__total-days"><span>Extending by:</span>${extraDays !== null ? `${extraDays} day${extraDays === 1 ? '' : 's'}` : '—'}</div>
+        <div class="resv-cal__total-days"><span>${extraDays !== null && extraDays < 0 ? 'Shortening by:' : 'Extending by:'}</span>${extraDays !== null ? `${Math.abs(extraDays)} day${Math.abs(extraDays) === 1 ? '' : 's'}` : '—'}</div>
         <button class="resv-cal__apply-btn" id="ext-cal-apply" ${!extendNewReturn ? 'disabled' : ''}>Apply</button>
       </div>
     </div>
