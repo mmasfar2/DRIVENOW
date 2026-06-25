@@ -50,7 +50,7 @@
   <div class="panel" style="padding:0;">
     <div style="display:flex;gap:4px;padding:0 20px;border-bottom:1px solid var(--gray-border);overflow-x:auto;" id="resv-tabs"></div>
     <div style="display:flex;gap:12px;padding:18px 20px;flex-wrap:wrap;">
-      <input id="r-search" placeholder="Search by name, email, phone, or car..." style="flex:1;min-width:220px;padding:10px 14px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;">
+      <input id="r-search" type="search" name="resv-search-query" autocomplete="off" placeholder="Search by name, email, phone, or car..." style="flex:1;min-width:220px;padding:10px 14px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;">
       <span id="r-count" style="align-self:center;color:var(--text-muted);font-size:0.85rem;white-space:nowrap;"></span>
     </div>
     <div style="overflow-x:auto;">
@@ -1327,7 +1327,7 @@ function initNewReservationModal() {
       customerBody.innerHTML = `
         <div class="resv-vsearch">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input id="f-csearch" placeholder="Search by name, email, phone" value="${customerSearchTerm}">
+          <input id="f-csearch" type="search" name="resv-customer-search" autocomplete="off" placeholder="Search by name, email, phone" value="${customerSearchTerm}">
         </div>
         <div id="f-cresults">${customerResults.length ? customerResults.map(c => `
           <div class="resv-customer-result ${form.email === c.email ? 'selected' : ''}" data-id="${c.id}">
