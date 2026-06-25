@@ -306,6 +306,19 @@ router.post('/:id/approve-arrival', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── AUTHED: Send an on-lease booking back to Potential Arrivals ──
+router.post('/:id/revert-arrival', requireAuth, (req, res) => {
+  const id = req.params.id;
+  const app = db.prepare('SELECT assigned_vehicle_id FROM applications WHERE id = ?').get(id);
+  if (!app) return res.status(404).json({ error: 'Not found' });
+  db.prepare("UPDATE applications SET payment_status = 'unpaid' WHERE id = ?").run(id);
+  if (app.assigned_vehicle_id) {
+    db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ?").run(app.assigned_vehicle_id);
+  }
+  logActivity(id, 'Booking sent back to potential arrivals');
+  res.json({ ok: true });
+});
+
 // ── AUTHED: Bookings/Reservations — applications that have an assigned vehicle ──
 router.get('/bookings/all', requireAuth, (req, res) => {
   const rows = db.prepare(`
@@ -387,11 +400,11 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
   const result = db.prepare(`
     INSERT INTO applications
       (first_name, last_name, phone, email, consent_background, stage, status,
-       assigned_vehicle_id, weekly_rate, total_due_at_pickup, pickup_scheduled_at, rental_end_at, source,
+       assigned_vehicle_id, weekly_rate, total_due_at_pickup, invoice_amount, payment_status, pickup_scheduled_at, rental_end_at, source,
        dob, license_number, address, license_path, insurance_path, insurance_private_path)
-    VALUES (?, ?, ?, ?, 1, 6, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, 1, 6, 'active', ?, ?, ?, ?, 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    first_name, last_name, phone, email, assigned_vehicle_id, weekly_rate, total_due_at_pickup || null,
+    first_name, last_name, phone, email, assigned_vehicle_id, weekly_rate, total_due_at_pickup || null, total_due_at_pickup || null,
     pickup_scheduled_at, rental_end_at, bookingSource,
     dob || null, license_number || null, address || null, licensePath, insurancePolicyPath, insurancePrivatePath
   );

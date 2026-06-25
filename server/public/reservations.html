@@ -505,6 +505,7 @@ function renderList() {
         </td>
         <td>
           ${b.bucket === 'potential_arrival' ? `<button class="btn btn-sm resv-table__complete-btn" data-id="${b.id}">Approve</button>` : ''}
+          ${b.bucket === 'on_rental' ? `<button class="btn btn-sm resv-table__unapprove-btn" data-id="${b.id}">Send Back</button>` : ''}
         </td>
         <td><a href="reservation-detail.html?id=${b.id}" class="resv-table__view" title="View">${icon('eye', 16)}</a></td>
       </tr>
@@ -535,6 +536,13 @@ function renderList() {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       await api(`/api/applications/${btn.dataset.id}/approve-arrival`, { method: 'POST' });
+      await reloadBookings();
+    });
+  });
+  document.querySelectorAll('.resv-table__unapprove-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await api(`/api/applications/${btn.dataset.id}/revert-arrival`, { method: 'POST' });
       await reloadBookings();
     });
   });
