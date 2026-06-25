@@ -56,17 +56,33 @@ router.delete('/:id/photo/:photoId', requireAuth, (req, res) => {
 });
 
 router.post('/', requireAuth, (req, res) => {
-  const { make, model, year, weekly_rate, notes } = req.body;
+  const {
+    make, model, year, weekly_rate, notes, status,
+    stock_number, license_plate, vin, color, vehicle_class,
+    purchase_date, purchase_price, mileage,
+  } = req.body;
   if (!make || !model || !year || !weekly_rate) {
     return res.status(400).json({ error: 'Make, model, year, and weekly rate are required' });
   }
-  const result = db.prepare('INSERT INTO vehicles (make, model, year, weekly_rate, notes) VALUES (?, ?, ?, ?, ?)')
-    .run(make, model, year, weekly_rate, notes || null);
+  const result = db.prepare(`
+    INSERT INTO vehicles (
+      make, model, year, weekly_rate, notes, status,
+      stock_number, license_plate, vin, color, vehicle_class,
+      purchase_date, purchase_price, mileage
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    make, model, year, weekly_rate, notes || null, status || 'available',
+    stock_number || null, license_plate || null, vin || null, color || null, vehicle_class || null,
+    purchase_date || null, purchase_price || null, mileage || null
+  );
   res.status(201).json({ id: result.lastInsertRowid });
 });
 
 router.patch('/:id', requireAuth, (req, res) => {
-  const allowed = ['make', 'model', 'year', 'weekly_rate', 'status', 'notes', 'vin', 'license_plate', 'color', 'fuel_type', 'transmission'];
+  const allowed = [
+    'make', 'model', 'year', 'weekly_rate', 'status', 'notes', 'vin', 'license_plate', 'color', 'fuel_type', 'transmission',
+    'stock_number', 'vehicle_class', 'purchase_date', 'purchase_price', 'mileage',
+  ];
   const updates = [];
   const params = [];
   for (const key of allowed) {
