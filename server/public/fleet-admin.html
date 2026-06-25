@@ -18,19 +18,49 @@
 
   <div class="panel">
     <div class="panel-title">Add Vehicle</div>
-    <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:10px;align-items:end;">
+
+    <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;margin-bottom:10px;">Identification</div>
+    <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:18px;">
+      <div class="field" style="margin-bottom:0;"><label>Stock Number</label><input id="new-stock" placeholder="STK-1042"></div>
+      <div class="field" style="margin-bottom:0;"><label>Plate Number</label><input id="new-plate" placeholder="ABC-1234"></div>
+      <div class="field" style="margin-bottom:0;"><label>VIN</label><input id="new-vin" placeholder="1HGCM82633A123456"></div>
+    </div>
+
+    <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;margin-bottom:10px;">Vehicle Details</div>
+    <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:14px;margin-bottom:18px;">
       <div class="field" style="margin-bottom:0;"><label>Make</label><input id="new-make" placeholder="Honda"></div>
       <div class="field" style="margin-bottom:0;"><label>Model</label><input id="new-model" placeholder="Accord LX"></div>
       <div class="field" style="margin-bottom:0;"><label>Year</label><input id="new-year" type="number" placeholder="2015"></div>
+      <div class="field" style="margin-bottom:0;"><label>Color</label><input id="new-color" placeholder="Silver"></div>
+      <div class="field" style="margin-bottom:0;"><label>Class</label><input id="new-class" placeholder="Sedan"></div>
+    </div>
+
+    <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;margin-bottom:10px;">Acquisition</div>
+    <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;margin-bottom:18px;">
+      <div class="field" style="margin-bottom:0;"><label>First Date</label><input id="new-first-date" type="date"></div>
+      <div class="field" style="margin-bottom:0;"><label>Purchase Price ($)</label><input id="new-purchase-price" type="number" placeholder="14500"></div>
+      <div class="field" style="margin-bottom:0;"><label>Mileage</label><input id="new-mileage" type="number" placeholder="42000"></div>
       <div class="field" style="margin-bottom:0;"><label>Weekly Rate ($)</label><input id="new-rate" type="number" placeholder="380"></div>
-      <button class="btn" style="height:46px;" onclick="addVehicle()">Add</button>
+    </div>
+
+    <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;margin-bottom:10px;">Status &amp; Photos</div>
+    <div class="form-row" style="display:grid;grid-template-columns:1fr 2fr auto;gap:14px;align-items:end;">
+      <div class="field" style="margin-bottom:0;">
+        <label>Status</label>
+        <select id="new-status">
+          <option value="available">Available</option>
+          <option value="sold">Sold</option>
+        </select>
+      </div>
+      <div class="field" style="margin-bottom:0;"><label>Photos</label><input id="new-photos" type="file" accept="image/*" multiple></div>
+      <button class="btn" style="height:46px;" onclick="addVehicle()">Add Vehicle</button>
     </div>
   </div>
 
   <div class="panel" style="padding:0;overflow-x:auto;">
     <table>
       <thead>
-        <tr><th>Photo</th><th>Vehicle</th><th>Weekly Rate</th><th>Status</th><th>Notes</th><th></th></tr>
+        <tr><th>Photo</th><th>Vehicle</th><th>Stock #</th><th>Plate</th><th>VIN</th><th>Class</th><th>Mileage</th><th>Weekly Rate</th><th>Status</th><th>Notes</th><th></th></tr>
       </thead>
       <tbody id="fleet-table-body"></tbody>
     </table>
@@ -67,7 +97,12 @@ function render() {
           <input type="file" accept="image/*" multiple style="display:none;" onchange="uploadPhoto(${v.id}, this)">
         </label>
       </td>
-      <td><strong>${v.year} ${v.make} ${v.model}</strong></td>
+      <td><strong>${v.year} ${v.make} ${v.model}</strong>${v.color ? `<br><span style="color:#888;font-size:0.8rem;">${v.color}</span>` : ''}</td>
+      <td>${v.stock_number || '—'}</td>
+      <td>${v.license_plate || '—'}</td>
+      <td>${v.vin || '—'}</td>
+      <td>${v.vehicle_class || '—'}</td>
+      <td>${v.mileage != null ? Number(v.mileage).toLocaleString() : '—'}</td>
       <td>
         <div style="display:flex;align-items:center;gap:4px;">
           <span>$</span>
@@ -83,12 +118,13 @@ function render() {
           <option value="reserved" ${v.status === 'reserved' ? 'selected' : ''}>Reserved</option>
           <option value="rented" ${v.status === 'rented' ? 'selected' : ''}>Rented</option>
           <option value="maintenance" ${v.status === 'maintenance' ? 'selected' : ''}>Maintenance</option>
+          <option value="sold" ${v.status === 'sold' ? 'selected' : ''}>Sold</option>
         </select>
       </td>
       <td>${v.notes || '—'}</td>
       <td><button class="btn btn-sm btn-outline" onclick="removeVehicle(${v.id})">Remove</button></td>
     </tr>
-  `).join('') : '<tr><td colspan="6" style="text-align:center;color:#888;padding:32px;">No vehicles yet.</td></tr>';
+  `).join('') : '<tr><td colspan="11" style="text-align:center;color:#888;padding:32px;">No vehicles yet.</td></tr>';
 }
 
 async function uploadPhoto(id, input) {
@@ -108,16 +144,36 @@ async function removePhoto(vehicleId, photoId) {
 }
 
 async function addVehicle() {
-  const make = document.getElementById('new-make').value;
-  const model = document.getElementById('new-model').value;
-  const year = document.getElementById('new-year').value;
-  const weekly_rate = document.getElementById('new-rate').value;
-  if (!make || !model || !year || !weekly_rate) { alert('Fill in all fields'); return; }
-  await api('/api/vehicles', { method: 'POST', body: JSON.stringify({ make, model, year, weekly_rate }) });
-  document.getElementById('new-make').value = '';
-  document.getElementById('new-model').value = '';
-  document.getElementById('new-year').value = '';
-  document.getElementById('new-rate').value = '';
+  const fields = {
+    stock_number: document.getElementById('new-stock').value,
+    license_plate: document.getElementById('new-plate').value,
+    vin: document.getElementById('new-vin').value,
+    make: document.getElementById('new-make').value,
+    model: document.getElementById('new-model').value,
+    year: document.getElementById('new-year').value,
+    color: document.getElementById('new-color').value,
+    vehicle_class: document.getElementById('new-class').value,
+    purchase_date: document.getElementById('new-first-date').value,
+    purchase_price: document.getElementById('new-purchase-price').value,
+    mileage: document.getElementById('new-mileage').value,
+    weekly_rate: document.getElementById('new-rate').value,
+    status: document.getElementById('new-status').value,
+  };
+  if (!fields.make || !fields.model || !fields.year || !fields.weekly_rate) { alert('Fill in make, model, year, and weekly rate'); return; }
+
+  const created = await api('/api/vehicles', { method: 'POST', body: JSON.stringify(fields) });
+
+  const photoInput = document.getElementById('new-photos');
+  if (photoInput.files.length) {
+    const formData = new FormData();
+    Array.from(photoInput.files).forEach(f => formData.append('photos', f));
+    await fetch(`/api/vehicles/${created.id}/photo`, { method: 'POST', body: formData });
+  }
+
+  ['new-stock', 'new-plate', 'new-vin', 'new-make', 'new-model', 'new-year', 'new-color', 'new-class',
+    'new-first-date', 'new-purchase-price', 'new-mileage', 'new-rate'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('new-status').value = 'available';
+  photoInput.value = '';
   load();
 }
 

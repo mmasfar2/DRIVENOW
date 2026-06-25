@@ -229,6 +229,21 @@ if (!vehicleCols.includes('fuel_type')) {
 if (!vehicleCols.includes('transmission')) {
   db.exec('ALTER TABLE vehicles ADD COLUMN transmission TEXT');
 }
+if (!vehicleCols.includes('stock_number')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN stock_number TEXT');
+}
+if (!vehicleCols.includes('vehicle_class')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN vehicle_class TEXT');
+}
+if (!vehicleCols.includes('purchase_date')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN purchase_date TEXT');
+}
+if (!vehicleCols.includes('purchase_price')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN purchase_price REAL');
+}
+if (!vehicleCols.includes('mileage')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN mileage REAL');
+}
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS booking_notes (
