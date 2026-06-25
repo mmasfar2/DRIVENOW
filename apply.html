@@ -20,7 +20,7 @@
       <li><a href="fleet.html">Fleet</a></li>
       <li><a href="resources.html">Resources</a></li>
       <li><a href="contact.html">Contact</a></li>
-      <li><a href="apply.html" class="btn btn-white nav__cta active" style="padding:10px 24px;font-size:0.78rem;">Apply Now</a></li>
+      <li><a href="fleet.html" class="btn btn-white nav__cta active" style="padding:10px 24px;font-size:0.78rem;">Apply Now</a></li>
     </ul>
     <div class="nav__hamburger"><span></span><span></span><span></span></div>
   </div>
@@ -28,7 +28,7 @@
     <a href="fleet.html">Fleet</a>
     <a href="resources.html">Resources & Calculator</a>
     <a href="contact.html">Contact</a>
-    <a href="apply.html">Apply Now →</a>
+    <a href="fleet.html">Apply Now →</a>
   </div>
 </nav>
 
@@ -112,21 +112,14 @@
             <input type="text" id="city" name="city" placeholder="Charlotte" required>
           </div>
         </div>
-        <div class="form-group">
-          <label for="address">Street Address *</label>
-          <input type="text" id="address" name="address" placeholder="123 Main St, Charlotte, NC 28202" required>
-        </div>
-
-        <!-- Section 2: License Info -->
-        <div class="form-section-title">Driver's License</div>
         <div class="form-row">
           <div class="form-group">
-            <label for="license-number">License Number *</label>
-            <input type="text" id="license-number" name="license_number" placeholder="NC12345678" required>
+            <label for="address">Street Address *</label>
+            <input type="text" id="address" name="address" placeholder="123 Main St" required>
           </div>
           <div class="form-group">
-            <label for="license-state">Issuing State *</label>
-            <select id="license-state" name="license_state" required>
+            <label for="state">State *</label>
+            <select id="state" name="state" required>
               <option value="">Select State</option>
               <option value="NC" selected>North Carolina</option>
               <option value="SC">South Carolina</option>
@@ -136,54 +129,17 @@
             </select>
           </div>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="license-expiry">License Expiration Date *</label>
-            <input type="date" id="license-expiry" name="license_expiry" required>
-          </div>
-          <div class="form-group">
-            <label for="years-licensed">Years Licensed</label>
-            <select id="years-licensed" name="years_licensed">
-              <option value="">Select</option>
-              <option value="1">Less than 1 year</option>
-              <option value="1-3">1–3 years</option>
-              <option value="3-5">3–5 years</option>
-              <option value="5+">5+ years</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="license-upload">Upload Driver's License *</label>
-            <input type="file" id="license-upload" name="license" accept="image/*,.pdf" required>
-          </div>
-          <div class="form-group">
-            <label for="insurance-upload">Upload Insurance (if you have your own)</label>
-            <input type="file" id="insurance-upload" name="insurance" accept="image/*,.pdf">
-          </div>
-        </div>
 
-        <!-- Section 3: Vehicle Preference -->
-        <div class="form-section-title">Vehicle Preference</div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="vehicle-choice">Preferred Vehicle *</label>
-            <select id="vehicle-choice" name="vehicle_choice" required>
-              <option value="">Select a vehicle</option>
-              <option value="accord-2013">2013 Honda Accord LX — $380/wk</option>
-              <option value="camry-2014">2014 Toyota Camry SE — $370/wk</option>
-              <option value="accord-2015">2015 Honda Accord Sport — $420/wk</option>
-              <option value="camry-2012">2012 Toyota Camry LE — $350/wk</option>
-              <option value="accord-2011">2011 Honda Accord EX — $350/wk</option>
-              <option value="camry-2015">2015 Toyota Camry XSE — $450/wk</option>
-              <option value="any">No preference — any available</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="start-date">Desired Start Date *</label>
-            <input type="date" id="start-date" name="start_date" required>
+        <!-- Selected Vehicle -->
+        <div class="form-section-title">Selected Vehicle</div>
+        <div id="selected-vehicle-box" style="display:flex;align-items:center;gap:16px;background:var(--gray-light);border-radius:8px;padding:18px 20px;margin-bottom:8px;">
+          <div style="font-size:1.6rem;">🚗</div>
+          <div style="flex:1;">
+            <div id="selected-vehicle-name" style="font-weight:800;font-size:1rem;">No vehicle selected</div>
+            <div id="selected-vehicle-rate" style="font-size:0.82rem;color:var(--text-muted);"><a href="fleet.html">Choose a vehicle from our fleet →</a></div>
           </div>
         </div>
+        <input type="hidden" id="vehicle-id" name="vehicle_id">
         <div class="form-group">
           <label for="rental-duration">How long do you plan to rent?</label>
           <select id="rental-duration" name="rental_duration">
@@ -196,8 +152,52 @@
           </select>
         </div>
 
+        <!-- Section 2: License Info -->
+        <div class="form-section-title">Driver's License</div>
+        <div class="form-group">
+          <label for="license-number">License Number *</label>
+          <input type="text" id="license-number" name="license_number" placeholder="NC12345678" required>
+        </div>
+        <div class="form-group">
+          <label for="license-upload">Upload Driver's License *</label>
+          <div class="upload-box" data-target="license-upload">
+            <div class="upload-box__icon">⬆</div>
+            <div class="upload-box__label">Upload Driver's License</div>
+            <div class="upload-box__hint">PDF, DOC/DOCX, XLS/CSV, JPG/JPEG, PNG, GIF</div>
+            <div class="upload-box__filename"></div>
+          </div>
+          <input type="file" id="license-upload" name="license" accept="image/*,.pdf,.doc,.docx,.xls,.csv" required hidden>
+        </div>
+
+        <!-- Insurance Yes/No -->
+        <div class="form-group">
+          <label>Do you have your own insurance? *</label>
+          <div class="checkbox-group" style="gap:24px;">
+            <label style="display:flex;align-items:center;gap:6px;font-weight:600;"><input type="radio" name="has_own_insurance" value="yes" required> Yes</label>
+            <label style="display:flex;align-items:center;gap:6px;font-weight:600;"><input type="radio" name="has_own_insurance" value="no" required> No</label>
+          </div>
+        </div>
+        <div class="form-group" id="insurance-upload-group" style="display:none;">
+          <label for="insurance-upload">Upload Insurance</label>
+          <div class="upload-box" data-target="insurance-upload">
+            <div class="upload-box__icon">⬆</div>
+            <div class="upload-box__label">Upload Insurance</div>
+            <div class="upload-box__hint">PDF, DOC/DOCX, XLS/CSV, JPG/JPEG, PNG, GIF</div>
+            <div class="upload-box__filename"></div>
+          </div>
+          <input type="file" id="insurance-upload" name="insurance" accept="image/*,.pdf,.doc,.docx,.xls,.csv" hidden>
+        </div>
+
         <!-- Section 4: Platform Info -->
         <div class="form-section-title">Gig Platform Details</div>
+        <div class="form-group">
+          <label for="use-type">Is this vehicle for personal use or for a job? *</label>
+          <select id="use-type" name="use_type" required>
+            <option value="">Select</option>
+            <option value="personal">Personal Use</option>
+            <option value="job">Job / Gig Work</option>
+          </select>
+        </div>
         <div class="form-group">
           <label for="platforms">Which platforms do you drive for? *</label>
           <select id="platforms" name="platforms" required>
@@ -208,55 +208,12 @@
             <option value="uber-lyft">Uber & Lyft</option>
             <option value="multiple">Multiple platforms</option>
             <option value="new">New — not yet active</option>
+            <option value="na">Not applicable</option>
           </select>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="avg-hours">Avg hours per week driving?</label>
-            <select id="avg-hours" name="avg_hours">
-              <option value="">Select</option>
-              <option value="under20">Under 20 hrs</option>
-              <option value="20-40">20–40 hrs</option>
-              <option value="40-60">40–60 hrs (full time)</option>
-              <option value="60+">60+ hrs</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="account-status">Account status on platform</label>
-            <select id="account-status" name="account_status">
-              <option value="">Select</option>
-              <option value="active">Active & in good standing</option>
-              <option value="new">Brand new account</option>
-              <option value="pending">Pending approval</option>
-              <option value="multiple">Multiple active accounts</option>
-            </select>
-          </div>
         </div>
 
         <!-- Section 5: Additional -->
         <div class="form-section-title">Additional Information</div>
-        <div class="form-group">
-          <label for="accidents">Any accidents or violations in the past 3 years?</label>
-          <select id="accidents" name="accidents">
-            <option value="">Select</option>
-            <option value="none">None</option>
-            <option value="minor">Minor (1 ticket / fender bender)</option>
-            <option value="moderate">Moderate (2–3 incidents)</option>
-            <option value="major">Major incident</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="how-heard">How did you hear about DriveNow?</label>
-          <select id="how-heard" name="how_heard">
-            <option value="">Select</option>
-            <option value="google">Google Search</option>
-            <option value="referral">Friend / Referral</option>
-            <option value="social">Social Media</option>
-            <option value="rideshare-group">Rideshare Facebook Group</option>
-            <option value="flyer">Flyer / Handout</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
         <div class="form-group">
           <label for="notes">Anything else you'd like us to know?</label>
           <textarea id="notes" name="notes" placeholder="Questions, special requests, or anything that helps us match you with the right vehicle..."></textarea>
@@ -316,7 +273,7 @@
         <div class="footer__col-title">Pages</div>
         <div class="footer__links">
           <a href="fleet.html">Fleet</a>
-          <a href="apply.html">Apply</a>
+          <a href="fleet.html">Apply</a>
           <a href="resources.html">Resources</a>
           <a href="contact.html">Contact</a>
         </div>

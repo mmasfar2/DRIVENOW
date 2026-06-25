@@ -105,6 +105,46 @@ document.querySelectorAll('.faq-question').forEach(btn => {
 // ── Application Form ──
 const appForm = document.getElementById('application-form');
 if (appForm) {
+  // Pre-fill the selected vehicle from the fleet page query string
+  const vParams = new URLSearchParams(window.location.search);
+  const vId = vParams.get('vehicle_id');
+  if (vId) {
+    document.getElementById('vehicle-id').value = vId;
+    const make = vParams.get('make') || '';
+    const model = vParams.get('model') || '';
+    const year = vParams.get('year') || '';
+    const rate = vParams.get('rate') || '';
+    document.getElementById('selected-vehicle-name').textContent = `${year} ${make} ${model}`.trim();
+    document.getElementById('selected-vehicle-rate').innerHTML = rate ? `$${rate} / week &nbsp;·&nbsp; <a href="fleet.html">Change vehicle</a>` : `<a href="fleet.html">Change vehicle</a>`;
+  }
+
+  // Upload boxes: click opens the hidden file input, shows the chosen filename
+  document.querySelectorAll('.upload-box').forEach(box => {
+    const input = document.getElementById(box.dataset.target);
+    if (!input) return;
+    box.addEventListener('click', () => input.click());
+    input.addEventListener('change', () => {
+      const nameEl = box.querySelector('.upload-box__filename');
+      if (input.files[0]) {
+        nameEl.textContent = `Selected: ${input.files[0].name}`;
+        box.classList.add('has-file');
+      } else {
+        nameEl.textContent = '';
+        box.classList.remove('has-file');
+      }
+    });
+  });
+
+  // Insurance Yes/No toggle
+  const insuranceGroup = document.getElementById('insurance-upload-group');
+  document.querySelectorAll('input[name="has_own_insurance"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      const showUpload = document.querySelector('input[name="has_own_insurance"]:checked')?.value === 'yes';
+      insuranceGroup.style.display = showUpload ? '' : 'none';
+      document.getElementById('insurance-upload').required = showUpload;
+    });
+  });
+
   appForm.addEventListener('submit', async e => {
     e.preventDefault();
     const submitBtn = appForm.querySelector('button[type="submit"]');
@@ -118,10 +158,12 @@ if (appForm) {
     formData.append('phone', document.getElementById('phone').value);
     formData.append('email', document.getElementById('email').value);
     formData.append('address', document.getElementById('address').value);
+    formData.append('state', document.getElementById('state')?.value || '');
+    formData.append('vehicle_id', document.getElementById('vehicle-id')?.value || '');
+    formData.append('use_type', document.getElementById('use-type')?.value || '');
     formData.append('occupation', document.getElementById('platforms')?.value || '');
-    formData.append('intended_use', document.getElementById('vehicle-choice')?.value || '');
+    formData.append('has_own_insurance', document.querySelector('input[name="has_own_insurance"]:checked')?.value || '');
     formData.append('license_number', document.getElementById('license-number')?.value || '');
-    formData.append('license_state', document.getElementById('license-state')?.value || '');
     formData.append('consent_background', document.getElementById('agree-terms').checked ? 'true' : 'false');
     const licenseFile = document.getElementById('license-upload')?.files[0];
     const insuranceFile = document.getElementById('insurance-upload')?.files[0];

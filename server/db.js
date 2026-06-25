@@ -194,6 +194,15 @@ if (!existingCols.includes('dropoff_location')) {
 if (!existingCols.includes('vehicle_class')) {
   db.exec('ALTER TABLE applications ADD COLUMN vehicle_class TEXT');
 }
+if (!existingCols.includes('state')) {
+  db.exec('ALTER TABLE applications ADD COLUMN state TEXT');
+}
+if (!existingCols.includes('has_own_insurance')) {
+  db.exec('ALTER TABLE applications ADD COLUMN has_own_insurance INTEGER');
+}
+if (!existingCols.includes('use_type')) {
+  db.exec("ALTER TABLE applications ADD COLUMN use_type TEXT");
+}
 
 const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);
 if (!vehicleCols.includes('photo_path')) {

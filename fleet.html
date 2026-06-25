@@ -65,7 +65,7 @@
       <li><a href="fleet.html" class="active">Fleet</a></li>
       <li><a href="resources.html">Resources</a></li>
       <li><a href="contact.html">Contact</a></li>
-      <li><a href="apply.html" class="btn btn-white nav__cta" style="padding:10px 24px;font-size:0.78rem;">Apply Now</a></li>
+      <li><a href="fleet.html" class="btn btn-white nav__cta" style="padding:10px 24px;font-size:0.78rem;">Apply Now</a></li>
     </ul>
     <div class="nav__hamburger"><span></span><span></span><span></span></div>
   </div>
@@ -73,7 +73,7 @@
     <a href="fleet.html">Fleet</a>
     <a href="resources.html">Resources & Calculator</a>
     <a href="contact.html">Contact</a>
-    <a href="apply.html">Apply Now →</a>
+    <a href="fleet.html">Apply Now →</a>
   </div>
 </nav>
 
@@ -110,7 +110,7 @@
         <div style="font-weight:700;margin-bottom:4px;">All vehicles are platform-approved</div>
         <div style="font-size:0.88rem;color:var(--text-muted);">Every car in our fleet meets Uber, Lyft, and DoorDash vehicle requirements for Charlotte, NC. Activate your account and start earning the same day you pick up.</div>
       </div>
-      <a href="apply.html" class="btn btn-primary" style="margin-left:auto;white-space:nowrap;">Apply Now</a>
+      <a href="#fleet-grid" class="btn btn-primary" style="margin-left:auto;white-space:nowrap;">See Vehicles</a>
     </div>
   </div>
 </section>
@@ -121,7 +121,7 @@
     <h2>See something you like?</h2>
     <p>Apply in 5 minutes. We'll have you on the road within 48 hours.</p>
     <div class="cta-band__actions">
-      <a href="apply.html" class="btn btn-white btn-lg">Start Your Application</a>
+      <a href="#fleet-grid" class="btn btn-white btn-lg">Choose Your Car</a>
       <a href="resources.html" class="btn btn-lg" style="border-color:rgba(255,255,255,0.3);color:rgba(255,255,255,0.7);">Calculate Earnings</a>
     </div>
   </div>
@@ -139,7 +139,7 @@
         <div class="footer__col-title">Pages</div>
         <div class="footer__links">
           <a href="fleet.html">Fleet</a>
-          <a href="apply.html">Apply</a>
+          <a href="fleet.html">Apply</a>
           <a href="resources.html">Resources</a>
           <a href="contact.html">Contact</a>
         </div>
@@ -201,7 +201,7 @@ function renderFleetCard(v) {
           <div class="price-weekly">$${v.weekly_rate} <span>/ week</span></div>
           <div class="availability ${status.cls}">${status.text}</div>
         </div>
-        <a href="apply.html" class="btn btn-primary" style="width:100%;text-align:center;margin-top:16px;display:block;">Apply for This Car</a>
+        <a href="apply.html?vehicle_id=${v.id}&make=${encodeURIComponent(v.make)}&model=${encodeURIComponent(v.model)}&year=${v.year}&rate=${v.weekly_rate}" class="btn btn-primary" style="width:100%;text-align:center;margin-top:16px;display:block;">Apply for This Car</a>
       </div>
     </div>
   `;

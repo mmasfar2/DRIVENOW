@@ -18,7 +18,7 @@ const upload = multer({
 
 // ── PUBLIC: Stage 1 — Customer Application Submission ──
 router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (req, res) => {
-  const { first_name, last_name, phone, email, address, occupation, intended_use, license_number, license_state, consent_background, vehicle_class } = req.body;
+  const { first_name, last_name, phone, email, address, state, occupation, use_type, license_number, consent_background, vehicle_id, has_own_insurance } = req.body;
 
   if (!first_name || !last_name || !phone || !email) {
     return res.status(400).json({ error: 'First name, last name, phone, and email are required' });
@@ -29,14 +29,18 @@ router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (r
 
   const licensePath = req.files?.license?.[0]?.filename || null;
   const insurancePath = req.files?.insurance?.[0]?.filename || null;
+  const assignedVehicleId = vehicle_id ? Number(vehicle_id) : null;
 
   const result = db.prepare(`
     INSERT INTO applications
-      (first_name, last_name, phone, email, address, occupation, intended_use, license_number, license_state, license_path, insurance_path, consent_background, vehicle_class, stage)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 1)
-  `).run(first_name, last_name, phone, email, address || null, occupation || null, intended_use || null, license_number || null, license_state || null, licensePath, insurancePath, vehicle_class || null);
+      (first_name, last_name, phone, email, address, state, occupation, use_type, license_number, license_path, insurance_path, consent_background, has_own_insurance, assigned_vehicle_id, stage)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, 1)
+  `).run(first_name, last_name, phone, email, address || null, state || null, occupation || null, use_type || null, license_number || null, licensePath, insurancePath, has_own_insurance === 'yes' ? 1 : 0, assignedVehicleId);
 
   const appId = result.lastInsertRowid;
+  if (assignedVehicleId) {
+    db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ? AND status = 'available'").run(assignedVehicleId);
+  }
   upsertCustomer({ email, first_name, last_name, phone, address });
   logActivity(appId, `New application submitted by ${first_name} ${last_name}`);
   queueMessage(appId, 'sms', phone, "We've received your application and are currently reviewing it.");
@@ -47,11 +51,16 @@ router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (r
 // ── AUTHED: List applications (filterable by stage/status) ──
 router.get('/', requireAuth, (req, res) => {
   const { stage, status } = req.query;
-  let query = 'SELECT * FROM applications WHERE 1=1';
+  let query = `
+    SELECT a.*, v.make as vehicle_make, v.model as vehicle_model, v.year as vehicle_year
+    FROM applications a
+    LEFT JOIN vehicles v ON v.id = a.assigned_vehicle_id
+    WHERE 1=1
+  `;
   const params = [];
-  if (stage) { query += ' AND stage = ?'; params.push(stage); }
-  if (status) { query += ' AND status = ?'; params.push(status); }
-  query += ' ORDER BY created_at DESC';
+  if (stage) { query += ' AND a.stage = ?'; params.push(stage); }
+  if (status) { query += ' AND a.status = ?'; params.push(status); }
+  query += ' ORDER BY a.created_at DESC';
   const rows = db.prepare(query).all(...params);
   res.json(rows);
 });
