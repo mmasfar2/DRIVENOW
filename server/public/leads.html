@@ -61,7 +61,7 @@
           <div class="cd-booking-row__icon">${icon('users', 16)}</div>
           <div style="flex:1;">
             <div><strong>${l.first_name} ${l.last_name}</strong></div>
-            <div style="color:var(--text-muted);font-size:0.8rem;">${l.vehicle_make ? `${l.vehicle_year} ${l.vehicle_make} ${l.vehicle_model}` : 'No vehicle selected'} &middot; Applied ${fmtDate(l.created_at)}</div>
+            <div style="color:var(--text-muted);font-size:0.8rem;">${l.vehicle_make ? `${l.vehicle_year} ${l.vehicle_make} ${l.vehicle_model}` : 'No vehicle selected'} &middot; ${l.has_own_insurance ? 'Personal Insurance' : 'No Insurance'} &middot; Applied ${fmtDate(l.created_at)}</div>
           </div>
         </a>
       `).join('')
