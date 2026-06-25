@@ -16,51 +16,18 @@
   <div class="page-title">Fleet Management</div>
   <div class="page-sub">Vehicles available for assignment to approved applicants.</div>
 
-  <div class="panel">
-    <div class="panel-title">Add Vehicle</div>
-
-    <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;margin-bottom:10px;">Identification</div>
-    <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:18px;">
-      <div class="field" style="margin-bottom:0;"><label>Stock Number</label><input id="new-stock" placeholder="STK-1042"></div>
-      <div class="field" style="margin-bottom:0;"><label>Plate Number</label><input id="new-plate" placeholder="ABC-1234"></div>
-      <div class="field" style="margin-bottom:0;"><label>VIN</label><input id="new-vin" placeholder="1HGCM82633A123456"></div>
+  <div class="panel" style="display:flex;justify-content:space-between;align-items:center;">
+    <div>
+      <div class="panel-title" style="margin-bottom:2px;">Vehicles</div>
+      <div style="font-size:0.82rem;color:#888;">Click a vehicle to view or edit its full details.</div>
     </div>
-
-    <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;margin-bottom:10px;">Vehicle Details</div>
-    <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:14px;margin-bottom:18px;">
-      <div class="field" style="margin-bottom:0;"><label>Make</label><input id="new-make" placeholder="Honda"></div>
-      <div class="field" style="margin-bottom:0;"><label>Model</label><input id="new-model" placeholder="Accord LX"></div>
-      <div class="field" style="margin-bottom:0;"><label>Year</label><input id="new-year" type="number" placeholder="2015"></div>
-      <div class="field" style="margin-bottom:0;"><label>Color</label><input id="new-color" placeholder="Silver"></div>
-      <div class="field" style="margin-bottom:0;"><label>Class</label><input id="new-class" placeholder="Sedan"></div>
-    </div>
-
-    <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;margin-bottom:10px;">Acquisition</div>
-    <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;margin-bottom:18px;">
-      <div class="field" style="margin-bottom:0;"><label>First Date</label><input id="new-first-date" type="date"></div>
-      <div class="field" style="margin-bottom:0;"><label>Purchase Price ($)</label><input id="new-purchase-price" type="number" placeholder="14500"></div>
-      <div class="field" style="margin-bottom:0;"><label>Mileage</label><input id="new-mileage" type="number" placeholder="42000"></div>
-      <div class="field" style="margin-bottom:0;"><label>Weekly Rate ($)</label><input id="new-rate" type="number" placeholder="380"></div>
-    </div>
-
-    <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;margin-bottom:10px;">Status &amp; Photos</div>
-    <div class="form-row" style="display:grid;grid-template-columns:1fr 2fr auto;gap:14px;align-items:end;">
-      <div class="field" style="margin-bottom:0;">
-        <label>Status</label>
-        <select id="new-status">
-          <option value="available">Available</option>
-          <option value="sold">Sold</option>
-        </select>
-      </div>
-      <div class="field" style="margin-bottom:0;"><label>Photos</label><input id="new-photos" type="file" accept="image/*" multiple></div>
-      <button class="btn" style="height:46px;" onclick="addVehicle()">Add Vehicle</button>
-    </div>
+    <button class="btn" onclick="openVehicleModal()">+ Add Vehicle</button>
   </div>
 
   <div class="panel" style="padding:0;overflow-x:auto;">
     <table>
       <thead>
-        <tr><th>Photo</th><th>Vehicle</th><th>Stock #</th><th>Plate</th><th>VIN</th><th>Class</th><th>Mileage</th><th>Weekly Rate</th><th>Status</th><th>Notes</th><th></th></tr>
+        <tr><th>Photo</th><th>Vehicle</th><th>Weekly Rate</th><th>Status</th><th></th></tr>
       </thead>
       <tbody id="fleet-table-body"></tbody>
     </table>
@@ -70,9 +37,65 @@
 </div>
 </div>
 
+<div id="vehicle-overlay" class="simple-modal-overlay" style="display:none;">
+  <div class="simple-modal" style="width:680px;">
+    <div class="simple-modal__header">
+      <div class="simple-modal__title" id="vehicle-modal-title">Add Vehicle</div>
+      <button class="simple-modal__close" id="vehicle-modal-close">&times;</button>
+    </div>
+    <div class="simple-modal__body">
+      <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
+        <div class="field"><label>Stock Number</label><input id="v-stock" placeholder="STK-1042"></div>
+        <div class="field"><label>Plate Number</label><input id="v-plate" placeholder="ABC-1234"></div>
+        <div class="field"><label>VIN</label><input id="v-vin" placeholder="1HGCM82633A123456"></div>
+      </div>
+      <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
+        <div class="field"><label>Make</label><input id="v-make" placeholder="Honda"></div>
+        <div class="field"><label>Model</label><input id="v-model" placeholder="Accord LX"></div>
+        <div class="field"><label>Year</label><input id="v-year" type="number" placeholder="2015"></div>
+      </div>
+      <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
+        <div class="field"><label>Color</label><input id="v-color" placeholder="Silver"></div>
+        <div class="field"><label>Class</label><input id="v-class" placeholder="Sedan"></div>
+        <div class="field"><label>Mileage</label><input id="v-mileage" type="number" placeholder="42000"></div>
+      </div>
+      <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
+        <div class="field"><label>First Date</label><input id="v-first-date" type="date"></div>
+        <div class="field"><label>Purchase Price ($)</label><input id="v-purchase-price" type="number" placeholder="14500"></div>
+        <div class="field">
+          <label>Availability</label>
+          <select id="v-status">
+            <option value="available">Available</option>
+            <option value="reserved">Reserved</option>
+            <option value="rented">Rented</option>
+            <option value="maintenance">Maintenance</option>
+            <option value="sold">Sold</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div class="field"><label>Weekly Rate ($)</label><input id="v-rate" type="number" placeholder="380"></div>
+        <div class="field"><label>Notes</label><input id="v-notes" placeholder="Optional notes"></div>
+      </div>
+
+      <div class="field">
+        <label>Photos</label>
+        <div id="v-photo-thumbs" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+        <input id="v-photos" type="file" accept="image/*" multiple>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <button class="btn btn-outline btn-danger" id="v-remove-btn" style="display:none;" onclick="removeVehicle()">Remove Vehicle</button>
+        <button class="btn" onclick="saveVehicle()">Save Vehicle</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="js/admin-common.js"></script>
 <script>
 let vehicles = [];
+let editingId = null;
 
 async function load() {
   vehicles = await api('/api/vehicles');
@@ -81,120 +104,118 @@ async function load() {
 
 function render() {
   document.getElementById('fleet-table-body').innerHTML = vehicles.length ? vehicles.map(v => `
-    <tr>
+    <tr style="cursor:pointer;" onclick="openVehicleModal(${v.id})">
       <td>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;max-width:160px;${(v.photos || []).length ? 'margin-bottom:6px;' : ''}">
-          ${(v.photos || []).map(p => `
-            <div style="position:relative;">
-              <img src="/uploads/${p.photo_path}" alt="" style="width:48px;height:36px;object-fit:cover;border-radius:4px;background:#eee;">
-              <button onclick="removePhoto(${v.id}, ${p.id})" title="Remove photo"
-                style="position:absolute;top:-6px;right:-6px;width:16px;height:16px;border-radius:50%;border:none;background:#c62828;color:#fff;font-size:10px;line-height:16px;cursor:pointer;padding:0;">×</button>
-            </div>
-          `).join('')}
-        </div>
-        <label class="btn btn-sm btn-outline" style="cursor:pointer;">
-          Upload Photos
-          <input type="file" accept="image/*" multiple style="display:none;" onchange="uploadPhoto(${v.id}, this)">
-        </label>
+        <img src="${(v.photos || [])[0] ? '/uploads/' + v.photos[0].photo_path : ''}" alt=""
+          style="width:56px;height:40px;object-fit:cover;border-radius:4px;background:#eee;${(v.photos || [])[0] ? '' : 'visibility:hidden;'}">
       </td>
       <td><strong>${v.year} ${v.make} ${v.model}</strong>${v.color ? `<br><span style="color:#888;font-size:0.8rem;">${v.color}</span>` : ''}</td>
-      <td>${v.stock_number || '—'}</td>
-      <td>${v.license_plate || '—'}</td>
-      <td>${v.vin || '—'}</td>
-      <td>${v.vehicle_class || '—'}</td>
-      <td>${v.mileage != null ? Number(v.mileage).toLocaleString() : '—'}</td>
-      <td>
-        <div style="display:flex;align-items:center;gap:4px;">
-          <span>$</span>
-          <input type="number" value="${v.weekly_rate}" style="width:80px;padding:6px 8px;border:1.5px solid #e0e0e0;border-radius:4px;"
-            onkeydown="if(event.key==='Enter') this.blur();"
-            onblur="updateRate(${v.id}, this.value, this)">
-          <span>/wk</span>
-        </div>
-      </td>
-      <td>
-        <select onchange="updateStatus(${v.id}, this.value)" style="padding:6px 10px;border:1.5px solid #e0e0e0;border-radius:4px;">
-          <option value="available" ${v.status === 'available' ? 'selected' : ''}>Available</option>
-          <option value="reserved" ${v.status === 'reserved' ? 'selected' : ''}>Reserved</option>
-          <option value="rented" ${v.status === 'rented' ? 'selected' : ''}>Rented</option>
-          <option value="maintenance" ${v.status === 'maintenance' ? 'selected' : ''}>Maintenance</option>
-          <option value="sold" ${v.status === 'sold' ? 'selected' : ''}>Sold</option>
-        </select>
-      </td>
-      <td>${v.notes || '—'}</td>
-      <td><button class="btn btn-sm btn-outline" onclick="removeVehicle(${v.id})">Remove</button></td>
+      <td>$${v.weekly_rate}/wk</td>
+      <td><span style="text-transform:capitalize;">${v.status}</span></td>
+      <td onclick="event.stopPropagation();"><button class="btn btn-sm btn-outline" onclick="removeVehicleFromRow(${v.id})">Remove</button></td>
     </tr>
-  `).join('') : '<tr><td colspan="11" style="text-align:center;color:#888;padding:32px;">No vehicles yet.</td></tr>';
+  `).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:32px;">No vehicles yet.</td></tr>';
 }
 
-async function uploadPhoto(id, input) {
-  const files = input.files;
-  if (!files.length) return;
-  const formData = new FormData();
-  Array.from(files).forEach(f => formData.append('photos', f));
-  const res = await fetch(`/api/vehicles/${id}/photo`, { method: 'POST', body: formData });
-  if (!res.ok) { alert('Photo upload failed'); return; }
+function renderPhotoThumbs(v) {
+  const thumbs = document.getElementById('v-photo-thumbs');
+  const photos = (v && v.photos) || [];
+  thumbs.innerHTML = photos.map(p => `
+    <div style="position:relative;">
+      <img src="/uploads/${p.photo_path}" alt="" style="width:56px;height:42px;object-fit:cover;border-radius:4px;background:#eee;">
+      <button onclick="removePhoto(${v.id}, ${p.id})" title="Remove photo"
+        style="position:absolute;top:-6px;right:-6px;width:16px;height:16px;border-radius:50%;border:none;background:#c62828;color:#fff;font-size:10px;line-height:16px;cursor:pointer;padding:0;">×</button>
+    </div>
+  `).join('');
+}
+
+function openVehicleModal(id) {
+  editingId = id || null;
+  const v = id ? vehicles.find(x => x.id === id) : null;
+
+  document.getElementById('vehicle-modal-title').textContent = v ? 'Edit Vehicle' : 'Add Vehicle';
+  document.getElementById('v-remove-btn').style.display = v ? '' : 'none';
+
+  document.getElementById('v-stock').value = v?.stock_number || '';
+  document.getElementById('v-plate').value = v?.license_plate || '';
+  document.getElementById('v-vin').value = v?.vin || '';
+  document.getElementById('v-make').value = v?.make || '';
+  document.getElementById('v-model').value = v?.model || '';
+  document.getElementById('v-year').value = v?.year || '';
+  document.getElementById('v-color').value = v?.color || '';
+  document.getElementById('v-class').value = v?.vehicle_class || '';
+  document.getElementById('v-mileage').value = v?.mileage ?? '';
+  document.getElementById('v-first-date').value = v?.purchase_date || '';
+  document.getElementById('v-purchase-price').value = v?.purchase_price ?? '';
+  document.getElementById('v-status').value = v?.status || 'available';
+  document.getElementById('v-rate').value = v?.weekly_rate ?? '';
+  document.getElementById('v-notes').value = v?.notes || '';
+  document.getElementById('v-photos').value = '';
+  renderPhotoThumbs(v);
+
+  document.getElementById('vehicle-overlay').style.display = 'flex';
+}
+
+function closeVehicleModal() {
+  document.getElementById('vehicle-overlay').style.display = 'none';
+  editingId = null;
+}
+
+async function saveVehicle() {
+  const fields = {
+    stock_number: document.getElementById('v-stock').value,
+    license_plate: document.getElementById('v-plate').value,
+    vin: document.getElementById('v-vin').value,
+    make: document.getElementById('v-make').value,
+    model: document.getElementById('v-model').value,
+    year: document.getElementById('v-year').value,
+    color: document.getElementById('v-color').value,
+    vehicle_class: document.getElementById('v-class').value,
+    mileage: document.getElementById('v-mileage').value,
+    purchase_date: document.getElementById('v-first-date').value,
+    purchase_price: document.getElementById('v-purchase-price').value,
+    status: document.getElementById('v-status').value,
+    weekly_rate: document.getElementById('v-rate').value,
+    notes: document.getElementById('v-notes').value,
+  };
+  if (!fields.make || !fields.model || !fields.year || !fields.weekly_rate) { alert('Fill in make, model, year, and weekly rate'); return; }
+
+  const id = editingId || (await api('/api/vehicles', { method: 'POST', body: JSON.stringify(fields) })).id;
+  if (editingId) await api(`/api/vehicles/${editingId}`, { method: 'PATCH', body: JSON.stringify(fields) });
+
+  const photoInput = document.getElementById('v-photos');
+  if (photoInput.files.length) {
+    const formData = new FormData();
+    Array.from(photoInput.files).forEach(f => formData.append('photos', f));
+    await fetch(`/api/vehicles/${id}/photo`, { method: 'POST', body: formData });
+  }
+
+  closeVehicleModal();
   load();
 }
 
 async function removePhoto(vehicleId, photoId) {
   if (!confirm('Remove this photo?')) return;
   await api(`/api/vehicles/${vehicleId}/photo/${photoId}`, { method: 'DELETE' });
+  await load();
+  renderPhotoThumbs(vehicles.find(x => x.id === vehicleId));
+}
+
+async function removeVehicle() {
+  if (!editingId || !confirm('Remove this vehicle from the fleet?')) return;
+  await api(`/api/vehicles/${editingId}`, { method: 'DELETE' });
+  closeVehicleModal();
   load();
 }
 
-async function addVehicle() {
-  const fields = {
-    stock_number: document.getElementById('new-stock').value,
-    license_plate: document.getElementById('new-plate').value,
-    vin: document.getElementById('new-vin').value,
-    make: document.getElementById('new-make').value,
-    model: document.getElementById('new-model').value,
-    year: document.getElementById('new-year').value,
-    color: document.getElementById('new-color').value,
-    vehicle_class: document.getElementById('new-class').value,
-    purchase_date: document.getElementById('new-first-date').value,
-    purchase_price: document.getElementById('new-purchase-price').value,
-    mileage: document.getElementById('new-mileage').value,
-    weekly_rate: document.getElementById('new-rate').value,
-    status: document.getElementById('new-status').value,
-  };
-  if (!fields.make || !fields.model || !fields.year || !fields.weekly_rate) { alert('Fill in make, model, year, and weekly rate'); return; }
-
-  const created = await api('/api/vehicles', { method: 'POST', body: JSON.stringify(fields) });
-
-  const photoInput = document.getElementById('new-photos');
-  if (photoInput.files.length) {
-    const formData = new FormData();
-    Array.from(photoInput.files).forEach(f => formData.append('photos', f));
-    await fetch(`/api/vehicles/${created.id}/photo`, { method: 'POST', body: formData });
-  }
-
-  ['new-stock', 'new-plate', 'new-vin', 'new-make', 'new-model', 'new-year', 'new-color', 'new-class',
-    'new-first-date', 'new-purchase-price', 'new-mileage', 'new-rate'].forEach(id => { document.getElementById(id).value = ''; });
-  document.getElementById('new-status').value = 'available';
-  photoInput.value = '';
-  load();
-}
-
-async function updateRate(id, weekly_rate, input) {
-  const v = vehicles.find(x => x.id === id);
-  if (!weekly_rate || isNaN(weekly_rate) || Number(weekly_rate) <= 0) { alert('Enter a valid weekly rate'); input.value = v.weekly_rate; return; }
-  if (Number(weekly_rate) === Number(v.weekly_rate)) return;
-  await api(`/api/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify({ weekly_rate: Number(weekly_rate) }) });
-  load();
-}
-
-async function updateStatus(id, status) {
-  await api(`/api/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
-  load();
-}
-
-async function removeVehicle(id) {
+async function removeVehicleFromRow(id) {
   if (!confirm('Remove this vehicle from the fleet?')) return;
   await api(`/api/vehicles/${id}`, { method: 'DELETE' });
   load();
 }
+
+document.getElementById('vehicle-modal-close').onclick = closeVehicleModal;
+document.getElementById('vehicle-overlay').onclick = (e) => { if (e.target.id === 'vehicle-overlay') closeVehicleModal(); };
 
 (async () => {
   renderSidebar('fleet');
