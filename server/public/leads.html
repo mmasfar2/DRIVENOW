@@ -24,7 +24,12 @@
   </div>
 
   <div class="panel">
-    <div class="panel-title">New Leads</div>
+    <div class="panel-title">
+      <select id="leads-mode" style="font-family:inherit;font-weight:700;font-size:0.95rem;border:1.5px solid var(--gray-border);border-radius:4px;padding:4px 8px;background:#fff;">
+        <option value="new">New Leads</option>
+        <option value="former">Former Leads</option>
+      </select>
+    </div>
     <div id="new-leads-list"></div>
   </div>
 
@@ -49,23 +54,62 @@
 
 <script src="js/admin-common.js"></script>
 <script>
+async function loadLeads() {
+  const mode = document.getElementById('leads-mode').value;
+  const leads = mode === 'former'
+    ? await api('/api/applications?status=rejected')
+    : await api('/api/applications?stage=1&status=active');
+
+  // Oldest first — first received at the top
+  leads.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+  document.getElementById('new-leads-list').innerHTML = leads.length
+    ? leads.map(l => `
+        <div class="cd-booking-row" style="cursor:default;">
+          <a href="customer-detail.html?email=${encodeURIComponent(l.email)}" style="display:flex;align-items:center;gap:12px;flex:1;text-decoration:none;color:inherit;">
+            <div class="cd-booking-row__icon">${icon('users', 16)}</div>
+            <div style="flex:1;">
+              <div><strong>${l.first_name} ${l.last_name}</strong></div>
+              <div style="color:var(--text-muted);font-size:0.8rem;">${l.vehicle_make ? `${l.vehicle_year} ${l.vehicle_make} ${l.vehicle_model}` : 'No vehicle selected'} &middot; ${l.has_own_insurance ? 'Personal Insurance' : 'No Insurance'} &middot; Applied ${fmtDate(l.created_at)}</div>
+            </div>
+          </a>
+          ${mode === 'new' ? `
+            <div style="display:flex;gap:8px;flex-shrink:0;">
+              <button class="lead-action-btn lead-approve" data-id="${l.id}" title="Move to Potential Arrivals" style="width:32px;height:32px;border-radius:50%;border:1.5px solid #2e7d32;color:#2e7d32;background:#fff;font-weight:800;cursor:pointer;">✓</button>
+              <button class="lead-action-btn lead-reject" data-id="${l.id}" title="Move to Former Leads" style="width:32px;height:32px;border-radius:50%;border:1.5px solid #c62828;color:#c62828;background:#fff;font-weight:800;cursor:pointer;">✕</button>
+            </div>
+          ` : ''}
+        </div>
+      `).join('')
+    : `<p style="color:#888;font-size:0.85rem;">${mode === 'former' ? 'No former leads.' : 'No new leads right now.'}</p>`;
+
+  document.querySelectorAll('.lead-approve').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        await api(`/api/applications/${btn.dataset.id}/move-to-arrivals`, { method: 'POST' });
+        await loadLeads();
+      } catch (err) {
+        alert(err.message || 'Could not move this lead to arrivals.');
+        btn.disabled = false;
+      }
+    });
+  });
+  document.querySelectorAll('.lead-reject').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      await api(`/api/applications/${btn.dataset.id}/reject-lead`, { method: 'POST' });
+      await loadLeads();
+    });
+  });
+}
+
 (async () => {
   renderSidebar('leads');
   await requireLogin();
   const data = await api('/api/dashboard/summary');
-  const newLeads = await api('/api/applications?stage=1&status=active');
-
-  document.getElementById('new-leads-list').innerHTML = newLeads.length
-    ? newLeads.map(l => `
-        <a href="customer-detail.html?email=${encodeURIComponent(l.email)}" class="cd-booking-row">
-          <div class="cd-booking-row__icon">${icon('users', 16)}</div>
-          <div style="flex:1;">
-            <div><strong>${l.first_name} ${l.last_name}</strong></div>
-            <div style="color:var(--text-muted);font-size:0.8rem;">${l.vehicle_make ? `${l.vehicle_year} ${l.vehicle_make} ${l.vehicle_model}` : 'No vehicle selected'} &middot; ${l.has_own_insurance ? 'Personal Insurance' : 'No Insurance'} &middot; Applied ${fmtDate(l.created_at)}</div>
-          </div>
-        </a>
-      `).join('')
-    : '<p style="color:#888;font-size:0.85rem;">No new leads right now.</p>';
+  document.getElementById('leads-mode').addEventListener('change', loadLeads);
+  await loadLeads();
 
   document.getElementById('stat-total').textContent = data.counts.totalApplications;
   document.getElementById('stat-active').textContent = data.counts.activeApplications;

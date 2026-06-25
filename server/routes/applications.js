@@ -48,6 +48,40 @@ router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (r
   res.status(201).json({ id: appId, message: 'Application received' });
 });
 
+// ── AUTHED: Approve a new lead — moves it into Reservations as a Potential Arrival ──
+router.post('/:id/move-to-arrivals', requireAuth, (req, res) => {
+  const id = req.params.id;
+  const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
+  if (!app) return res.status(404).json({ error: 'Not found' });
+  if (!app.assigned_vehicle_id) return res.status(400).json({ error: 'This lead has no vehicle selected yet' });
+
+  const vehicle = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(app.assigned_vehicle_id);
+  if (!vehicle) return res.status(404).json({ error: 'Assigned vehicle not found' });
+
+  const amount = app.invoice_amount || app.total_due_at_pickup || vehicle.weekly_rate;
+  db.prepare(`
+    UPDATE applications SET
+      stage = 5, status = 'active', payment_status = 'unpaid',
+      weekly_rate = COALESCE(weekly_rate, ?), invoice_amount = ?, total_due_at_pickup = COALESCE(total_due_at_pickup, ?),
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(vehicle.weekly_rate, amount, amount, id);
+  db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ?").run(vehicle.id);
+
+  logActivity(id, 'Lead approved — moved to Potential Arrivals in Reservations');
+  res.json({ ok: true });
+});
+
+// ── AUTHED: Reject a new lead — moves it to the Former Leads tab ──
+router.post('/:id/reject-lead', requireAuth, (req, res) => {
+  const id = req.params.id;
+  const app = db.prepare('SELECT id FROM applications WHERE id = ?').get(id);
+  if (!app) return res.status(404).json({ error: 'Not found' });
+  db.prepare(`UPDATE applications SET status = 'rejected', rejection_reason = 'Rejected from Leads', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+  logActivity(id, 'Lead rejected — moved to Former Leads');
+  res.json({ ok: true });
+});
+
 // ── AUTHED: List applications (filterable by stage/status) ──
 router.get('/', requireAuth, (req, res) => {
   const { stage, status } = req.query;
