@@ -293,27 +293,16 @@ router.patch('/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── AUTHED: Approve an upcoming reservation — moves it from Pending Check In to On Lease ──
-router.post('/:id/check-in', requireAuth, (req, res) => {
+// ── AUTHED: Approve a potential arrival — marks it paid and checks the vehicle out, moving it to On Lease ──
+router.post('/:id/approve-arrival', requireAuth, (req, res) => {
   const id = req.params.id;
   const app = db.prepare('SELECT assigned_vehicle_id FROM applications WHERE id = ?').get(id);
   if (!app) return res.status(404).json({ error: 'Not found' });
+  db.prepare("UPDATE applications SET payment_status = 'paid' WHERE id = ?").run(id);
   if (app.assigned_vehicle_id) {
     db.prepare("UPDATE vehicles SET status = 'rented' WHERE id = ?").run(app.assigned_vehicle_id);
   }
-  logActivity(id, 'Reservation approved — vehicle checked out, now on lease');
-  res.json({ ok: true });
-});
-
-// ── AUTHED: Unapprove an on-lease reservation — moves it back to Pending Check In ──
-router.delete('/:id/check-in', requireAuth, (req, res) => {
-  const id = req.params.id;
-  const app = db.prepare('SELECT assigned_vehicle_id FROM applications WHERE id = ?').get(id);
-  if (!app) return res.status(404).json({ error: 'Not found' });
-  if (app.assigned_vehicle_id) {
-    db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ?").run(app.assigned_vehicle_id);
-  }
-  logActivity(id, 'Reservation unapproved — moved back to pending check-in');
+  logActivity(id, 'Potential arrival approved — vehicle checked out, now on lease');
   res.json({ ok: true });
 });
 
@@ -334,7 +323,7 @@ router.get('/bookings/all', requireAuth, (req, res) => {
     const charge = r.invoice_amount || r.total_due_at_pickup || 0;
     const owed = r.status === 'active' ? Math.max(0, Math.round((charge - r.paid_total) * 100) / 100) : 0;
     let bucket;
-    if (r.payment_status === 'unpaid' && r.invoice_amount) bucket = 'pending_payment';
+    if (r.payment_status === 'unpaid' && r.invoice_amount) bucket = 'potential_arrival';
     else if (r.vehicle_status === 'rented') bucket = 'on_rental';
     else if (r.vehicle_status === 'reserved') bucket = 'upcoming';
     else bucket = 'completed';
