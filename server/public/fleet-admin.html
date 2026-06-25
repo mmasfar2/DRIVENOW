@@ -27,7 +27,7 @@
   <div class="panel" style="padding:0;overflow-x:auto;">
     <table>
       <thead>
-        <tr><th>Photo</th><th>Vehicle</th><th>Weekly Rate</th><th>Status</th><th></th></tr>
+        <tr><th>Photo</th><th>Vehicle</th><th>Plate Number</th><th>Weekly Rate</th><th>Status</th><th></th></tr>
       </thead>
       <tbody id="fleet-table-body"></tbody>
     </table>
@@ -110,11 +110,12 @@ function render() {
           style="width:56px;height:40px;object-fit:cover;border-radius:4px;background:#eee;${(v.photos || [])[0] ? '' : 'visibility:hidden;'}">
       </td>
       <td><strong>${v.year} ${v.make} ${v.model}</strong>${v.color ? `<br><span style="color:#888;font-size:0.8rem;">${v.color}</span>` : ''}</td>
+      <td>${v.license_plate || '—'}</td>
       <td>$${v.weekly_rate}/wk</td>
       <td><span style="text-transform:capitalize;">${v.status}</span></td>
       <td onclick="event.stopPropagation();"><button class="btn btn-sm btn-outline" onclick="removeVehicleFromRow(${v.id})">Remove</button></td>
     </tr>
-  `).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:32px;">No vehicles yet.</td></tr>';
+  `).join('') : '<tr><td colspan="6" style="text-align:center;color:#888;padding:32px;">No vehicles yet.</td></tr>';
 }
 
 function renderPhotoThumbs(v) {
