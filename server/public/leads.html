@@ -57,11 +57,15 @@
 async function loadLeads() {
   const mode = document.getElementById('leads-mode').value;
   const leads = mode === 'former'
-    ? await api('/api/applications?status=rejected')
+    ? await api('/api/applications?decided=1')
     : await api('/api/applications?stage=1&status=active');
 
-  // Oldest first — first received at the top
-  leads.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  // Oldest first — first received (or first processed, for Former Leads) at the top
+  if (mode === 'former') {
+    leads.sort((a, b) => new Date(a.lead_decided_at) - new Date(b.lead_decided_at));
+  } else {
+    leads.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  }
 
   document.getElementById('new-leads-list').innerHTML = leads.length
     ? leads.map(l => `
@@ -69,8 +73,8 @@ async function loadLeads() {
           <a href="customer-detail.html?email=${encodeURIComponent(l.email)}" style="display:flex;align-items:center;gap:12px;flex:1;text-decoration:none;color:inherit;">
             <div class="cd-booking-row__icon">${icon('users', 16)}</div>
             <div style="flex:1;">
-              <div><strong>${l.first_name} ${l.last_name}</strong></div>
-              <div style="color:var(--text-muted);font-size:0.8rem;">${l.vehicle_make ? `${l.vehicle_year} ${l.vehicle_make} ${l.vehicle_model}` : 'No vehicle selected'} &middot; ${l.has_own_insurance ? 'Personal Insurance' : 'No Insurance'} &middot; Applied ${fmtDate(l.created_at)}</div>
+              <div><strong>${l.first_name} ${l.last_name}</strong> ${mode === 'former' ? `<span class="badge ${l.lead_decision === 'approved' ? 'badge-completed' : 'badge-rejected'}">${l.lead_decision === 'approved' ? 'Approved' : 'Rejected'}</span>` : ''}</div>
+              <div style="color:var(--text-muted);font-size:0.8rem;">${l.vehicle_make ? `${l.vehicle_year} ${l.vehicle_make} ${l.vehicle_model}` : 'No vehicle selected'} &middot; ${l.has_own_insurance ? 'Personal Insurance' : 'No Insurance'} &middot; ${mode === 'former' ? `Processed ${fmtDate(l.lead_decided_at)}` : `Applied ${fmtDate(l.created_at)}`}</div>
             </div>
           </a>
           ${mode === 'new' ? `
@@ -78,7 +82,11 @@ async function loadLeads() {
               <button class="lead-action-btn lead-approve" data-id="${l.id}" title="Move to Potential Arrivals" style="width:32px;height:32px;border-radius:50%;border:1.5px solid #2e7d32;color:#2e7d32;background:#fff;font-weight:800;cursor:pointer;">✓</button>
               <button class="lead-action-btn lead-reject" data-id="${l.id}" title="Move to Former Leads" style="width:32px;height:32px;border-radius:50%;border:1.5px solid #c62828;color:#c62828;background:#fff;font-weight:800;cursor:pointer;">✕</button>
             </div>
-          ` : ''}
+          ` : `
+            <div style="display:flex;gap:8px;flex-shrink:0;">
+              <button class="lead-action-btn lead-undo" data-id="${l.id}" title="Send back to New Leads" style="width:32px;height:32px;border-radius:50%;border:1.5px solid #888;color:#555;background:#fff;font-weight:800;cursor:pointer;">↺</button>
+            </div>
+          `}
         </div>
       `).join('')
     : `<p style="color:#888;font-size:0.85rem;">${mode === 'former' ? 'No former leads.' : 'No new leads right now.'}</p>`;
@@ -99,6 +107,13 @@ async function loadLeads() {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
       await api(`/api/applications/${btn.dataset.id}/reject-lead`, { method: 'POST' });
+      await loadLeads();
+    });
+  });
+  document.querySelectorAll('.lead-undo').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      await api(`/api/applications/${btn.dataset.id}/undo-lead-decision`, { method: 'POST' });
       await loadLeads();
     });
   });

@@ -203,6 +203,12 @@ if (!existingCols.includes('has_own_insurance')) {
 if (!existingCols.includes('use_type')) {
   db.exec("ALTER TABLE applications ADD COLUMN use_type TEXT");
 }
+if (!existingCols.includes('lead_decision')) {
+  db.exec("ALTER TABLE applications ADD COLUMN lead_decision TEXT"); // 'approved' | 'rejected'
+}
+if (!existingCols.includes('lead_decided_at')) {
+  db.exec('ALTER TABLE applications ADD COLUMN lead_decided_at TEXT');
+}
 
 const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);
 if (!vehicleCols.includes('photo_path')) {

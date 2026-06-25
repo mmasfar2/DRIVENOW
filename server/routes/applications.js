@@ -63,6 +63,7 @@ router.post('/:id/move-to-arrivals', requireAuth, (req, res) => {
     UPDATE applications SET
       stage = 5, status = 'active', payment_status = 'unpaid',
       weekly_rate = COALESCE(weekly_rate, ?), invoice_amount = ?, total_due_at_pickup = COALESCE(total_due_at_pickup, ?),
+      lead_decision = 'approved', lead_decided_at = CURRENT_TIMESTAMP,
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(vehicle.weekly_rate, amount, amount, id);
@@ -77,14 +78,47 @@ router.post('/:id/reject-lead', requireAuth, (req, res) => {
   const id = req.params.id;
   const app = db.prepare('SELECT id FROM applications WHERE id = ?').get(id);
   if (!app) return res.status(404).json({ error: 'Not found' });
-  db.prepare(`UPDATE applications SET status = 'rejected', rejection_reason = 'Rejected from Leads', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
+  db.prepare(`
+    UPDATE applications SET
+      status = 'rejected', rejection_reason = 'Rejected from Leads',
+      lead_decision = 'rejected', lead_decided_at = CURRENT_TIMESTAMP,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(id);
   logActivity(id, 'Lead rejected — moved to Former Leads');
+  res.json({ ok: true });
+});
+
+// ── AUTHED: Undo a former-leads decision — sends the lead back to New Leads ──
+router.post('/:id/undo-lead-decision', requireAuth, (req, res) => {
+  const id = req.params.id;
+  const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
+  if (!app) return res.status(404).json({ error: 'Not found' });
+
+  if (app.lead_decision === 'approved') {
+    db.prepare(`
+      UPDATE applications SET
+        stage = 1, status = 'active', payment_status = 'unpaid',
+        weekly_rate = NULL, invoice_amount = NULL, total_due_at_pickup = NULL,
+        lead_decision = NULL, lead_decided_at = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(id);
+  } else {
+    db.prepare(`
+      UPDATE applications SET
+        stage = 1, status = 'active', rejection_reason = NULL,
+        lead_decision = NULL, lead_decided_at = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(id);
+  }
+
+  logActivity(id, 'Former lead decision undone — sent back to New Leads');
   res.json({ ok: true });
 });
 
 // ── AUTHED: List applications (filterable by stage/status) ──
 router.get('/', requireAuth, (req, res) => {
-  const { stage, status } = req.query;
+  const { stage, status, decided } = req.query;
   let query = `
     SELECT a.*, v.make as vehicle_make, v.model as vehicle_model, v.year as vehicle_year
     FROM applications a
@@ -94,7 +128,8 @@ router.get('/', requireAuth, (req, res) => {
   const params = [];
   if (stage) { query += ' AND a.stage = ?'; params.push(stage); }
   if (status) { query += ' AND a.status = ?'; params.push(status); }
-  query += ' ORDER BY a.created_at DESC';
+  if (decided === '1') { query += ' AND a.lead_decision IS NOT NULL'; }
+  query += decided === '1' ? ' ORDER BY a.lead_decided_at ASC' : ' ORDER BY a.created_at DESC';
   const rows = db.prepare(query).all(...params);
   res.json(rows);
 });
