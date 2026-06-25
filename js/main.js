@@ -160,8 +160,9 @@ if (appForm) {
     formData.append('address', document.getElementById('address').value);
     formData.append('state', document.getElementById('state')?.value || '');
     formData.append('vehicle_id', document.getElementById('vehicle-id')?.value || '');
-    formData.append('use_type', document.getElementById('use-type')?.value || '');
-    formData.append('occupation', document.getElementById('platforms')?.value || '');
+    const platformValue = document.getElementById('platforms')?.value || '';
+    formData.append('use_type', platformValue === 'personal' ? 'personal' : (platformValue ? 'job' : ''));
+    formData.append('occupation', platformValue);
     formData.append('has_own_insurance', document.querySelector('input[name="has_own_insurance"]:checked')?.value || '');
     formData.append('license_number', document.getElementById('license-number')?.value || '');
     formData.append('consent_background', document.getElementById('agree-terms').checked ? 'true' : 'false');
