@@ -154,6 +154,7 @@ if (appForm) {
 
     const phoneValue = document.getElementById('phone').value;
     const licenseNumberValue = document.getElementById('license-number')?.value || '';
+    const zipValue = document.getElementById('zip')?.value || '';
     if (phoneValue.replace(/\D/g, '').length !== 10) {
       alert('Please enter a valid 10-digit phone number.');
       submitBtn.textContent = originalText;
@@ -162,6 +163,12 @@ if (appForm) {
     }
     if (licenseNumberValue.replace(/[^0-9A-Za-z]/g, '').length < 4) {
       alert('Please double check your license number — it looks too short.');
+      submitBtn.textContent = originalText;
+      submitBtn.disabled = false;
+      return;
+    }
+    if (zipValue.replace(/\D/g, '').length !== 5) {
+      alert('Please enter a valid 5-digit ZIP code.');
       submitBtn.textContent = originalText;
       submitBtn.disabled = false;
       return;
@@ -176,6 +183,7 @@ if (appForm) {
     formData.append('address', document.getElementById('address').value);
     formData.append('city', document.getElementById('city')?.value || '');
     formData.append('state', document.getElementById('state')?.value || '');
+    formData.append('zip_code', zipValue);
     formData.append('vehicle_id', document.getElementById('vehicle-id')?.value || '');
     formData.append('rental_duration', document.getElementById('rental-duration')?.value || '');
     formData.append('notes', document.getElementById('notes')?.value || '');

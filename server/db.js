@@ -218,6 +218,9 @@ if (!existingCols.includes('rental_duration')) {
 if (!existingCols.includes('notes')) {
   db.exec('ALTER TABLE applications ADD COLUMN notes TEXT');
 }
+if (!existingCols.includes('zip_code')) {
+  db.exec('ALTER TABLE applications ADD COLUMN zip_code TEXT');
+}
 
 const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);
 if (!vehicleCols.includes('photo_path')) {
@@ -330,10 +333,10 @@ for (const a of distinctApplicants) {
 // from their most recent application, now that the apply form sends city/state/dob.
 const customersMissingDetails = db.prepare(`
   SELECT id, lower(email) as email FROM customers
-  WHERE city IS NULL OR state IS NULL OR dob IS NULL OR address IS NULL OR phone IS NULL
+  WHERE city IS NULL OR state IS NULL OR dob IS NULL OR address IS NULL OR phone IS NULL OR zip_code IS NULL
 `).all();
 const latestApplicationByEmail = db.prepare(`
-  SELECT city, state, dob, address, phone FROM applications WHERE lower(email) = ? ORDER BY created_at DESC LIMIT 1
+  SELECT city, state, dob, address, phone, zip_code FROM applications WHERE lower(email) = ? ORDER BY created_at DESC LIMIT 1
 `);
 const updateCustomerDetails = db.prepare(`
   UPDATE customers SET
@@ -341,13 +344,14 @@ const updateCustomerDetails = db.prepare(`
     state = COALESCE(state, ?),
     dob = COALESCE(dob, ?),
     address = COALESCE(address, ?),
-    phone = COALESCE(phone, ?)
+    phone = COALESCE(phone, ?),
+    zip_code = COALESCE(zip_code, ?)
   WHERE id = ?
 `);
 for (const c of customersMissingDetails) {
   const app = latestApplicationByEmail.get(c.email);
   if (!app) continue;
-  updateCustomerDetails.run(app.city || null, app.state || null, app.dob || null, app.address || null, app.phone || null, c.id);
+  updateCustomerDetails.run(app.city || null, app.state || null, app.dob || null, app.address || null, app.phone || null, app.zip_code || null, c.id);
 }
 
 function upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob }) {

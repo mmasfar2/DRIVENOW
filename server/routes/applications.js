@@ -18,7 +18,7 @@ const upload = multer({
 
 // ── PUBLIC: Stage 1 — Customer Application Submission ──
 router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (req, res) => {
-  const { first_name, last_name, phone, email, address, city, state, dob, occupation, use_type, license_number, consent_background, vehicle_id, has_own_insurance, rental_duration, notes } = req.body;
+  const { first_name, last_name, phone, email, address, city, state, zip_code, dob, occupation, use_type, license_number, consent_background, vehicle_id, has_own_insurance, rental_duration, notes } = req.body;
 
   if (!first_name || !last_name || !phone || !email) {
     return res.status(400).json({ error: 'First name, last name, phone, and email are required' });
@@ -32,6 +32,9 @@ router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (r
   if (license_number && license_number.replace(/[^0-9A-Za-z]/g, '').length < 4) {
     return res.status(400).json({ error: 'License number looks too short — please check and try again' });
   }
+  if (!zip_code || zip_code.replace(/\D/g, '').length !== 5) {
+    return res.status(400).json({ error: 'ZIP code must contain exactly 5 digits' });
+  }
 
   const licensePath = req.files?.license?.[0]?.filename || null;
   const insurancePath = req.files?.insurance?.[0]?.filename || null;
@@ -39,15 +42,15 @@ router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (r
 
   const result = db.prepare(`
     INSERT INTO applications
-      (first_name, last_name, phone, email, address, city, state, dob, occupation, use_type, license_number, license_path, insurance_path, consent_background, has_own_insurance, assigned_vehicle_id, rental_duration, notes, stage)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, 1)
-  `).run(first_name, last_name, phone, email, address || null, city || null, state || null, dob || null, occupation || null, use_type || null, license_number || null, licensePath, insurancePath, has_own_insurance === 'yes' ? 1 : 0, assignedVehicleId, rental_duration || null, notes || null);
+      (first_name, last_name, phone, email, address, city, state, zip_code, dob, occupation, use_type, license_number, license_path, insurance_path, consent_background, has_own_insurance, assigned_vehicle_id, rental_duration, notes, stage)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, 1)
+  `).run(first_name, last_name, phone, email, address || null, city || null, state || null, zip_code || null, dob || null, occupation || null, use_type || null, license_number || null, licensePath, insurancePath, has_own_insurance === 'yes' ? 1 : 0, assignedVehicleId, rental_duration || null, notes || null);
 
   const appId = result.lastInsertRowid;
   if (assignedVehicleId) {
     db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ? AND status = 'available'").run(assignedVehicleId);
   }
-  upsertCustomer({ email, first_name, last_name, phone, address, city, state, dob });
+  upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob });
   logActivity(appId, `New application submitted by ${first_name} ${last_name}`);
   queueMessage(appId, 'sms', phone, "We've received your application and are currently reviewing it.");
 
