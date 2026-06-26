@@ -16,6 +16,7 @@ const messageRoutes = require('./routes/messages');
 const maintenanceRoutes = require('./routes/maintenance');
 const waitlistRoutes = require('./routes/waitlist');
 const customerRoutes = require('./routes/customers');
+const undoRoutes = require('./routes/undo');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -55,6 +56,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/waitlist', waitlistRoutes);
 app.use('/api/customers', customerRoutes);
+app.use('/api/undo', undoRoutes);
 
 app.use('/uploads', express.static(UPLOADS_DIR));
 app.use(express.static(path.join(__dirname, 'public')));

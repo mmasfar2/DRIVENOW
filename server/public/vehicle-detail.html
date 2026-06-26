@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vehicle Detail — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  .vd-photo-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+  .vd-photo-box { position: relative; width: 140px; height: 100px; }
+  .vd-photo-box img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; background: #eee; }
+  .vd-photo-box .vd-photo-del {
+    position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%;
+    border: none; background: #c62828; color: #fff; font-size: 12px; line-height: 20px; cursor: pointer; padding: 0;
+  }
+  .vd-stat-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  .vd-stat-card { flex: 1; min-width: 180px; background: var(--gray-light); border-radius: 6px; padding: 16px; }
+  .vd-stat-card__label { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #888; margin-bottom: 6px; }
+  .vd-stat-card__value { font-size: 1.5rem; font-weight: 800; margin-bottom: 8px; }
+  .vd-stat-card__edit { display: flex; gap: 6px; align-items: center; }
+  .vd-stat-card__edit input { padding: 6px 8px; border: 1.5px solid #e0e0e0; border-radius: 4px; font-family: inherit; width: 100%; }
+</style>
+</head>
+<body>
+
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
+<div class="page">
+  <a href="fleet-admin.html" style="font-size:0.82rem;color:#888;">← Back to Fleet Management</a>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:12px;">
+    <div>
+      <div class="page-title" id="vd-title" style="margin-bottom:4px;">Loading…</div>
+      <div class="page-sub" style="margin-bottom:0;" id="vd-sub"></div>
+    </div>
+    <span class="badge" id="vd-status-badge"></span>
+  </div>
+
+  <div class="rd-tabs">
+    <div class="rd-tab active" data-tab="details">Details</div>
+    <div class="rd-tab" data-tab="maintenance">Maintenance Log</div>
+    <div class="rd-tab" data-tab="financials">Financials</div>
+    <div class="rd-tab" data-tab="inspection">Inspection</div>
+  </div>
+
+  <div id="vd-panel-details">
+    <div class="panel">
+      <div class="panel-title">Vehicle Details</div>
+      <div class="info-row"><div class="info-row__label">Stock Number</div><div class="info-row__val" id="vd-stock"></div></div>
+      <div class="info-row"><div class="info-row__label">License Plate</div><div class="info-row__val" id="vd-plate"></div></div>
+      <div class="info-row"><div class="info-row__label">VIN</div><div class="info-row__val" id="vd-vin"></div></div>
+      <div class="info-row"><div class="info-row__label">Make</div><div class="info-row__val" id="vd-make"></div></div>
+      <div class="info-row"><div class="info-row__label">Model</div><div class="info-row__val" id="vd-model"></div></div>
+      <div class="info-row"><div class="info-row__label">Year</div><div class="info-row__val" id="vd-year"></div></div>
+      <div class="info-row"><div class="info-row__label">Color</div><div class="info-row__val" id="vd-color"></div></div>
+      <div class="info-row"><div class="info-row__label">Class</div><div class="info-row__val" id="vd-class"></div></div>
+      <div class="info-row"><div class="info-row__label">Mileage</div><div class="info-row__val" id="vd-mileage"></div></div>
+      <div class="info-row"><div class="info-row__label">Purchase Date</div><div class="info-row__val" id="vd-purchase-date"></div></div>
+      <div class="info-row"><div class="info-row__label">Purchase Price</div><div class="info-row__val" id="vd-purchase-price"></div></div>
+      <div class="info-row"><div class="info-row__label">Status</div><div class="info-row__val" id="vd-status"></div></div>
+      <div class="info-row"><div class="info-row__label">Weekly Rate</div><div class="info-row__val" id="vd-rate"></div></div>
+      <div class="info-row"><div class="info-row__label">Fuel Type</div><div class="info-row__val" id="vd-fuel"></div></div>
+      <div class="info-row"><div class="info-row__label">Transmission</div><div class="info-row__val" id="vd-trans"></div></div>
+      <div class="info-row"><div class="info-row__label">Notes</div><div class="info-row__val" id="vd-notes"></div></div>
+    </div>
+  </div>
+
+  <div id="vd-panel-maintenance" style="display:none;">
+    <div class="vd-stat-row">
+      <div class="vd-stat-card">
+        <div class="vd-stat-card__label">Date Last Serviced</div>
+        <div class="vd-stat-card__value" id="vd-last-serviced">—</div>
+      </div>
+      <div class="vd-stat-card">
+        <div class="vd-stat-card__label">Next Service Date</div>
+        <div class="vd-stat-card__edit">
+          <input type="date" id="vd-next-service-input">
+          <button class="btn btn-sm" id="vd-next-service-save">Save</button>
+        </div>
+      </div>
+      <div class="vd-stat-card">
+        <div class="vd-stat-card__label">Current Odometer Reading</div>
+        <div class="vd-stat-card__edit">
+          <input type="number" id="vd-mileage-input" placeholder="Miles">
+          <button class="btn btn-sm" id="vd-mileage-save">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Log Service / Maintenance Record</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="field"><label>Description</label><input type="text" id="vd-m-desc" placeholder="Oil change, brake pad replacement, etc."></div>
+        <div class="field"><label>Category</label>
+          <select id="vd-m-category">
+            <option value="">— Select —</option>
+            <option value="Oil Change">Oil Change</option>
+            <option value="Repair">Repair</option>
+            <option value="Inspection">Inspection</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="field"><label>Amount ($)</label><input type="number" id="vd-m-cost" step="0.01"></div>
+        <div class="field"><label>Date Performed</label><input type="date" id="vd-m-date"></div>
+      </div>
+      <button class="btn" id="vd-m-submit">Log Record</button>
+    </div>
+
+    <div class="panel" style="padding:0;overflow-x:auto;">
+      <table>
+        <thead><tr><th>Description</th><th>Category</th><th>Cost</th><th>Date</th><th></th></tr></thead>
+        <tbody id="vd-maint-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="vd-panel-financials" style="display:none;">
+    <div class="vd-stat-row">
+      <div class="vd-stat-card">
+        <div class="vd-stat-card__label">Total Revenue</div>
+        <div class="vd-stat-card__value" id="vd-total-revenue">$0</div>
+      </div>
+      <div class="vd-stat-card">
+        <div class="vd-stat-card__label">Total Expense Recorded</div>
+        <div class="vd-stat-card__value" id="vd-total-expense">$0</div>
+      </div>
+      <div class="vd-stat-card">
+        <div class="vd-stat-card__label">Total Profit</div>
+        <div class="vd-stat-card__value" id="vd-total-profit">$0</div>
+      </div>
+    </div>
+
+    <div class="panel" style="padding:0;overflow-x:auto;">
+      <div class="panel-title" style="padding:18px 18px 0;">Rental History</div>
+      <table>
+        <thead><tr><th>Applicant</th><th>Pickup</th><th>Dropoff</th><th>Days</th><th>Revenue</th></tr></thead>
+        <tbody id="vd-bookings-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="vd-panel-inspection" style="display:none;">
+    <div class="panel">
+      <div class="panel-title">Inspection Photos</div>
+      <div class="vd-photo-grid" id="vd-inspection-photos"></div>
+      <div class="field" style="margin-top:16px;">
+        <label>Upload Inspection Photo</label>
+        <input id="vd-inspection-upload" type="file" accept="image/*" multiple>
+        <button class="btn btn-sm" id="vd-inspection-upload-btn" style="margin-top:8px;">Upload</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<script src="js/admin-common.js"></script>
+<script>
+const id = new URLSearchParams(window.location.search).get('id');
+let vehicle = null;
+
+async function load() {
+  vehicle = await api(`/api/vehicles/${id}`);
+  render();
+}
+
+function render() {
+  document.getElementById('vd-title').textContent = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
+  document.getElementById('vd-sub').textContent = vehicle.license_plate ? `Plate: ${vehicle.license_plate}` : '';
+  const badge = document.getElementById('vd-status-badge');
+  badge.textContent = vehicle.status;
+  badge.className = 'badge';
+
+  document.getElementById('vd-stock').textContent = vehicle.stock_number || '—';
+  document.getElementById('vd-plate').textContent = vehicle.license_plate || '—';
+  document.getElementById('vd-vin').textContent = vehicle.vin || '—';
+  document.getElementById('vd-make').textContent = vehicle.make || '—';
+  document.getElementById('vd-model').textContent = vehicle.model || '—';
+  document.getElementById('vd-year').textContent = vehicle.year || '—';
+  document.getElementById('vd-color').textContent = vehicle.color || '—';
+  document.getElementById('vd-class').textContent = vehicle.vehicle_class || '—';
+  document.getElementById('vd-mileage').textContent = vehicle.mileage != null ? `${Number(vehicle.mileage).toLocaleString()} mi` : '—';
+  document.getElementById('vd-purchase-date').textContent = vehicle.purchase_date || '—';
+  document.getElementById('vd-purchase-price').textContent = vehicle.purchase_price != null ? fmtMoney(vehicle.purchase_price) : '—';
+  document.getElementById('vd-status').textContent = vehicle.status || '—';
+  document.getElementById('vd-rate').textContent = vehicle.weekly_rate != null ? `${fmtMoney(vehicle.weekly_rate)}/wk` : '—';
+  document.getElementById('vd-fuel').textContent = vehicle.fuel_type || '—';
+  document.getElementById('vd-trans').textContent = vehicle.transmission || '—';
+  document.getElementById('vd-notes').textContent = vehicle.notes || '—';
+
+  document.getElementById('vd-last-serviced').textContent = vehicle.lastServiced || '—';
+  document.getElementById('vd-next-service-input').value = vehicle.next_service_at ? vehicle.next_service_at.slice(0, 10) : '';
+  document.getElementById('vd-mileage-input').value = vehicle.mileage ?? '';
+
+  renderMaintenanceTable();
+
+  document.getElementById('vd-total-revenue').textContent = fmtMoney(vehicle.totalRevenue);
+  document.getElementById('vd-total-expense').textContent = fmtMoney(vehicle.totalExpense);
+  document.getElementById('vd-total-profit').textContent = fmtMoney(vehicle.totalProfit);
+  renderBookingsTable();
+
+  renderInspectionPhotos();
+}
+
+function renderMaintenanceTable() {
+  const body = document.getElementById('vd-maint-table-body');
+  const records = vehicle.maintenance || [];
+  body.innerHTML = records.length ? records.map(m => `
+    <tr>
+      <td>${m.description}</td>
+      <td>${m.category || '—'}</td>
+      <td>${m.cost ? fmtMoney(m.cost) : '—'}</td>
+      <td>${m.performed_at || '—'}</td>
+      <td><button class="btn btn-sm btn-outline" onclick="deleteMaintenance(${m.id})">Delete</button></td>
+    </tr>
+  `).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:24px;">No maintenance records yet.</td></tr>';
+}
+
+function renderBookingsTable() {
+  const body = document.getElementById('vd-bookings-table-body');
+  const bookings = vehicle.bookings || [];
+  body.innerHTML = bookings.length ? bookings.map(b => `
+    <tr>
+      <td>${b.applicant}</td>
+      <td>${b.pickup ? fmtDate(b.pickup) : '—'}</td>
+      <td>${b.dropoff ? fmtDate(b.dropoff) : '—'}</td>
+      <td>${b.days || '—'}</td>
+      <td>${fmtMoney(b.revenue)}</td>
+    </tr>
+  `).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:24px;">No rental history yet.</td></tr>';
+}
+
+function renderInspectionPhotos() {
+  const box = document.getElementById('vd-inspection-photos');
+  const photos = vehicle.photos || [];
+  box.innerHTML = photos.length ? photos.map(p => `
+    <div class="vd-photo-box">
+      <img src="/uploads/${p.photo_path}" alt="">
+      <button class="vd-photo-del" onclick="deletePhoto(${p.id})" title="Remove photo">×</button>
+    </div>
+  `).join('') : '<div style="color:#888;font-size:0.85rem;">No photos uploaded yet.</div>';
+}
+
+document.querySelectorAll('.rd-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.rd-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    ['details', 'maintenance', 'financials', 'inspection'].forEach(name => {
+      document.getElementById(`vd-panel-${name}`).style.display = name === tab.dataset.tab ? '' : 'none';
+    });
+  });
+});
+
+document.getElementById('vd-next-service-save').addEventListener('click', async () => {
+  const next_service_at = document.getElementById('vd-next-service-input').value;
+  await api(`/api/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify({ next_service_at }) });
+  await load();
+});
+
+document.getElementById('vd-mileage-save').addEventListener('click', async () => {
+  const mileage = document.getElementById('vd-mileage-input').value;
+  await api(`/api/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify({ mileage }) });
+  await load();
+});
+
+document.getElementById('vd-m-submit').addEventListener('click', async () => {
+  const description = document.getElementById('vd-m-desc').value;
+  const cost = document.getElementById('vd-m-cost').value;
+  const performed_at = document.getElementById('vd-m-date').value;
+  const category = document.getElementById('vd-m-category').value;
+  if (!description) { alert('Description is required'); return; }
+  await api('/api/maintenance', {
+    method: 'POST',
+    body: JSON.stringify({ vehicle_id: id, description, cost, performed_at, category }),
+  });
+  document.getElementById('vd-m-desc').value = '';
+  document.getElementById('vd-m-cost').value = '';
+  document.getElementById('vd-m-date').value = '';
+  document.getElementById('vd-m-category').value = '';
+  await load();
+});
+
+async function deleteMaintenance(maintId) {
+  if (!confirm('Delete this maintenance record?')) return;
+  await api(`/api/maintenance/${maintId}`, { method: 'DELETE' });
+  await load();
+}
+
+async function deletePhoto(photoId) {
+  if (!confirm('Remove this photo?')) return;
+  await api(`/api/vehicles/${id}/photo/${photoId}`, { method: 'DELETE' });
+  await load();
+}
+
+document.getElementById('vd-inspection-upload-btn').addEventListener('click', async () => {
+  const input = document.getElementById('vd-inspection-upload');
+  if (!input.files.length) { alert('Choose at least one photo'); return; }
+  const formData = new FormData();
+  Array.from(input.files).forEach(f => formData.append('photos', f));
+  await fetch(`/api/vehicles/${id}/photo`, { method: 'POST', body: formData });
+  input.value = '';
+  await load();
+});
+
+(async () => {
+  renderSidebar('fleet');
+  await requireLogin();
+  load();
+})();
+</script>
+</body>
+</html>

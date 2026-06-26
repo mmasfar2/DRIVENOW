@@ -256,6 +256,29 @@ if (!vehicleCols.includes('purchase_price')) {
 if (!vehicleCols.includes('mileage')) {
   db.exec('ALTER TABLE vehicles ADD COLUMN mileage REAL');
 }
+if (!vehicleCols.includes('next_service_at')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN next_service_at TEXT');
+}
+
+const maintenanceCols = db.prepare("PRAGMA table_info(vehicle_maintenance)").all().map(c => c.name);
+if (!maintenanceCols.includes('category')) {
+  db.exec('ALTER TABLE vehicle_maintenance ADD COLUMN category TEXT');
+}
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS undo_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  entity_type TEXT NOT NULL,
+  label TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+`);
+
+function logUndo(entityType, label, payload) {
+  db.prepare('DELETE FROM undo_log').run();
+  db.prepare('INSERT INTO undo_log (entity_type, label, payload) VALUES (?, ?, ?)').run(entityType, label, JSON.stringify(payload));
+}
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS booking_notes (
@@ -423,4 +446,4 @@ function queueMessage(applicationId, channel, to, body) {
     .run(applicationId, channel, to, body);
 }
 
-module.exports = { db, logActivity, queueMessage, upsertCustomer };
+module.exports = { db, logActivity, queueMessage, upsertCustomer, logUndo };

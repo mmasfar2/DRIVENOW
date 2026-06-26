@@ -62,6 +62,49 @@ function renderSidebar(activeKey) {
     </div>
   `;
   initSidebarDragReorder();
+  ensureUndoButton();
+}
+
+function ensureUndoButton() {
+  let btn = document.getElementById('global-undo-btn');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'global-undo-btn';
+    btn.className = 'btn btn-sm btn-outline';
+    btn.style.position = 'fixed';
+    btn.style.top = '16px';
+    btn.style.right = '24px';
+    btn.style.zIndex = '9999';
+    btn.style.display = 'none';
+    btn.onclick = undoLastAction;
+    document.body.appendChild(btn);
+  }
+  refreshUndoButton();
+}
+
+async function refreshUndoButton() {
+  const btn = document.getElementById('global-undo-btn');
+  if (!btn) return;
+  try {
+    const result = await api('/api/undo');
+    if (result) {
+      btn.textContent = `Undo: ${result.label}`;
+      btn.style.display = '';
+    } else {
+      btn.style.display = 'none';
+    }
+  } catch {
+    btn.style.display = 'none';
+  }
+}
+
+async function undoLastAction() {
+  try {
+    await api('/api/undo', { method: 'POST' });
+    location.reload();
+  } catch (e) {
+    alert(e.message || 'Failed to undo');
+  }
 }
 
 function initSidebarDragReorder() {
