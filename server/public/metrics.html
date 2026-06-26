@@ -29,11 +29,21 @@
 
   <div id="period-cards"></div>
 
+  <div class="panel" id="flagged-panel" style="display:none;border-color:#e65100;background:#fff8f0;">
+    <div class="panel-title" style="color:#e65100;">⚠ Renters Behind on Payment (balance &gt; $250)</div>
+    <table>
+      <thead>
+        <tr><th>Renter</th><th>Vehicle</th><th>Expected To Date</th><th>Paid To Date</th><th>Balance</th></tr>
+      </thead>
+      <tbody id="flagged-table-body"></tbody>
+    </table>
+  </div>
+
   <div class="panel" style="padding:0;overflow-x:auto;">
     <div class="panel-title" style="padding:18px 22px 0;">Active Renters — Expected Daily Rate</div>
     <table>
       <thead>
-        <tr><th>Renter</th><th>Vehicle</th><th>Weekly Rate</th><th>Expected Daily Rate</th></tr>
+        <tr><th>Renter</th><th>Vehicle</th><th>Weekly Rate</th><th>Expected Daily Rate</th><th>Balance</th></tr>
       </thead>
       <tbody id="renters-table-body"></tbody>
     </table>
@@ -104,8 +114,25 @@ async function load() {
       <td>${r.year} ${r.make} ${r.model}</td>
       <td>${fmtMoney(r.weekly_rate)}/wk</td>
       <td>${fmtMoney(r.daily_rate)}/day</td>
+      <td class="${r.balance > 250 ? 'text-orange' : ''}" style="font-weight:${r.balance > 250 ? '700' : '400'};">${fmtMoney(r.balance)}</td>
     </tr>
-  `).join('') : '<tr><td colspan="4" style="text-align:center;color:#888;padding:32px;">No active renters right now.</td></tr>';
+  `).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:32px;">No active renters right now.</td></tr>';
+
+  const flaggedPanel = document.getElementById('flagged-panel');
+  if (data.flaggedRenters.length) {
+    flaggedPanel.style.display = '';
+    document.getElementById('flagged-table-body').innerHTML = data.flaggedRenters.map(r => `
+      <tr>
+        <td>${r.first_name} ${r.last_name}</td>
+        <td>${r.year} ${r.make} ${r.model}</td>
+        <td>${fmtMoney(r.expectedToDate)}</td>
+        <td>${fmtMoney(r.paidToDate)}</td>
+        <td class="text-orange" style="font-weight:700;">${fmtMoney(r.balance)}</td>
+      </tr>
+    `).join('');
+  } else {
+    flaggedPanel.style.display = 'none';
+  }
 }
 
 (async () => {
