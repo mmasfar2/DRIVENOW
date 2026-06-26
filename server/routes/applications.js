@@ -348,7 +348,7 @@ router.post('/:id/notes', requireAuth, (req, res) => {
 
 // ── AUTHED: General notes / edit ──
 router.patch('/:id', requireAuth, (req, res) => {
-  const allowed = ['first_name', 'last_name', 'phone', 'email', 'address', 'occupation', 'intended_use', 'rental_end_at', 'odometer_out', 'odometer_in', 'pickup_location', 'dropoff_location'];
+  const allowed = ['first_name', 'last_name', 'phone', 'email', 'address', 'occupation', 'intended_use', 'pickup_scheduled_at', 'rental_end_at', 'odometer_out', 'odometer_in', 'pickup_location', 'dropoff_location'];
   const updates = [];
   const params = [];
   for (const key of allowed) {
@@ -361,19 +361,19 @@ router.patch('/:id', requireAuth, (req, res) => {
   params.push(req.params.id);
   db.prepare(`UPDATE applications SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...params);
 
-  // Extending the rental term changes how much is owed — recompute the exact charge
-  // from the weekly rate rather than leaving the original quote's total stale.
-  if (req.body.rental_end_at !== undefined) {
+  // Changing the pickup or return date changes how much is owed — recompute the exact
+  // charge from the weekly rate rather than leaving the original quote's total stale.
+  if (req.body.rental_end_at !== undefined || req.body.pickup_scheduled_at !== undefined) {
     const id = req.params.id;
-    const app = db.prepare('SELECT pickup_scheduled_at, weekly_rate FROM applications WHERE id = ?').get(id);
-    if (app && app.pickup_scheduled_at && app.weekly_rate) {
-      const days = Math.round((new Date(req.body.rental_end_at) - new Date(app.pickup_scheduled_at)) / 86400000);
+    const app = db.prepare('SELECT pickup_scheduled_at, rental_end_at, weekly_rate FROM applications WHERE id = ?').get(id);
+    if (app && app.pickup_scheduled_at && app.rental_end_at && app.weekly_rate) {
+      const days = Math.round((new Date(app.rental_end_at) - new Date(app.pickup_scheduled_at)) / 86400000);
       const dailyRateExact = app.weekly_rate / 7;
       const subtotal = Math.round(dailyRateExact * days * 100) / 100;
       const salesTax = Math.round(subtotal * 0.0725 * 100) / 100;
       const total = Math.round((subtotal + salesTax) * 100) / 100;
       db.prepare('UPDATE applications SET total_due_at_pickup = ? WHERE id = ?').run(total, id);
-      logActivity(id, `Reservation extended to ${req.body.rental_end_at} — balance recalculated to $${total}`);
+      logActivity(id, `Reservation dates updated (${app.pickup_scheduled_at} → ${app.rental_end_at}) — balance recalculated to $${total}`);
     }
   }
 

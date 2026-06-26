@@ -80,6 +80,15 @@
 
   <div id="rd-panel-financials" style="display:none;">
     <div class="panel">
+      <div class="panel-title">Rental Dates</div>
+      <div class="field-row">
+        <div class="field"><label>Pickup Date</label><input type="date" id="rd-fin-pickup"></div>
+        <div class="field"><label>Return Date</label><input type="date" id="rd-fin-return"></div>
+      </div>
+      <button class="btn btn-sm" id="rd-fin-dates-save">Save Dates</button>
+    </div>
+
+    <div class="panel">
       <div class="panel-title">Payment Log</div>
       <table>
         <thead><tr><th>Date Paid</th><th style="text-align:right;">Amount Paid</th></tr></thead>
@@ -168,6 +177,8 @@ function render() {
 
   document.getElementById('rd-pickup').textContent = booking.pickup_scheduled_at ? fmtDate(booking.pickup_scheduled_at) : '—';
   document.getElementById('rd-return').textContent = booking.rental_end_at ? fmtDate(booking.rental_end_at) : '—';
+  document.getElementById('rd-fin-pickup').value = booking.pickup_scheduled_at ? booking.pickup_scheduled_at.slice(0, 10) : '';
+  document.getElementById('rd-fin-return').value = booking.rental_end_at ? booking.rental_end_at.slice(0, 10) : '';
   const days = (booking.pickup_scheduled_at && booking.rental_end_at)
     ? Math.round((new Date(booking.rental_end_at) - new Date(booking.pickup_scheduled_at)) / 86400000)
     : 0;
@@ -354,6 +365,13 @@ document.getElementById('ap-submit').addEventListener('click', async () => {
   if (!amount || Number(amount) <= 0) { alert('Enter a valid amount'); return; }
   await api(`/api/applications/${id}/payments`, { method: 'POST', body: JSON.stringify({ amount, paid_at }) });
   document.getElementById('add-payment-overlay').style.display = 'none';
+  await load();
+});
+
+document.getElementById('rd-fin-dates-save').addEventListener('click', async () => {
+  const pickup_scheduled_at = document.getElementById('rd-fin-pickup').value;
+  const rental_end_at = document.getElementById('rd-fin-return').value;
+  await api(`/api/applications/${id}`, { method: 'PATCH', body: JSON.stringify({ pickup_scheduled_at, rental_end_at }) });
   await load();
 });
 
