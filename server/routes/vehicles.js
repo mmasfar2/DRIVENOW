@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { db } = require('../db');
+const { db, logUndo } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
 
@@ -33,6 +33,50 @@ router.get('/', requireAuth, (req, res) => {
   res.json(withPhotos);
 });
 
+router.get('/:id', requireAuth, (req, res) => {
+  const vehicle = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(req.params.id);
+  if (!vehicle) return res.status(404).json({ error: 'Not found' });
+
+  const photos = db.prepare('SELECT * FROM vehicle_photos WHERE vehicle_id = ? ORDER BY created_at ASC').all(req.params.id);
+  const maintenance = db.prepare('SELECT * FROM vehicle_maintenance WHERE vehicle_id = ? ORDER BY performed_at DESC').all(req.params.id);
+
+  const applications = db.prepare('SELECT * FROM applications WHERE assigned_vehicle_id = ?').all(req.params.id);
+  const dailyRate = (vehicle.weekly_rate || 0) / 7;
+  const bookings = applications.map(a => {
+    const pickup = a.pickup_scheduled_at || null;
+    const dropoff = a.rental_end_at || null;
+    let days = 0;
+    if (pickup && dropoff) {
+      days = Math.round((new Date(dropoff) - new Date(pickup)) / 86400000);
+    }
+    const revenue = Math.round(dailyRate * days * 100) / 100;
+    return {
+      applicant: `${a.first_name} ${a.last_name}`,
+      pickup,
+      dropoff,
+      days,
+      revenue,
+    };
+  });
+
+  const totalRevenue = Math.round(bookings.reduce((sum, b) => sum + b.revenue, 0) * 100) / 100;
+  const totalExpense = Math.round(maintenance.reduce((sum, m) => sum + (Number(m.cost) || 0), 0) * 100) / 100;
+  const totalProfit = Math.round((totalRevenue - totalExpense) * 100) / 100;
+  const lastServicedRow = maintenance.find(m => m.performed_at);
+  const lastServiced = lastServicedRow ? lastServicedRow.performed_at : null;
+
+  res.json({
+    ...vehicle,
+    photos,
+    maintenance,
+    bookings,
+    totalRevenue,
+    totalExpense,
+    totalProfit,
+    lastServiced,
+  });
+});
+
 router.get('/:id/photos', requireAuth, (req, res) => {
   res.json(db.prepare('SELECT * FROM vehicle_photos WHERE vehicle_id = ? ORDER BY created_at ASC').all(req.params.id));
 });
@@ -49,6 +93,9 @@ router.post('/:id/photo', requireAuth, upload.array('photos', 20), (req, res) =>
 });
 
 router.delete('/:id/photo/:photoId', requireAuth, (req, res) => {
+  const photo = db.prepare('SELECT * FROM vehicle_photos WHERE id = ? AND vehicle_id = ?').get(req.params.photoId, req.params.id);
+  if (!photo) return res.status(404).json({ error: 'Not found' });
+  logUndo('vehicle_photo_delete', 'Removed vehicle photo', photo);
   db.prepare('DELETE FROM vehicle_photos WHERE id = ? AND vehicle_id = ?').run(req.params.photoId, req.params.id);
   const latest = db.prepare('SELECT photo_path FROM vehicle_photos WHERE vehicle_id = ? ORDER BY created_at DESC LIMIT 1').get(req.params.id);
   db.prepare('UPDATE vehicles SET photo_path = ? WHERE id = ?').run(latest ? latest.photo_path : null, req.params.id);
@@ -81,7 +128,7 @@ router.post('/', requireAuth, (req, res) => {
 router.patch('/:id', requireAuth, (req, res) => {
   const allowed = [
     'make', 'model', 'year', 'weekly_rate', 'status', 'notes', 'vin', 'license_plate', 'color', 'fuel_type', 'transmission',
-    'stock_number', 'vehicle_class', 'purchase_date', 'purchase_price', 'mileage',
+    'stock_number', 'vehicle_class', 'purchase_date', 'purchase_price', 'mileage', 'next_service_at',
   ];
   const updates = [];
   const params = [];
@@ -98,6 +145,15 @@ router.patch('/:id', requireAuth, (req, res) => {
 });
 
 router.delete('/:id', requireAuth, (req, res) => {
+  const vehicle = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(req.params.id);
+  if (!vehicle) return res.status(404).json({ error: 'Not found' });
+  const photos = db.prepare('SELECT * FROM vehicle_photos WHERE vehicle_id = ?').all(req.params.id);
+  const maintenance = db.prepare('SELECT * FROM vehicle_maintenance WHERE vehicle_id = ?').all(req.params.id);
+
+  logUndo('vehicle_delete', `Removed ${vehicle.year} ${vehicle.make} ${vehicle.model}`, { vehicle, photos, maintenance });
+
+  db.prepare('DELETE FROM vehicle_photos WHERE vehicle_id = ?').run(req.params.id);
+  db.prepare('DELETE FROM vehicle_maintenance WHERE vehicle_id = ?').run(req.params.id);
   db.prepare('DELETE FROM vehicles WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });

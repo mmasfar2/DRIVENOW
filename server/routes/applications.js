@@ -18,13 +18,22 @@ const upload = multer({
 
 // ── PUBLIC: Stage 1 — Customer Application Submission ──
 router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (req, res) => {
-  const { first_name, last_name, phone, email, address, state, occupation, use_type, license_number, consent_background, vehicle_id, has_own_insurance } = req.body;
+  const { first_name, last_name, phone, email, address, city, state, zip_code, dob, occupation, use_type, license_number, consent_background, vehicle_id, has_own_insurance, rental_duration, notes } = req.body;
 
   if (!first_name || !last_name || !phone || !email) {
     return res.status(400).json({ error: 'First name, last name, phone, and email are required' });
   }
   if (!consent_background || consent_background === 'false') {
     return res.status(400).json({ error: 'Consent to background check is required' });
+  }
+  if (phone.replace(/\D/g, '').length !== 10) {
+    return res.status(400).json({ error: 'Phone number must contain exactly 10 digits' });
+  }
+  if (license_number && license_number.replace(/[^0-9A-Za-z]/g, '').length < 4) {
+    return res.status(400).json({ error: 'License number looks too short — please check and try again' });
+  }
+  if (!zip_code || zip_code.replace(/\D/g, '').length !== 5) {
+    return res.status(400).json({ error: 'ZIP code must contain exactly 5 digits' });
   }
 
   const licensePath = req.files?.license?.[0]?.filename || null;
@@ -33,15 +42,15 @@ router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (r
 
   const result = db.prepare(`
     INSERT INTO applications
-      (first_name, last_name, phone, email, address, state, occupation, use_type, license_number, license_path, insurance_path, consent_background, has_own_insurance, assigned_vehicle_id, stage)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, 1)
-  `).run(first_name, last_name, phone, email, address || null, state || null, occupation || null, use_type || null, license_number || null, licensePath, insurancePath, has_own_insurance === 'yes' ? 1 : 0, assignedVehicleId);
+      (first_name, last_name, phone, email, address, city, state, zip_code, dob, occupation, use_type, license_number, license_path, insurance_path, consent_background, has_own_insurance, assigned_vehicle_id, rental_duration, notes, stage)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, 1)
+  `).run(first_name, last_name, phone, email, address || null, city || null, state || null, zip_code || null, dob || null, occupation || null, use_type || null, license_number || null, licensePath, insurancePath, has_own_insurance === 'yes' ? 1 : 0, assignedVehicleId, rental_duration || null, notes || null);
 
   const appId = result.lastInsertRowid;
   if (assignedVehicleId) {
     db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ? AND status = 'available'").run(assignedVehicleId);
   }
-  upsertCustomer({ email, first_name, last_name, phone, address });
+  upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob });
   logActivity(appId, `New application submitted by ${first_name} ${last_name}`);
   queueMessage(appId, 'sms', phone, "We've received your application and are currently reviewing it.");
 
@@ -339,7 +348,7 @@ router.post('/:id/notes', requireAuth, (req, res) => {
 
 // ── AUTHED: General notes / edit ──
 router.patch('/:id', requireAuth, (req, res) => {
-  const allowed = ['first_name', 'last_name', 'phone', 'email', 'address', 'occupation', 'intended_use', 'rental_end_at', 'odometer_out', 'odometer_in', 'pickup_location', 'dropoff_location'];
+  const allowed = ['first_name', 'last_name', 'phone', 'email', 'address', 'occupation', 'intended_use', 'pickup_scheduled_at', 'rental_end_at', 'odometer_out', 'odometer_in', 'pickup_location', 'dropoff_location'];
   const updates = [];
   const params = [];
   for (const key of allowed) {
@@ -352,19 +361,19 @@ router.patch('/:id', requireAuth, (req, res) => {
   params.push(req.params.id);
   db.prepare(`UPDATE applications SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...params);
 
-  // Extending the rental term changes how much is owed — recompute the exact charge
-  // from the weekly rate rather than leaving the original quote's total stale.
-  if (req.body.rental_end_at !== undefined) {
+  // Changing the pickup or return date changes how much is owed — recompute the exact
+  // charge from the weekly rate rather than leaving the original quote's total stale.
+  if (req.body.rental_end_at !== undefined || req.body.pickup_scheduled_at !== undefined) {
     const id = req.params.id;
-    const app = db.prepare('SELECT pickup_scheduled_at, weekly_rate FROM applications WHERE id = ?').get(id);
-    if (app && app.pickup_scheduled_at && app.weekly_rate) {
-      const days = Math.round((new Date(req.body.rental_end_at) - new Date(app.pickup_scheduled_at)) / 86400000);
+    const app = db.prepare('SELECT pickup_scheduled_at, rental_end_at, weekly_rate FROM applications WHERE id = ?').get(id);
+    if (app && app.pickup_scheduled_at && app.rental_end_at && app.weekly_rate) {
+      const days = Math.round((new Date(app.rental_end_at) - new Date(app.pickup_scheduled_at)) / 86400000);
       const dailyRateExact = app.weekly_rate / 7;
       const subtotal = Math.round(dailyRateExact * days * 100) / 100;
       const salesTax = Math.round(subtotal * 0.0725 * 100) / 100;
       const total = Math.round((subtotal + salesTax) * 100) / 100;
       db.prepare('UPDATE applications SET total_due_at_pickup = ? WHERE id = ?').run(total, id);
-      logActivity(id, `Reservation extended to ${req.body.rental_end_at} — balance recalculated to $${total}`);
+      logActivity(id, `Reservation dates updated (${app.pickup_scheduled_at} → ${app.rental_end_at}) — balance recalculated to $${total}`);
     }
   }
 

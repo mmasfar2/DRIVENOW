@@ -104,7 +104,7 @@ async function load() {
 
 function render() {
   document.getElementById('fleet-table-body').innerHTML = vehicles.length ? vehicles.map(v => `
-    <tr style="cursor:pointer;" onclick="openVehicleModal(${v.id})">
+    <tr style="cursor:pointer;" onclick="window.location.href='vehicle-detail.html?id=${v.id}'">
       <td>
         <img src="${(v.photos || [])[0] ? '/uploads/' + v.photos[0].photo_path : ''}" alt=""
           style="width:56px;height:40px;object-fit:cover;border-radius:4px;background:#eee;${(v.photos || [])[0] ? '' : 'visibility:hidden;'}">

@@ -152,19 +152,46 @@ if (appForm) {
     submitBtn.textContent = 'Submitting…';
     submitBtn.disabled = true;
 
+    const phoneValue = document.getElementById('phone').value;
+    const licenseNumberValue = document.getElementById('license-number')?.value || '';
+    const zipValue = document.getElementById('zip')?.value || '';
+    if (phoneValue.replace(/\D/g, '').length !== 10) {
+      alert('Please enter a valid 10-digit phone number.');
+      submitBtn.textContent = originalText;
+      submitBtn.disabled = false;
+      return;
+    }
+    if (licenseNumberValue.replace(/[^0-9A-Za-z]/g, '').length < 4) {
+      alert('Please double check your license number — it looks too short.');
+      submitBtn.textContent = originalText;
+      submitBtn.disabled = false;
+      return;
+    }
+    if (zipValue.replace(/\D/g, '').length !== 5) {
+      alert('Please enter a valid 5-digit ZIP code.');
+      submitBtn.textContent = originalText;
+      submitBtn.disabled = false;
+      return;
+    }
+
     const formData = new FormData();
     formData.append('first_name', document.getElementById('first-name').value);
     formData.append('last_name', document.getElementById('last-name').value);
-    formData.append('phone', document.getElementById('phone').value);
+    formData.append('phone', phoneValue);
     formData.append('email', document.getElementById('email').value);
+    formData.append('dob', document.getElementById('dob')?.value || '');
     formData.append('address', document.getElementById('address').value);
+    formData.append('city', document.getElementById('city')?.value || '');
     formData.append('state', document.getElementById('state')?.value || '');
+    formData.append('zip_code', zipValue);
     formData.append('vehicle_id', document.getElementById('vehicle-id')?.value || '');
+    formData.append('rental_duration', document.getElementById('rental-duration')?.value || '');
+    formData.append('notes', document.getElementById('notes')?.value || '');
     const platformValue = document.getElementById('platforms')?.value || '';
     formData.append('use_type', platformValue === 'personal' ? 'personal' : (platformValue ? 'job' : ''));
     formData.append('occupation', platformValue);
     formData.append('has_own_insurance', document.querySelector('input[name="has_own_insurance"]:checked')?.value || '');
-    formData.append('license_number', document.getElementById('license-number')?.value || '');
+    formData.append('license_number', licenseNumberValue);
     formData.append('consent_background', document.getElementById('agree-terms').checked ? 'true' : 'false');
     const licenseFile = document.getElementById('license-upload')?.files[0];
     const insuranceFile = document.getElementById('insurance-upload')?.files[0];

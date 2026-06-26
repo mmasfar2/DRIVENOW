@@ -209,6 +209,18 @@ if (!existingCols.includes('lead_decision')) {
 if (!existingCols.includes('lead_decided_at')) {
   db.exec('ALTER TABLE applications ADD COLUMN lead_decided_at TEXT');
 }
+if (!existingCols.includes('city')) {
+  db.exec('ALTER TABLE applications ADD COLUMN city TEXT');
+}
+if (!existingCols.includes('rental_duration')) {
+  db.exec('ALTER TABLE applications ADD COLUMN rental_duration TEXT');
+}
+if (!existingCols.includes('notes')) {
+  db.exec('ALTER TABLE applications ADD COLUMN notes TEXT');
+}
+if (!existingCols.includes('zip_code')) {
+  db.exec('ALTER TABLE applications ADD COLUMN zip_code TEXT');
+}
 
 const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);
 if (!vehicleCols.includes('photo_path')) {
@@ -243,6 +255,29 @@ if (!vehicleCols.includes('purchase_price')) {
 }
 if (!vehicleCols.includes('mileage')) {
   db.exec('ALTER TABLE vehicles ADD COLUMN mileage REAL');
+}
+if (!vehicleCols.includes('next_service_at')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN next_service_at TEXT');
+}
+
+const maintenanceCols = db.prepare("PRAGMA table_info(vehicle_maintenance)").all().map(c => c.name);
+if (!maintenanceCols.includes('category')) {
+  db.exec('ALTER TABLE vehicle_maintenance ADD COLUMN category TEXT');
+}
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS undo_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  entity_type TEXT NOT NULL,
+  label TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+`);
+
+function logUndo(entityType, label, payload) {
+  db.prepare('DELETE FROM undo_log').run();
+  db.prepare('INSERT INTO undo_log (entity_type, label, payload) VALUES (?, ?, ?)').run(entityType, label, JSON.stringify(payload));
 }
 
 db.exec(`
@@ -279,6 +314,26 @@ CREATE TABLE IF NOT EXISTS customer_tags (
 );
 `);
 
+const customerCols = db.prepare("PRAGMA table_info(customers)").all().map(c => c.name);
+if (!customerCols.includes('city')) {
+  db.exec('ALTER TABLE customers ADD COLUMN city TEXT');
+}
+if (!customerCols.includes('state')) {
+  db.exec('ALTER TABLE customers ADD COLUMN state TEXT');
+}
+if (!customerCols.includes('zip_code')) {
+  db.exec('ALTER TABLE customers ADD COLUMN zip_code TEXT');
+}
+if (!customerCols.includes('dob')) {
+  db.exec('ALTER TABLE customers ADD COLUMN dob TEXT');
+}
+if (!customerCols.includes('blacklisted')) {
+  db.exec('ALTER TABLE customers ADD COLUMN blacklisted INTEGER DEFAULT 0');
+}
+if (!customerCols.includes('internal_notes')) {
+  db.exec('ALTER TABLE customers ADD COLUMN internal_notes TEXT');
+}
+
 // Backfill: build a customers record for every distinct email already in
 // applications, so existing leads/bookings get a profile retroactively.
 const existingCustomerEmails = new Set(db.prepare('SELECT lower(email) as e FROM customers').all().map(r => r.e));
@@ -297,14 +352,51 @@ for (const a of distinctApplicants) {
   insertCustomer.run(a.email, a.first_name, a.last_name, a.phone, a.address || null, a.dob || null, a.first_seen);
 }
 
-function upsertCustomer({ email, first_name, last_name, phone, address, dob }) {
+// Backfill: fill in any missing contact details on existing customer records
+// from their most recent application, now that the apply form sends city/state/dob.
+const customersMissingDetails = db.prepare(`
+  SELECT id, lower(email) as email FROM customers
+  WHERE city IS NULL OR state IS NULL OR dob IS NULL OR address IS NULL OR phone IS NULL OR zip_code IS NULL
+`).all();
+const latestApplicationByEmail = db.prepare(`
+  SELECT city, state, dob, address, phone, zip_code FROM applications WHERE lower(email) = ? ORDER BY created_at DESC LIMIT 1
+`);
+const updateCustomerDetails = db.prepare(`
+  UPDATE customers SET
+    city = COALESCE(city, ?),
+    state = COALESCE(state, ?),
+    dob = COALESCE(dob, ?),
+    address = COALESCE(address, ?),
+    phone = COALESCE(phone, ?),
+    zip_code = COALESCE(zip_code, ?)
+  WHERE id = ?
+`);
+for (const c of customersMissingDetails) {
+  const app = latestApplicationByEmail.get(c.email);
+  if (!app) continue;
+  updateCustomerDetails.run(app.city || null, app.state || null, app.dob || null, app.address || null, app.phone || null, app.zip_code || null, c.id);
+}
+
+function upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob }) {
   if (!email) return;
   const existing = db.prepare('SELECT id FROM customers WHERE lower(email) = lower(?)').get(email);
-  if (existing) return existing.id;
+  if (existing) {
+    db.prepare(`
+      UPDATE customers SET
+        city = COALESCE(city, ?),
+        state = COALESCE(state, ?),
+        zip_code = COALESCE(zip_code, ?),
+        address = COALESCE(address, ?),
+        dob = COALESCE(dob, ?),
+        phone = COALESCE(phone, ?)
+      WHERE id = ?
+    `).run(city || null, state || null, zip_code || null, address || null, dob || null, phone || null, existing.id);
+    return existing.id;
+  }
   const result = db.prepare(`
-    INSERT INTO customers (email, first_name, last_name, phone, address, dob)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(email, first_name || null, last_name || null, phone || null, address || null, dob || null);
+    INSERT INTO customers (email, first_name, last_name, phone, address, city, state, zip_code, dob)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(email, first_name || null, last_name || null, phone || null, address || null, city || null, state || null, zip_code || null, dob || null);
   return result.lastInsertRowid;
 }
 
@@ -354,4 +446,4 @@ function queueMessage(applicationId, channel, to, body) {
     .run(applicationId, channel, to, body);
 }
 
-module.exports = { db, logActivity, queueMessage, upsertCustomer };
+module.exports = { db, logActivity, queueMessage, upsertCustomer, logUndo };

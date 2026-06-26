@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { db } = require('../db');
+const { db, logUndo } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
 
@@ -42,14 +42,14 @@ router.get('/:id', requireAuth, (req, res) => {
 });
 
 router.post('/', requireAuth, upload.array('photos', 10), (req, res) => {
-  const { vehicle_id, description, cost, performed_at, notes } = req.body;
+  const { vehicle_id, description, cost, performed_at, notes, category } = req.body;
   if (!vehicle_id || !description) {
     return res.status(400).json({ error: 'Vehicle and description are required' });
   }
   const result = db.prepare(`
-    INSERT INTO vehicle_maintenance (vehicle_id, description, cost, performed_at, notes)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(vehicle_id, description, cost || null, performed_at || null, notes || null);
+    INSERT INTO vehicle_maintenance (vehicle_id, description, cost, performed_at, notes, category)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(vehicle_id, description, cost || null, performed_at || null, notes || null, category || null);
 
   const maintenanceId = result.lastInsertRowid;
   const insertPhoto = db.prepare('INSERT INTO maintenance_photos (maintenance_id, photo_path) VALUES (?, ?)');
@@ -59,6 +59,12 @@ router.post('/', requireAuth, upload.array('photos', 10), (req, res) => {
 });
 
 router.delete('/:id', requireAuth, (req, res) => {
+  const record = db.prepare('SELECT * FROM vehicle_maintenance WHERE id = ?').get(req.params.id);
+  if (!record) return res.status(404).json({ error: 'Not found' });
+  const photos = db.prepare('SELECT * FROM maintenance_photos WHERE maintenance_id = ?').all(req.params.id);
+
+  logUndo('maintenance_delete', `Removed maintenance: ${record.description}`, { record, photos });
+
   db.prepare('DELETE FROM maintenance_photos WHERE maintenance_id = ?').run(req.params.id);
   db.prepare('DELETE FROM vehicle_maintenance WHERE id = ?').run(req.params.id);
   res.json({ ok: true });

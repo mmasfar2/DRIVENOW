@@ -63,6 +63,49 @@ function renderSidebar(activeKey) {
     </div>
   `;
   initSidebarDragReorder();
+  ensureUndoButton();
+}
+
+function ensureUndoButton() {
+  let btn = document.getElementById('global-undo-btn');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'global-undo-btn';
+    btn.className = 'btn btn-sm btn-outline';
+    btn.style.position = 'fixed';
+    btn.style.top = '16px';
+    btn.style.right = '24px';
+    btn.style.zIndex = '9999';
+    btn.style.display = 'none';
+    btn.onclick = undoLastAction;
+    document.body.appendChild(btn);
+  }
+  refreshUndoButton();
+}
+
+async function refreshUndoButton() {
+  const btn = document.getElementById('global-undo-btn');
+  if (!btn) return;
+  try {
+    const result = await api('/api/undo');
+    if (result) {
+      btn.textContent = `Undo: ${result.label}`;
+      btn.style.display = '';
+    } else {
+      btn.style.display = 'none';
+    }
+  } catch {
+    btn.style.display = 'none';
+  }
+}
+
+async function undoLastAction() {
+  try {
+    await api('/api/undo', { method: 'POST' });
+    location.reload();
+  } catch (e) {
+    alert(e.message || 'Failed to undo');
+  }
 }
 
 function initSidebarDragReorder() {
@@ -117,6 +160,19 @@ function fmtMoney(n) {
 function fmtDate(d) {
   if (!d) return '—';
   return new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+// Renders a "View File" link, plus a small thumbnail preview when the upload is an image.
+function filePreviewHtml(filePath, linkText) {
+  if (!filePath) return 'Not provided';
+  const url = `/uploads/${filePath}`;
+  const isImage = /\.(jpe?g|png|gif|webp)$/i.test(filePath);
+  return `
+    <div style="display:flex;align-items:center;gap:10px;justify-content:flex-end;">
+      ${isImage ? `<a href="${url}" target="_blank"><img src="${url}" alt="preview" style="width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid var(--gray-border);"></a>` : ''}
+      <a href="${url}" target="_blank">${linkText || 'View File'}</a>
+    </div>
+  `;
 }
 
 async function api(path, options = {}) {

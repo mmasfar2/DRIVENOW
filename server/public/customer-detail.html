@@ -88,6 +88,11 @@
     <div class="panel">
       <div class="panel-title"><span>Booking History</span><span class="panel-title__view-all" id="cd-booking-count"></span></div>
       <div id="cd-bookings"></div>
+
+      <div class="panel" style="margin-top:24px;box-shadow:none;border-style:dashed;">
+        <div class="panel-title">Additional Info</div>
+        <div id="cd-additional-info"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -138,13 +143,27 @@ function render() {
   const latestBooking = customer.bookings[0];
 
   document.getElementById('cd-license').innerHTML = `
-    <div class="info-row"><div class="info-row__label">License</div><div class="info-row__val">${latestBooking && latestBooking.license_path ? `<a href="/uploads/${latestBooking.license_path}" target="_blank">View File</a>` : 'Not provided'}</div></div>
+    <div class="info-row"><div class="info-row__label">License</div><div class="info-row__val">${filePreviewHtml(latestBooking?.license_path)}</div></div>
   `;
 
   document.getElementById('cd-insurance').innerHTML = `
     <div class="info-row"><div class="info-row__label">Status</div><div class="info-row__val"><span class="badge badge-reserved">Not Verified</span></div></div>
-    <div class="info-row"><div class="info-row__label">Upload</div><div class="info-row__val">${latestBooking && latestBooking.insurance_path ? `<a href="/uploads/${latestBooking.insurance_path}" target="_blank">View File</a>` : 'Not provided'}</div></div>
+    <div class="info-row"><div class="info-row__label">Upload</div><div class="info-row__val">${filePreviewHtml(latestBooking?.insurance_path)}</div></div>
     ${firstBooking ? `<a href="reservation-detail.html?id=${firstBooking.id}" style="font-size:0.82rem;">↗ From booking #${String(firstBooking.id).padStart(3, '0')}</a>` : ''}
+  `;
+
+  const RENTAL_DURATION_LABELS = {
+    '1-4wk': '1–4 weeks', '1-3mo': '1–3 months', '3-6mo': '3–6 months', '6mo+': '6+ months', 'ongoing': 'Ongoing / indefinite',
+  };
+  const PLATFORM_LABELS = {
+    uber: 'Uber', lyft: 'Lyft', doordash: 'DoorDash', multiple: 'Multiple platforms', new: 'New — not yet active',
+    'amazon-flex': 'Amazon Flex', 'walmart-spark': 'Walmart Spark', instacart: 'Instacart', personal: 'Personal Use (not for gig work)', other: 'Other',
+  };
+  document.getElementById('cd-additional-info').innerHTML = `
+    <div class="info-row"><div class="info-row__label">Planned Rental Length</div><div class="info-row__val">${latestBooking?.rental_duration ? (RENTAL_DURATION_LABELS[latestBooking.rental_duration] || latestBooking.rental_duration) : '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">Platform / Use</div><div class="info-row__val">${latestBooking?.occupation ? (PLATFORM_LABELS[latestBooking.occupation] || latestBooking.occupation) : '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">Own Insurance</div><div class="info-row__val">${latestBooking ? (latestBooking.has_own_insurance ? 'Yes' : 'No') : '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">Notes</div><div class="info-row__val">${latestBooking?.notes || '—'}</div></div>
   `;
 
   renderTags();

@@ -80,6 +80,11 @@
 
   <div id="rd-panel-financials" style="display:none;">
     <div class="panel">
+      <div class="panel-title">Rental Dates</div>
+      <div id="rd-fin-cal"></div>
+    </div>
+
+    <div class="panel">
       <div class="panel-title">Payment Log</div>
       <table>
         <thead><tr><th>Date Paid</th><th style="text-align:right;">Amount Paid</th></tr></thead>
@@ -128,6 +133,13 @@ const id = new URLSearchParams(window.location.search).get('id');
 const HIGHWAY_TAX_RATE = 0.08;
 const SALES_TAX_RATE = 0.0725;
 let booking, paymentBreakdownItems = [];
+let finCalMonth = null, finNewPickup = '', finNewReturn = '';
+
+function fmtFinCalDate(dateStr) {
+  if (!dateStr) return 'Select date';
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
 function fmtExact(n) {
   return '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -209,6 +221,7 @@ function render() {
   renderPaymentLog();
   initBreakdown();
   renderBreakdown();
+  initFinCal();
 }
 
 function renderNotes() {
@@ -234,6 +247,113 @@ function renderPaymentLog() {
     : `<tr><td colspan="2" style="text-align:center;color:#888;padding:24px;">No payments recorded yet.</td></tr>`;
 }
 
+function initFinCal() {
+  finNewPickup = booking.pickup_scheduled_at ? booking.pickup_scheduled_at.slice(0, 10) : '';
+  finNewReturn = booking.rental_end_at ? booking.rental_end_at.slice(0, 10) : '';
+  const anchor = finNewPickup || finNewReturn || new Date().toISOString().slice(0, 10);
+  const anchorDate = new Date(anchor + 'T00:00:00');
+  finCalMonth = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1);
+  renderFinCal();
+}
+
+function renderFinCal() {
+  const box = document.getElementById('rd-fin-cal');
+
+  function monthGrid(monthDate) {
+    const year = monthDate.getFullYear();
+    const month = monthDate.getMonth();
+    const firstDow = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < firstDow; i++) cells.push('<div class="resv-cal__day empty"></div>');
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const isPickup = dateStr === finNewPickup;
+      const isReturn = dateStr === finNewReturn;
+      const inRange = finNewPickup && finNewReturn && dateStr > finNewPickup && dateStr < finNewReturn;
+      const classes = ['resv-cal__day'];
+      if (inRange) classes.push('in-range');
+      if (isPickup && finNewReturn) classes.push('in-range', 'range-start');
+      if (isReturn && finNewPickup) classes.push('in-range', 'range-end');
+      if (isPickup || isReturn) classes.push('selected');
+      cells.push(`
+        <div class="${classes.join(' ')}" data-date="${dateStr}">
+          <div class="resv-cal__day-inner">${day}</div>
+        </div>
+      `);
+    }
+    return `
+      <div class="resv-cal__month">
+        <div class="resv-cal__month-head"><span>${monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span></div>
+        <div class="resv-cal__dow">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div>${d}</div>`).join('')}</div>
+        <div class="resv-cal__days">${cells.join('')}</div>
+      </div>
+    `;
+  }
+
+  const nextMonth = new Date(finCalMonth.getFullYear(), finCalMonth.getMonth() + 1, 1);
+  const days = (finNewPickup && finNewReturn)
+    ? Math.round((new Date(finNewReturn) - new Date(finNewPickup)) / 86400000)
+    : null;
+  const dailyRateExact = (booking.weekly_rate || 0) / 7;
+  const estimate = days ? Math.round(dailyRateExact * days * (1 + SALES_TAX_RATE) * 100) / 100 : null;
+
+  box.innerHTML = `
+    <div class="resv-cal">
+      <div class="resv-cal__summary">
+        <div>
+          <div class="resv-cal__summary-label">Pickup Date</div>
+          <div class="resv-cal__summary-value">${fmtFinCalDate(finNewPickup)}</div>
+        </div>
+        <div>
+          <div class="resv-cal__summary-label">Return Date</div>
+          <div class="resv-cal__summary-value">${fmtFinCalDate(finNewReturn)}</div>
+        </div>
+      </div>
+      <div class="resv-cal__grid">
+        <button class="resv-cal__nav" id="fin-cal-prev">&#8249;</button>
+        ${monthGrid(finCalMonth)}
+        ${monthGrid(nextMonth)}
+        <button class="resv-cal__nav" id="fin-cal-next">&#8250;</button>
+      </div>
+      <div class="resv-cal__apply-row">
+        <div class="resv-cal__total-days"><span>Duration:</span>${days !== null ? `${days} day${days === 1 ? '' : 's'}` : '—'}</div>
+        <div class="resv-cal__est-amount"><span>Est. Total:</span>${estimate !== null ? fmtExact(estimate) : '—'}</div>
+        <button class="resv-cal__apply-btn" id="fin-cal-apply" ${!(finNewPickup && finNewReturn) ? 'disabled' : ''}>Save Dates</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('fin-cal-prev').addEventListener('click', () => {
+    finCalMonth = new Date(finCalMonth.getFullYear(), finCalMonth.getMonth() - 1, 1);
+    renderFinCal();
+  });
+  document.getElementById('fin-cal-next').addEventListener('click', () => {
+    finCalMonth = new Date(finCalMonth.getFullYear(), finCalMonth.getMonth() + 1, 1);
+    renderFinCal();
+  });
+  box.querySelectorAll('.resv-cal__day[data-date]').forEach(el => {
+    el.addEventListener('click', () => {
+      const dateStr = el.dataset.date;
+      if (!finNewPickup || finNewReturn) {
+        finNewPickup = dateStr;
+        finNewReturn = '';
+      } else if (dateStr > finNewPickup) {
+        finNewReturn = dateStr;
+      } else {
+        finNewPickup = dateStr;
+        finNewReturn = '';
+      }
+      renderFinCal();
+    });
+  });
+  document.getElementById('fin-cal-apply').addEventListener('click', async () => {
+    if (!finNewPickup || !finNewReturn) return;
+    await api(`/api/applications/${id}`, { method: 'PATCH', body: JSON.stringify({ pickup_scheduled_at: finNewPickup, rental_end_at: finNewReturn }) });
+    await load();
+  });
+}
+
 function initBreakdown() {
   const days = (booking.pickup_scheduled_at && booking.rental_end_at)
     ? Math.round((new Date(booking.rental_end_at) - new Date(booking.pickup_scheduled_at)) / 86400000)
@@ -243,12 +363,15 @@ function initBreakdown() {
     { key: 'daily', type: 'rate', days, rate: dailyRate, checked: true },
     { key: 'highway', type: 'amount', label: 'Highway Tax (8%, included in rate)', amount: 0, checked: true },
     { key: 'sales', type: 'amount', label: 'Sales Tax (7.25%)', amount: 0, checked: true },
+    { key: 'misc', type: 'amount', label: 'Miscellaneous', amount: 0, checked: false },
+    { key: 'tolls', type: 'amount', label: 'Tolls', amount: 0, checked: false },
+    { key: 'discount', type: 'amount', label: 'Discount', amount: 0, checked: false, sign: -1 },
   ];
   recalcTaxes();
 }
 
 function getItemAmount(item) {
-  return item.type === 'rate' ? Math.round(item.days * item.rate * 100) / 100 : Number(item.amount || 0);
+  return item.type === 'rate' ? Math.round(item.days * item.rate * 100) / 100 : Number(item.amount || 0) * (item.sign || 1);
 }
 function getItemLabel(item) {
   return item.type === 'rate' ? `Lease Rate (${item.days}d x ${item.rate}/d)` : item.label;
@@ -289,7 +412,7 @@ function renderBreakdown() {
       <div class="payment-breakdown-row">
         <input type="checkbox" class="pb-checkbox" data-i="${i}" ${item.checked ? 'checked' : ''}>
         <div class="payment-breakdown-row__label" id="pb-label-${i}">${getItemLabel(item)}</div>
-        <input type="text" inputmode="decimal" class="pb-amount" id="pb-input-${i}" data-i="${i}" value="${item.type === 'rate' ? item.rate : item.amount}">
+        <input type="text" inputmode="decimal" class="pb-amount" id="pb-input-${i}" data-i="${i}" value="${getItemAmount(item)}">
       </div>
     `).join('')}
   `;
@@ -305,7 +428,7 @@ function renderBreakdown() {
       const item = paymentBreakdownItems[Number(inp.dataset.i)];
       const value = Number(inp.value) || 0;
       if (item.type === 'rate') {
-        item.rate = value;
+        item.rate = item.days > 0 ? Math.round((value / item.days) * 100) / 100 : value;
         document.getElementById(`pb-label-${inp.dataset.i}`).textContent = getItemLabel(item);
         recalcTaxes();
         const highwayI = paymentBreakdownItems.findIndex(i => i.key === 'highway');

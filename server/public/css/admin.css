@@ -179,10 +179,49 @@ tr:hover td { background: var(--gray-light); }
 .payment-breakdown-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 12px; }
 .payment-breakdown-header #invoice-total-display { color: var(--black); font-size: 0.85rem; }
 .payment-breakdown-header__balance { color: #c0392b; font-size: 0.9rem; font-weight: 800; margin-top: 4px; text-align: right; }
-.payment-breakdown-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
-.payment-breakdown-row__label { flex: 1; font-size: 0.85rem; }
-.payment-breakdown-row .pb-checkbox { width: 16px; height: 16px; flex-shrink: 0; }
-.payment-breakdown-row .pb-amount { width: 100px; padding: 6px 8px; border: 1.5px solid var(--gray-border); border-radius: 4px; font-family: inherit; font-size: 0.85rem; text-align: right; }
+.payment-breakdown-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.payment-breakdown-row__label { flex: 1; font-size: 0.78rem; }
+.payment-breakdown-row .pb-checkbox { width: 14px; height: 14px; flex-shrink: 0; }
+.payment-breakdown-row .pb-amount { width: 76px; padding: 4px 6px; border: 1.5px solid var(--gray-border); border-radius: 4px; font-family: inherit; font-size: 0.78rem; text-align: right; }
+
+/* Date-range calendar widget (shared by reservations + reservation detail) */
+.resv-cal { border: 1.5px solid var(--gray-border); border-radius: 8px; overflow: hidden; }
+.resv-cal__summary { display: flex; }
+.resv-cal__summary > div { flex: 1; padding: 14px 18px; }
+.resv-cal__summary > div:first-child { border-right: 1px solid var(--gray-border); }
+.resv-cal__summary-label { font-size: 0.76rem; color: var(--text-muted); margin-bottom: 4px; }
+.resv-cal__summary-value { font-size: 0.95rem; font-weight: 700; }
+.resv-cal__grid { background: var(--gray-light); padding: 18px; display: flex; gap: 24px; align-items: flex-start; border-top: 1px solid var(--gray-border); }
+.resv-cal__nav { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem; padding: 4px 8px; }
+.resv-cal__nav:disabled { opacity: 0.3; cursor: not-allowed; }
+.resv-cal__nav:not(:disabled):hover { color: var(--black); }
+.resv-cal__month { flex: 1; min-width: 0; }
+.resv-cal__month-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 700; font-size: 0.92rem; }
+.resv-cal__dow { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 0.7rem; color: var(--text-muted); margin-bottom: 6px; }
+.resv-cal__days { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 4px; }
+.resv-cal__day {
+  display: flex; align-items: center; justify-content: center; height: 34px; font-size: 0.82rem; cursor: pointer;
+  border-radius: 50%; color: var(--black); position: relative;
+}
+.resv-cal__day.empty { cursor: default; }
+.resv-cal__day.disabled { color: #ccc; cursor: not-allowed; }
+.resv-cal__day.in-range { background: var(--gray-border); border-radius: 0; }
+.resv-cal__day.range-start { border-radius: 50% 0 0 50%; }
+.resv-cal__day.range-end { border-radius: 0 50% 50% 0; }
+.resv-cal__day.selected .resv-cal__day-inner {
+  background: var(--black); color: #fff; width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+}
+.resv-cal__day-inner { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.resv-cal__apply-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-top: 1px solid var(--gray-border); gap: 14px; }
+.resv-cal__total-days { font-size: 0.88rem; font-weight: 700; }
+.resv-cal__total-days span { color: var(--text-muted); font-weight: 400; margin-right: 4px; }
+.resv-cal__est-amount { font-size: 0.88rem; font-weight: 700; }
+.resv-cal__est-amount span { color: var(--text-muted); font-weight: 400; margin-right: 4px; }
+.resv-cal__apply-btn {
+  padding: 10px 22px; background: var(--black); color: #fff; border: none; border-radius: 6px;
+  font-size: 0.82rem; font-weight: 700; cursor: pointer;
+}
+.resv-cal__apply-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* Reservation detail page */
 .rd-tabs { display: flex; gap: 28px; border-bottom: 2px solid var(--gray-border); margin: 24px 0; }
