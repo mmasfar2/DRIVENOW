@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clients — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
+<div class="page">
+  <div class="page-title">Clients</div>
+  <div class="page-sub">Look up any current or previous renter.</div>
+
+  <div class="panel" style="display:flex;gap:24px;align-items:center;">
+    <div>
+      <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;">Total Clients</div>
+      <div style="font-size:1.6rem;font-weight:800;" id="c-total-count">—</div>
+    </div>
+    <div>
+      <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;">Current Renters</div>
+      <div style="font-size:1.6rem;font-weight:800;" id="c-current-count">—</div>
+    </div>
+  </div>
+
+  <div class="panel" style="padding:0;overflow-x:auto;">
+    <div style="padding:18px 22px 0;display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+      <input id="c-search" placeholder="Search by name, email, or phone…" style="flex:1;min-width:220px;padding:10px 14px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;">
+      <select id="c-filter" style="padding:10px 14px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;">
+        <option value="all">All Clients</option>
+        <option value="current">Current Renters</option>
+        <option value="previous">Previous Renters</option>
+      </select>
+    </div>
+    <table style="margin-top:14px;">
+      <thead>
+        <tr><th>Name</th><th>Email</th><th>Phone</th><th>Status</th><th>Total Bookings</th><th>Total Spent</th></tr>
+      </thead>
+      <tbody id="clients-table-body"></tbody>
+    </table>
+  </div>
+</div>
+</div>
+</div>
+
+<script src="js/admin-common.js"></script>
+<script>
+let clients = [];
+
+function render() {
+  const search = document.getElementById('c-search').value.trim().toLowerCase();
+  const filter = document.getElementById('c-filter').value;
+
+  const filtered = clients.filter(c => {
+    if (filter !== 'all' && c.status !== filter) return false;
+    if (!search) return true;
+    const haystack = `${c.first_name} ${c.last_name} ${c.email} ${c.phone || ''}`.toLowerCase();
+    return haystack.includes(search);
+  });
+
+  document.getElementById('clients-table-body').innerHTML = filtered.length ? filtered.map(c => `
+    <tr style="cursor:pointer;" onclick="window.location.href='customer-detail.html?email=${encodeURIComponent(c.email)}'">
+      <td><strong>${c.first_name} ${c.last_name}</strong>${c.blacklisted ? ' <span class="badge badge-rejected">Blacklisted</span>' : ''}</td>
+      <td>${c.email}</td>
+      <td>${c.phone || '—'}</td>
+      <td><span class="badge ${c.status === 'current' ? 'badge-active' : 'badge-completed'}">${c.status === 'current' ? 'Current Renter' : 'Previous Renter'}</span></td>
+      <td>${c.total_bookings}</td>
+      <td>${fmtMoney(c.total_spent)}</td>
+    </tr>
+  `).join('') : '<tr><td colspan="6" style="text-align:center;color:#888;padding:32px;">No clients match your search.</td></tr>';
+}
+
+async function load() {
+  clients = await api('/api/customers');
+  document.getElementById('c-total-count').textContent = clients.length;
+  document.getElementById('c-current-count').textContent = clients.filter(c => c.status === 'current').length;
+  render();
+}
+
+document.getElementById('c-search').addEventListener('input', render);
+document.getElementById('c-filter').addEventListener('change', render);
+
+(async () => {
+  renderSidebar('clients');
+  await requireLogin();
+  load();
+})();
+</script>
+</body>
+</html>
