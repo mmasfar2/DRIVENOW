@@ -65,6 +65,14 @@ function periodCard(title, p, sub) {
           <div style="font-size:1.3rem;font-weight:800;">${fmtMoney(p.actual)}</div>
         </div>
         <div>
+          <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.06em;">Expenses</div>
+          <div style="font-size:1.3rem;font-weight:800;" class="${p.expenses ? 'text-orange' : ''}">${p.expenses ? '-' : ''}${fmtMoney(p.expenses)}</div>
+        </div>
+        <div>
+          <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.06em;">Net Collected</div>
+          <div style="font-size:1.3rem;font-weight:800;">${fmtMoney(p.netActual)}</div>
+        </div>
+        <div>
           <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.06em;">P&amp;L (Variance)</div>
           <div style="font-size:1.3rem;font-weight:800;" class="${color}">${positive ? '+' : ''}${fmtMoney(p.variance)} <span style="font-size:0.85rem;font-weight:600;">(${pct(p.variance, p.expected)})</span></div>
         </div>

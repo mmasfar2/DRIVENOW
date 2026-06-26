@@ -36,24 +36,38 @@ router.get('/cashflow', requireAuth, (req, res) => {
     SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE paid_at >= ? AND paid_at <= ?
   `).get(monthStartStr, todayStr).total;
 
+  const expensesToday = db.prepare(`
+    SELECT COALESCE(SUM(cost), 0) as total FROM vehicle_maintenance WHERE performed_at = ?
+  `).get(todayStr).total;
+  const expensesWeek = db.prepare(`
+    SELECT COALESCE(SUM(cost), 0) as total FROM vehicle_maintenance WHERE performed_at >= ? AND performed_at <= ?
+  `).get(weekStartStr, todayStr).total;
+  const expensesMonth = db.prepare(`
+    SELECT COALESCE(SUM(cost), 0) as total FROM vehicle_maintenance WHERE performed_at >= ? AND performed_at <= ?
+  `).get(monthStartStr, todayStr).total;
+
   const periods = {
     daily: {
       expected: expectedDailyTotal,
       actual: actualToday,
+      expenses: expensesToday,
     },
     weekly: {
       expected: expectedDailyTotal * daysElapsedThisWeek,
       expectedFull: expectedDailyTotal * 7,
       actual: actualWeek,
+      expenses: expensesWeek,
     },
     monthly: {
       expected: expectedDailyTotal * daysElapsedThisMonth,
       expectedFull: expectedDailyTotal * daysInThisMonth,
       actual: actualMonth,
+      expenses: expensesMonth,
     },
   };
   for (const p of Object.values(periods)) {
-    p.variance = p.actual - p.expected;
+    p.netActual = p.actual - p.expenses;
+    p.variance = p.netActual - p.expected;
   }
 
   res.json({ activeRenters, expectedDailyTotal, periods });
