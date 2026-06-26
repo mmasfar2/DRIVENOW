@@ -24,6 +24,7 @@ const SIDEBAR_LINKS = [
   { key: 'automation', label: 'Automation', href: 'automation.html' },
   { key: 'fleet', label: 'Fleet Management', href: 'fleet-admin.html' },
   { key: 'maintenance', label: 'Maintenance', href: 'maintenance.html' },
+  { key: 'metrics', label: 'Metrics', href: 'metrics.html' },
   { key: 'mysite', label: 'My Site', href: 'https://mmasfar2.github.io/drivenow/', external: true },
 ];
 
