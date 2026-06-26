@@ -118,6 +118,19 @@ function fmtDate(d) {
   return new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+// Renders a "View File" link, plus a small thumbnail preview when the upload is an image.
+function filePreviewHtml(filePath, linkText) {
+  if (!filePath) return 'Not provided';
+  const url = `/uploads/${filePath}`;
+  const isImage = /\.(jpe?g|png|gif|webp)$/i.test(filePath);
+  return `
+    <div style="display:flex;align-items:center;gap:10px;justify-content:flex-end;">
+      ${isImage ? `<a href="${url}" target="_blank"><img src="${url}" alt="preview" style="width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid var(--gray-border);"></a>` : ''}
+      <a href="${url}" target="_blank">${linkText || 'View File'}</a>
+    </div>
+  `;
+}
+
 async function api(path, options = {}) {
   const res = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
