@@ -326,21 +326,28 @@ for (const a of distinctApplicants) {
   insertCustomer.run(a.email, a.first_name, a.last_name, a.phone, a.address || null, a.dob || null, a.first_seen);
 }
 
-// Backfill: fill in missing city/state/zip on existing customer records from
-// their most recent application, now that the apply form actually sends city/state.
-const customersMissingLocation = db.prepare(`
-  SELECT id, lower(email) as email FROM customers WHERE city IS NULL OR state IS NULL
+// Backfill: fill in any missing contact details on existing customer records
+// from their most recent application, now that the apply form sends city/state/dob.
+const customersMissingDetails = db.prepare(`
+  SELECT id, lower(email) as email FROM customers
+  WHERE city IS NULL OR state IS NULL OR dob IS NULL OR address IS NULL OR phone IS NULL
 `).all();
 const latestApplicationByEmail = db.prepare(`
-  SELECT city, state FROM applications WHERE lower(email) = ? ORDER BY created_at DESC LIMIT 1
+  SELECT city, state, dob, address, phone FROM applications WHERE lower(email) = ? ORDER BY created_at DESC LIMIT 1
 `);
-const updateCustomerLocation = db.prepare(`
-  UPDATE customers SET city = COALESCE(city, ?), state = COALESCE(state, ?) WHERE id = ?
+const updateCustomerDetails = db.prepare(`
+  UPDATE customers SET
+    city = COALESCE(city, ?),
+    state = COALESCE(state, ?),
+    dob = COALESCE(dob, ?),
+    address = COALESCE(address, ?),
+    phone = COALESCE(phone, ?)
+  WHERE id = ?
 `);
-for (const c of customersMissingLocation) {
+for (const c of customersMissingDetails) {
   const app = latestApplicationByEmail.get(c.email);
   if (!app) continue;
-  updateCustomerLocation.run(app.city || null, app.state || null, c.id);
+  updateCustomerDetails.run(app.city || null, app.state || null, app.dob || null, app.address || null, app.phone || null, c.id);
 }
 
 function upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob }) {
@@ -353,9 +360,10 @@ function upsertCustomer({ email, first_name, last_name, phone, address, city, st
         state = COALESCE(state, ?),
         zip_code = COALESCE(zip_code, ?),
         address = COALESCE(address, ?),
-        dob = COALESCE(dob, ?)
+        dob = COALESCE(dob, ?),
+        phone = COALESCE(phone, ?)
       WHERE id = ?
-    `).run(city || null, state || null, zip_code || null, address || null, dob || null, existing.id);
+    `).run(city || null, state || null, zip_code || null, address || null, dob || null, phone || null, existing.id);
     return existing.id;
   }
   const result = db.prepare(`
