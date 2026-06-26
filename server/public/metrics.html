@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Metrics — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
+<div class="page">
+  <div class="page-title">Metrics</div>
+  <div class="page-sub">Expected cash flow (based on each active renter's daily rate) vs. what's actually been collected.</div>
+
+  <div class="panel" style="display:flex;gap:24px;align-items:center;">
+    <div>
+      <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;">Active Renters</div>
+      <div style="font-size:1.6rem;font-weight:800;" id="m-active-count">—</div>
+    </div>
+    <div>
+      <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;">Expected Daily Total</div>
+      <div style="font-size:1.6rem;font-weight:800;" id="m-expected-daily">—</div>
+    </div>
+  </div>
+
+  <div id="period-cards"></div>
+
+  <div class="panel" style="padding:0;overflow-x:auto;">
+    <div class="panel-title" style="padding:18px 22px 0;">Active Renters — Expected Daily Rate</div>
+    <table>
+      <thead>
+        <tr><th>Renter</th><th>Vehicle</th><th>Weekly Rate</th><th>Expected Daily Rate</th></tr>
+      </thead>
+      <tbody id="renters-table-body"></tbody>
+    </table>
+  </div>
+</div>
+</div>
+</div>
+
+<script src="js/admin-common.js"></script>
+<script>
+function pct(variance, expected) {
+  if (!expected) return '—';
+  return `${variance >= 0 ? '+' : ''}${((variance / expected) * 100).toFixed(1)}%`;
+}
+
+function periodCard(title, p, sub) {
+  const positive = p.variance >= 0;
+  const color = positive ? 'text-green' : 'text-orange';
+  return `
+    <div class="panel">
+      <div class="panel-title">${title}</div>
+      <div style="display:flex;gap:32px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.06em;">Expected${sub ? ` (${sub})` : ''}</div>
+          <div style="font-size:1.3rem;font-weight:800;">${fmtMoney(p.expected)}</div>
+        </div>
+        <div>
+          <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.06em;">Actual Collected</div>
+          <div style="font-size:1.3rem;font-weight:800;">${fmtMoney(p.actual)}</div>
+        </div>
+        <div>
+          <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.06em;">P&amp;L (Variance)</div>
+          <div style="font-size:1.3rem;font-weight:800;" class="${color}">${positive ? '+' : ''}${fmtMoney(p.variance)} <span style="font-size:0.85rem;font-weight:600;">(${pct(p.variance, p.expected)})</span></div>
+        </div>
+        ${p.expectedFull != null ? `
+        <div>
+          <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.06em;">Full Period Target</div>
+          <div style="font-size:1.3rem;font-weight:800;color:#888;">${fmtMoney(p.expectedFull)}</div>
+        </div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+async function load() {
+  const data = await api('/api/metrics/cashflow');
+
+  document.getElementById('m-active-count').textContent = data.activeRenters.length;
+  document.getElementById('m-expected-daily').textContent = fmtMoney(data.expectedDailyTotal);
+
+  document.getElementById('period-cards').innerHTML = [
+    periodCard('Daily', data.periods.daily),
+    periodCard('Weekly (to date)', data.periods.weekly, 'week-to-date'),
+    periodCard('Monthly (to date)', data.periods.monthly, 'month-to-date'),
+  ].join('');
+
+  document.getElementById('renters-table-body').innerHTML = data.activeRenters.length ? data.activeRenters.map(r => `
+    <tr>
+      <td>${r.first_name} ${r.last_name}</td>
+      <td>${r.year} ${r.make} ${r.model}</td>
+      <td>${fmtMoney(r.weekly_rate)}/wk</td>
+      <td>${fmtMoney(r.daily_rate)}/day</td>
+    </tr>
+  `).join('') : '<tr><td colspan="4" style="text-align:center;color:#888;padding:32px;">No active renters right now.</td></tr>';
+}
+
+(async () => {
+  renderSidebar('metrics');
+  await requireLogin();
+  load();
+})();
+</script>
+</body>
+</html>

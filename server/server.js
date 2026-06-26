@@ -16,6 +16,7 @@ const messageRoutes = require('./routes/messages');
 const maintenanceRoutes = require('./routes/maintenance');
 const waitlistRoutes = require('./routes/waitlist');
 const customerRoutes = require('./routes/customers');
+const metricsRoutes = require('./routes/metrics');
 const undoRoutes = require('./routes/undo');
 
 const app = express();
@@ -56,6 +57,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/waitlist', waitlistRoutes);
 app.use('/api/customers', customerRoutes);
+app.use('/api/metrics', metricsRoutes);
 app.use('/api/undo', undoRoutes);
 
 app.use('/uploads', express.static(UPLOADS_DIR));
