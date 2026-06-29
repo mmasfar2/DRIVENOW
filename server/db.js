@@ -333,6 +333,15 @@ if (!customerCols.includes('blacklisted')) {
 if (!customerCols.includes('internal_notes')) {
   db.exec('ALTER TABLE customers ADD COLUMN internal_notes TEXT');
 }
+if (!customerCols.includes('license_number')) {
+  db.exec('ALTER TABLE customers ADD COLUMN license_number TEXT');
+}
+if (!customerCols.includes('insurance_company')) {
+  db.exec('ALTER TABLE customers ADD COLUMN insurance_company TEXT');
+}
+if (!customerCols.includes('insurance_policy_number')) {
+  db.exec('ALTER TABLE customers ADD COLUMN insurance_policy_number TEXT');
+}
 
 // Backfill: build a customers record for every distinct email already in
 // applications, so existing leads/bookings get a profile retroactively.
@@ -377,7 +386,7 @@ for (const c of customersMissingDetails) {
   updateCustomerDetails.run(app.city || null, app.state || null, app.dob || null, app.address || null, app.phone || null, app.zip_code || null, c.id);
 }
 
-function upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob }) {
+function upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob, license_number }) {
   if (!email) return;
   const existing = db.prepare('SELECT id FROM customers WHERE lower(email) = lower(?)').get(email);
   if (existing) {
@@ -388,15 +397,16 @@ function upsertCustomer({ email, first_name, last_name, phone, address, city, st
         zip_code = COALESCE(zip_code, ?),
         address = COALESCE(address, ?),
         dob = COALESCE(dob, ?),
-        phone = COALESCE(phone, ?)
+        phone = COALESCE(phone, ?),
+        license_number = COALESCE(license_number, ?)
       WHERE id = ?
-    `).run(city || null, state || null, zip_code || null, address || null, dob || null, phone || null, existing.id);
+    `).run(city || null, state || null, zip_code || null, address || null, dob || null, phone || null, license_number || null, existing.id);
     return existing.id;
   }
   const result = db.prepare(`
-    INSERT INTO customers (email, first_name, last_name, phone, address, city, state, zip_code, dob)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(email, first_name || null, last_name || null, phone || null, address || null, city || null, state || null, zip_code || null, dob || null);
+    INSERT INTO customers (email, first_name, last_name, phone, address, city, state, zip_code, dob, license_number)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(email, first_name || null, last_name || null, phone || null, address || null, city || null, state || null, zip_code || null, dob || null, license_number || null);
   return result.lastInsertRowid;
 }
 

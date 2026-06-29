@@ -50,7 +50,7 @@ router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (r
   if (assignedVehicleId) {
     db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ? AND status = 'available'").run(assignedVehicleId);
   }
-  upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob });
+  upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob, license_number });
   logActivity(appId, `New application submitted by ${first_name} ${last_name}`);
   queueMessage(appId, 'sms', phone, "We've received your application and are currently reviewing it.");
 
@@ -498,7 +498,7 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
 
   const appId = result.lastInsertRowid;
   db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ?").run(assigned_vehicle_id);
-  upsertCustomer({ email, first_name, last_name, phone, address, dob });
+  upsertCustomer({ email, first_name, last_name, phone, address, dob, license_number });
   logActivity(appId, `Manual reservation created for ${first_name} ${last_name} — ${vehicle.make} ${vehicle.model} at $${weekly_rate}/week`);
 
   res.status(201).json({ id: appId, message: 'Reservation created' });

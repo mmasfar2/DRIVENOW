@@ -78,7 +78,7 @@ router.get('/by-email/:email', requireAuth, (req, res) => {
 });
 
 router.patch('/:id', requireAuth, (req, res) => {
-  const allowed = ['first_name', 'last_name', 'phone', 'address', 'city', 'state', 'zip_code', 'dob', 'internal_notes', 'blacklisted'];
+  const allowed = ['first_name', 'last_name', 'phone', 'address', 'city', 'state', 'zip_code', 'dob', 'internal_notes', 'blacklisted', 'license_number', 'insurance_company', 'insurance_policy_number'];
   const updates = [];
   const params = [];
   for (const key of allowed) {
