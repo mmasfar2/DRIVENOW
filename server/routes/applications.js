@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { db, logActivity, queueMessage, upsertCustomer } = require('../db');
+const { db, logActivity, queueMessage, upsertCustomer, logUndo } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
 
@@ -403,6 +403,30 @@ router.post('/:id/revert-arrival', requireAuth, (req, res) => {
     db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ?").run(app.assigned_vehicle_id);
   }
   logActivity(id, 'Booking sent back to potential arrivals');
+  res.json({ ok: true });
+});
+
+// ── AUTHED: Delete a reservation/booking entirely ──
+router.delete('/:id', requireAuth, (req, res) => {
+  const id = req.params.id;
+  const application = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
+  if (!application) return res.status(404).json({ error: 'Not found' });
+
+  const payments = db.prepare('SELECT * FROM payments WHERE application_id = ?').all(id);
+  const activity = db.prepare('SELECT * FROM activity_log WHERE application_id = ?').all(id);
+  const messages = db.prepare('SELECT * FROM messages_outbox WHERE application_id = ?').all(id);
+  const notes = db.prepare('SELECT * FROM booking_notes WHERE application_id = ?').all(id);
+
+  logUndo('application_delete', `Removed reservation for ${application.first_name} ${application.last_name}`, { application, payments, activity, messages, notes });
+
+  if (application.assigned_vehicle_id) {
+    db.prepare("UPDATE vehicles SET status = 'available' WHERE id = ? AND status IN ('reserved', 'rented')").run(application.assigned_vehicle_id);
+  }
+  db.prepare('DELETE FROM payments WHERE application_id = ?').run(id);
+  db.prepare('DELETE FROM activity_log WHERE application_id = ?').run(id);
+  db.prepare('DELETE FROM messages_outbox WHERE application_id = ?').run(id);
+  db.prepare('DELETE FROM booking_notes WHERE application_id = ?').run(id);
+  db.prepare('DELETE FROM applications WHERE id = ?').run(id);
   res.json({ ok: true });
 });
 
