@@ -54,6 +54,8 @@
         <div class="field-row"><div class="field"><label>City</label><input id="cd-f-city"></div><div class="field"><label>State</label><input id="cd-f-state"></div></div>
         <div class="field"><label>ZIP Code</label><input id="cd-f-zip"></div>
         <div class="field"><label>Date of Birth</label><input type="date" id="cd-f-dob"></div>
+        <div class="field"><label>License Number</label><input id="cd-f-license"></div>
+        <div class="field-row"><div class="field"><label>Insurance Company</label><input id="cd-f-ins-company"></div><div class="field"><label>Insurance Policy #</label><input id="cd-f-ins-policy"></div></div>
         <button class="btn" id="cd-save-btn">Save Changes</button>
       </div>
 
@@ -137,6 +139,7 @@ function render() {
     <div class="info-row"><div class="info-row__label">State</div><div class="info-row__val">${customer.state || '—'}</div></div>
     <div class="info-row"><div class="info-row__label">ZIP Code</div><div class="info-row__val">${customer.zip_code || '—'}</div></div>
     <div class="info-row"><div class="info-row__label">Date of Birth</div><div class="info-row__val">${customer.dob ? fmtDate(customer.dob) : '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">License Number</div><div class="info-row__val">${customer.license_number || '—'}</div></div>
   `;
 
   const firstBooking = customer.bookings[customer.bookings.length - 1];
@@ -148,6 +151,8 @@ function render() {
 
   document.getElementById('cd-insurance').innerHTML = `
     <div class="info-row"><div class="info-row__label">Status</div><div class="info-row__val"><span class="badge badge-reserved">Not Verified</span></div></div>
+    <div class="info-row"><div class="info-row__label">Insurance Company</div><div class="info-row__val">${customer.insurance_company || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">Policy Number</div><div class="info-row__val">${customer.insurance_policy_number || '—'}</div></div>
     <div class="info-row"><div class="info-row__label">Upload</div><div class="info-row__val">${filePreviewHtml(latestBooking?.insurance_path)}</div></div>
     ${firstBooking ? `<a href="reservation-detail.html?id=${firstBooking.id}" style="font-size:0.82rem;">↗ From booking #${String(firstBooking.id).padStart(3, '0')}</a>` : ''}
   `;
@@ -230,6 +235,9 @@ document.getElementById('cd-edit-btn').addEventListener('click', () => {
   document.getElementById('cd-f-state').value = customer.state || '';
   document.getElementById('cd-f-zip').value = customer.zip_code || '';
   document.getElementById('cd-f-dob').value = customer.dob ? customer.dob.slice(0, 10) : '';
+  document.getElementById('cd-f-license').value = customer.license_number || '';
+  document.getElementById('cd-f-ins-company').value = customer.insurance_company || '';
+  document.getElementById('cd-f-ins-policy').value = customer.insurance_policy_number || '';
   document.getElementById('cd-contact-view').style.display = 'none';
   document.getElementById('cd-contact-edit').style.display = '';
   document.getElementById('cd-edit-btn').textContent = 'Cancel';
@@ -245,6 +253,9 @@ document.getElementById('cd-save-btn').addEventListener('click', async () => {
     state: document.getElementById('cd-f-state').value,
     zip_code: document.getElementById('cd-f-zip').value,
     dob: document.getElementById('cd-f-dob').value || null,
+    license_number: document.getElementById('cd-f-license').value,
+    insurance_company: document.getElementById('cd-f-ins-company').value,
+    insurance_policy_number: document.getElementById('cd-f-ins-policy').value,
   })});
   document.getElementById('cd-contact-edit').style.display = 'none';
   document.getElementById('cd-contact-view').style.display = '';
