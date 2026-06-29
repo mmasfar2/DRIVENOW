@@ -524,7 +524,10 @@ function renderList() {
             </div>
           ` : ''}
         </td>
-        <td><a href="reservation-detail.html?id=${b.id}" class="resv-table__view" title="View">${icon('eye', 16)}</a></td>
+        <td style="display:flex;gap:2px;">
+          <a href="reservation-detail.html?id=${b.id}" class="resv-table__view" title="View">${icon('eye', 16)}</a>
+          <button class="resv-table__view resv-table__delete-btn" data-id="${b.id}" title="Delete" style="background:none;border:none;cursor:pointer;">${icon('trash', 16)}</button>
+        </td>
       </tr>
     `;
   }).join('');
@@ -570,6 +573,14 @@ function renderList() {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       await api(`/api/applications/${btn.dataset.id}/revert-arrival`, { method: 'POST' });
+      await reloadBookings();
+    });
+  });
+  document.querySelectorAll('.resv-table__delete-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm('Delete this reservation? This cannot be undone from here.')) return;
+      await api(`/api/applications/${btn.dataset.id}`, { method: 'DELETE' });
       await reloadBookings();
     });
   });
