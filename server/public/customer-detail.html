@@ -149,12 +149,19 @@ function render() {
     <div class="info-row"><div class="info-row__label">License</div><div class="info-row__val">${filePreviewHtml(latestBooking?.license_path)}</div></div>
   `;
 
+  // The Insurance panel — synced with the Insurance admin page (insurance.html /
+  // insurance-detail.html), which is the single place these records are
+  // created/edited, so this stays consistent with what shows up there.
+  const INS_TYPE_LABELS = { our_policy: 'Our Policy', private: 'Private' };
   document.getElementById('cd-insurance').innerHTML = `
-    <div class="info-row"><div class="info-row__label">Status</div><div class="info-row__val"><span class="badge badge-reserved">Not Verified</span></div></div>
-    <div class="info-row"><div class="info-row__label">Insurance Company</div><div class="info-row__val">${customer.insurance_company || '—'}</div></div>
-    <div class="info-row"><div class="info-row__label">Policy Number</div><div class="info-row__val">${customer.insurance_policy_number || '—'}</div></div>
-    <div class="info-row"><div class="info-row__label">Upload</div><div class="info-row__val">${filePreviewHtml(latestBooking?.insurance_path)}</div></div>
-    ${firstBooking ? `<a href="reservation-detail.html?id=${firstBooking.id}" style="font-size:0.82rem;">↗ From booking #${String(firstBooking.id).padStart(3, '0')}</a>` : ''}
+    ${customer.insurance_records.length ? customer.insurance_records.map(r => `
+      <a href="insurance-detail.html?id=${r.id}" class="info-row" style="text-decoration:none;color:inherit;">
+        <div class="info-row__label"><span class="badge ${r.type === 'our_policy' ? 'badge-reserved' : 'badge-available'}">${INS_TYPE_LABELS[r.type] || r.type}</span></div>
+        <div class="info-row__val">${r.carrier || 'No carrier on file'}${r.protection_type ? ` · ${r.protection_type}` : ''} →</div>
+      </a>
+    `).join('') : '<p class="rd-empty" style="padding:0;">No insurance records on file yet</p>'}
+    <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Legacy Booking Upload</div><div class="info-row__val">${filePreviewHtml(latestBooking?.insurance_path)}</div></div>
+    <a href="insurance.html?section=our_policies" style="font-size:0.82rem;">+ Add insurance record →</a>
   `;
 
   const RENTAL_DURATION_LABELS = {

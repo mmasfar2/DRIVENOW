@@ -119,7 +119,11 @@
   </div>
 
   <div id="rd-panel-documents" style="display:none;">
-    <div class="panel"><div class="panel-title">Documents</div><p class="rd-empty">Signed agreements, uploaded license, and insurance documents will appear here.</p></div>
+    <div class="panel"><div class="panel-title">Documents</div><p class="rd-empty">Signed agreements and uploaded license documents will appear here.</p></div>
+    <div class="panel">
+      <div class="panel-title">Insurance</div>
+      <div id="rd-insurance-list"></div>
+    </div>
   </div>
 </div>
 </div>
@@ -234,10 +238,26 @@ function balanceDisplay(n) {
 
 let vehiclePhotos = [];
 
+let insuranceRecords = [];
+
 async function load() {
   booking = await api(`/api/applications/${id}/detail`);
   vehiclePhotos = booking.vehicle_id ? await api(`/api/vehicles/${booking.vehicle_id}/photos`) : [];
+  insuranceRecords = booking.email ? await api(`/api/insurance/by-customer-email/${encodeURIComponent(booking.email)}`) : [];
   render();
+}
+
+const INS_TYPE_LABELS = { our_policy: 'Our Policy', private: 'Private' };
+function renderInsurance() {
+  const box = document.getElementById('rd-insurance-list');
+  box.innerHTML = insuranceRecords.length
+    ? insuranceRecords.map(r => `
+      <a href="insurance-detail.html?id=${r.id}" class="info-row" style="text-decoration:none;color:inherit;">
+        <div class="info-row__label"><span class="badge ${r.type === 'our_policy' ? 'badge-reserved' : 'badge-available'}">${INS_TYPE_LABELS[r.type] || r.type}</span></div>
+        <div class="info-row__val">${r.carrier || 'No carrier on file'}${r.protection_type ? ` · ${r.protection_type}` : ''} →</div>
+      </a>
+    `).join('')
+    : `<p class="rd-empty">No insurance on file for this customer — <a href="insurance.html?section=our_policies">add a record →</a></p>`;
 }
 
 function renderVehiclePhotos() {
@@ -313,6 +333,7 @@ function render() {
   renderNotes();
   renderPaymentLog();
   renderDepositLog();
+  renderInsurance();
   initBreakdown();
   renderBreakdown();
   initFinCal();

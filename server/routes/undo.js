@@ -63,6 +63,12 @@ router.post('/', requireAuth, (req, res) => {
     const { previous } = payload;
     db.prepare('UPDATE payments SET amount = ?, paid_at = ?, method = ?, processing_fee = ? WHERE id = ?')
       .run(previous.amount, previous.paid_at, previous.method, previous.processing_fee, previous.id);
+  } else if (row.entity_type === 'insurance_delete') {
+    const { record } = payload;
+    db.prepare(`
+      INSERT INTO insurance_records (id, customer_id, type, carrier, protection_type, policy_number, document_path, last_verified_at, next_payment_date, notes, created_at, updated_at)
+      VALUES (@id, @customer_id, @type, @carrier, @protection_type, @policy_number, @document_path, @last_verified_at, @next_payment_date, @notes, @created_at, @updated_at)
+    `).run(record);
   }
 
   db.prepare('DELETE FROM undo_log WHERE id = ?').run(row.id);
