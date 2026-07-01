@@ -136,6 +136,8 @@ CREATE TABLE IF NOT EXISTS payments (
   application_id INTEGER NOT NULL,
   amount REAL NOT NULL,
   paid_at TEXT NOT NULL,
+  method TEXT NOT NULL DEFAULT 'cash', -- cash | card
+  processing_fee REAL NOT NULL DEFAULT 0,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (application_id) REFERENCES applications(id)
 );
@@ -263,6 +265,14 @@ if (!vehicleCols.includes('next_service_at')) {
 const maintenanceCols = db.prepare("PRAGMA table_info(vehicle_maintenance)").all().map(c => c.name);
 if (!maintenanceCols.includes('category')) {
   db.exec('ALTER TABLE vehicle_maintenance ADD COLUMN category TEXT');
+}
+
+const paymentCols = db.prepare("PRAGMA table_info(payments)").all().map(c => c.name);
+if (!paymentCols.includes('method')) {
+  db.exec("ALTER TABLE payments ADD COLUMN method TEXT NOT NULL DEFAULT 'cash'");
+}
+if (!paymentCols.includes('processing_fee')) {
+  db.exec('ALTER TABLE payments ADD COLUMN processing_fee REAL NOT NULL DEFAULT 0');
 }
 
 db.exec(`

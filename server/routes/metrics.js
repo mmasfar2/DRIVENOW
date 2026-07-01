@@ -50,6 +50,19 @@ router.get('/cashflow', requireAuth, (req, res) => {
     SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE paid_at >= ? AND paid_at <= ?
   `).get(monthStartStr, todayStr).total;
 
+  // Card processing fees are collected on top of rental revenue (not counted
+  // toward a renter's balance) — tracked separately so they can be reconciled
+  // against the processor's statement instead of mixed into rental income.
+  const feesToday = db.prepare(`
+    SELECT COALESCE(SUM(processing_fee), 0) as total FROM payments WHERE paid_at = ? AND method = 'card'
+  `).get(todayStr).total;
+  const feesWeek = db.prepare(`
+    SELECT COALESCE(SUM(processing_fee), 0) as total FROM payments WHERE paid_at >= ? AND paid_at <= ? AND method = 'card'
+  `).get(weekStartStr, todayStr).total;
+  const feesMonth = db.prepare(`
+    SELECT COALESCE(SUM(processing_fee), 0) as total FROM payments WHERE paid_at >= ? AND paid_at <= ? AND method = 'card'
+  `).get(monthStartStr, todayStr).total;
+
   const expensesToday = db.prepare(`
     SELECT COALESCE(SUM(cost), 0) as total FROM vehicle_maintenance WHERE performed_at = ?
   `).get(todayStr).total;
@@ -65,18 +78,21 @@ router.get('/cashflow', requireAuth, (req, res) => {
       expected: expectedDailyTotal,
       actual: actualToday,
       expenses: expensesToday,
+      cardFees: feesToday,
     },
     weekly: {
       expected: expectedDailyTotal * daysElapsedThisWeek,
       expectedFull: expectedDailyTotal * 7,
       actual: actualWeek,
       expenses: expensesWeek,
+      cardFees: feesWeek,
     },
     monthly: {
       expected: expectedDailyTotal * daysElapsedThisMonth,
       expectedFull: expectedDailyTotal * daysInThisMonth,
       actual: actualMonth,
       expenses: expensesMonth,
+      cardFees: feesMonth,
     },
   };
   for (const p of Object.values(periods)) {

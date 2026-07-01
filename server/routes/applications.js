@@ -298,15 +298,18 @@ router.get('/:id/payments', requireAuth, (req, res) => {
 });
 
 router.post('/:id/payments', requireAuth, (req, res) => {
-  const { amount, paid_at } = req.body;
+  const { amount, paid_at, method, processing_fee } = req.body;
   const id = req.params.id;
   const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
   if (!app) return res.status(404).json({ error: 'Not found' });
   if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'A valid amount is required' });
 
-  db.prepare('INSERT INTO payments (application_id, amount, paid_at) VALUES (?, ?, ?)')
-    .run(id, amount, paid_at || new Date().toISOString().slice(0, 10));
-  logActivity(id, `Payment of $${amount} recorded`);
+  const paymentMethod = method === 'card' ? 'card' : 'cash';
+  const fee = paymentMethod === 'card' ? Math.max(0, Number(processing_fee) || 0) : 0;
+
+  db.prepare('INSERT INTO payments (application_id, amount, paid_at, method, processing_fee) VALUES (?, ?, ?, ?, ?)')
+    .run(id, amount, paid_at || new Date().toISOString().slice(0, 10), paymentMethod, fee);
+  logActivity(id, `Payment of $${amount} recorded (${paymentMethod}${fee ? `, +$${fee} processing fee` : ''})`);
   res.status(201).json({ ok: true });
 });
 
@@ -324,10 +327,11 @@ router.get('/:id/detail', requireAuth, (req, res) => {
   const payments = db.prepare('SELECT * FROM payments WHERE application_id = ? ORDER BY paid_at DESC, id DESC').all(req.params.id);
   const notes = db.prepare('SELECT * FROM booking_notes WHERE application_id = ? ORDER BY created_at DESC').all(req.params.id);
   const paidTotal = Math.round(payments.reduce((sum, p) => sum + Number(p.amount), 0) * 100) / 100;
+  const feesTotal = Math.round(payments.reduce((sum, p) => sum + Number(p.processing_fee || 0), 0) * 100) / 100;
   const charge = row.invoice_amount || row.total_due_at_pickup || 0;
   const owed = row.status === 'active' ? Math.max(0, Math.round((charge - paidTotal) * 100) / 100) : 0;
 
-  res.json({ ...row, payments, paid_total: paidTotal, owed, notes });
+  res.json({ ...row, payments, paid_total: paidTotal, fees_total: feesTotal, owed, notes });
 });
 
 // ── AUTHED: Booking notes (internal, VA/owner only) ──
