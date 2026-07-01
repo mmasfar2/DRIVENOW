@@ -314,10 +314,10 @@ router.post('/:id/payments', requireAuth, (req, res) => {
 });
 
 // ── AUTHED: Security Deposits — held separately from rental payments so they
-// never flow into revenue reporting. A deposit is collected as 'held', then
-// later resolved into some refunded amount and/or some forfeited amount. Any
-// forfeited amount is booked as a real payment at resolution time, so it only
-// becomes revenue at the point the business actually decides to keep it. ──
+// never flow into rent balances or revenue reporting. A deposit is collected
+// as 'held', then later resolved into some refunded amount and/or some
+// forfeited amount (see /:id/deposits/:depositId/resolve for how forfeited
+// amounts are reported). ──
 router.get('/:id/deposits', requireAuth, (req, res) => {
   const rows = db.prepare('SELECT * FROM deposits WHERE application_id = ? ORDER BY collected_at DESC, id DESC').all(req.params.id);
   res.json(rows);
