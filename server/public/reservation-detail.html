@@ -219,16 +219,17 @@ function fmtFinCalDate(dateStr) {
 }
 
 function fmtExact(n) {
-  return '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const num = Number(n || 0);
+  const sign = num < 0 ? '-' : '';
+  return sign + '$' + Math.abs(num).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-// Signed balance -> a label + magnitude to display, positive is money owed,
-// negative is an overpayment (credit) that should read as a credit, not a
-// negative dollar amount.
+// Signed balance -> a normalized amount plus whether it's gone negative
+// (customer overpaid). The label stays whatever each panel already calls
+// it ("Balance Owed" / "Balance Due") — only the number goes negative.
 function balanceDisplay(n) {
   const v = Math.round(Number(n || 0) * 100) / 100;
-  if (v < 0) return { label: 'Credit', amount: Math.abs(v), isCredit: true };
-  return { label: 'Balance Owed', amount: v, isCredit: false };
+  return { amount: v, isCredit: v < 0 };
 }
 
 let vehiclePhotos = [];
@@ -292,7 +293,7 @@ function render() {
     <div class="rd-charge-row"><span>Sales Tax (7.25%)</span><span>${fmtExact(salesTax)}</span></div>
     <div class="rd-charge-row--total"><span>Total</span><span>${fmtExact(booking.charge)}</span></div>
     <div class="rd-charge-row--collected"><span>Collected</span><span>${fmtExact(booking.paid_total)}</span></div>
-    <div class="rd-charge-row--balance${bal.isCredit ? ' is-credit' : ''}"><span>${bal.label}</span><span>${fmtExact(bal.amount)}</span></div>
+    <div class="rd-charge-row--balance${bal.isCredit ? ' is-credit' : ''}"><span>Balance Owed</span><span>${fmtExact(bal.amount)}</span></div>
   `;
 
   document.getElementById('rd-cust-name').innerHTML = `<a href="customer-detail.html?email=${encodeURIComponent(booking.email)}" style="color:inherit;">${booking.first_name} ${booking.last_name}</a>`;
@@ -561,7 +562,7 @@ function updateInvoiceTotals() {
   document.getElementById('invoice-total-display').textContent = `Invoice Total: ${fmtExact(getInvoiceTotal())}`;
   const bal = balanceDisplay(getBalanceDue());
   const balEl = document.getElementById('balance-due-display');
-  balEl.textContent = `${bal.label}: ${fmtExact(bal.amount)}`;
+  balEl.textContent = `Balance Due: ${fmtExact(bal.amount)}`;
   balEl.classList.toggle('is-credit', bal.isCredit);
 }
 
@@ -573,7 +574,7 @@ function renderBreakdown() {
       <div>Invoice Adjustments</div>
       <div>
         <div id="invoice-total-display">Invoice Total: ${fmtExact(getInvoiceTotal())}</div>
-        <div id="balance-due-display" class="payment-breakdown-header__balance${bal.isCredit ? ' is-credit' : ''}">${bal.label}: ${fmtExact(bal.amount)}</div>
+        <div id="balance-due-display" class="payment-breakdown-header__balance${bal.isCredit ? ' is-credit' : ''}">Balance Due: ${fmtExact(bal.amount)}</div>
       </div>
     </div>
     ${paymentBreakdownItems.map((item, i) => `
@@ -658,10 +659,8 @@ function updatePaymentFeePreview() {
 
   const amount = Number(document.getElementById('ap-amount').value) || 0;
   const before = balanceBeforeThisPayment();
-  const beforeDisplay = balanceDisplay(before);
-  const afterDisplay = balanceDisplay(Math.round((before - amount) * 100) / 100);
-  document.getElementById('ap-current-balance').textContent = `${beforeDisplay.label}: ${fmtExact(beforeDisplay.amount)}`;
-  document.getElementById('ap-remaining-balance').textContent = `${afterDisplay.label}: ${fmtExact(afterDisplay.amount)}`;
+  document.getElementById('ap-current-balance').textContent = fmtExact(before);
+  document.getElementById('ap-remaining-balance').textContent = fmtExact(Math.round((before - amount) * 100) / 100);
 }
 
 function openPaymentModal(paymentId) {

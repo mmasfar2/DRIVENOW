@@ -156,7 +156,9 @@ async function logout() {
 }
 
 function fmtMoney(n) {
-  return '$' + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const num = Number(n || 0);
+  const sign = num < 0 ? '-' : '';
+  return sign + '$' + Math.abs(num).toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 
 function fmtDate(d) {
