@@ -510,7 +510,7 @@ function renderList() {
         </td>
         <td>
           ${b.bucket !== 'upcoming' ? `<button class="btn btn-sm resv-table__pay-btn" data-id="${b.id}">Payment</button>` : ''}
-          <div class="resv-table__balance ${owed > 0 ? 'resv-table__balance--due' : owed < 0 ? 'resv-table__balance--credit' : ''}">${owed < 0 ? `Credit ${fmtMoney(Math.abs(owed))}` : fmtMoney(owed)}</div>
+          <div class="resv-table__balance ${owed > 0 ? 'resv-table__balance--due' : owed < 0 ? 'resv-table__balance--credit' : ''}">${fmtMoney(owed)}</div>
         </td>
         <td>
           ${b.bucket === 'potential_arrival' ? `<button class="btn btn-sm resv-table__complete-btn" data-id="${b.id}">Approve</button>` : ''}
