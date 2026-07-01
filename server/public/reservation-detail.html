@@ -97,6 +97,17 @@
         <button class="btn" id="rd-add-payment-btn">Add Payment</button>
       </div>
     </div>
+
+    <div class="panel">
+      <div class="panel-title">Security Deposit</div>
+      <table>
+        <thead><tr><th>Collected</th><th>Method</th><th style="text-align:right;">Amount</th><th>Status</th><th style="text-align:right;">Refunded</th><th style="text-align:right;">Forfeited</th><th></th></tr></thead>
+        <tbody id="rd-deposit-log-body"></tbody>
+      </table>
+      <div class="payment-log-actions">
+        <button class="btn" id="rd-add-deposit-btn">Collect Deposit</button>
+      </div>
+    </div>
   </div>
 
   <div id="rd-panel-communications" style="display:none;">
@@ -138,6 +149,52 @@
         </div>
       </div>
       <button class="btn btn-block" id="ap-submit">Save Payment</button>
+    </div>
+  </div>
+</div>
+
+<div id="add-deposit-overlay" class="simple-modal-overlay" style="display:none;">
+  <div class="simple-modal">
+    <div class="simple-modal__header">
+      <div class="simple-modal__title">Collect Security Deposit</div>
+      <button class="simple-modal__close" id="add-deposit-close">&times;</button>
+    </div>
+    <div class="simple-modal__body">
+      <div class="field"><label>Date Collected</label><input type="date" id="ad-date"></div>
+      <div class="field"><label>Deposit Amount ($)</label><input type="number" id="ad-amount" step="0.01"></div>
+      <div class="field"><label>Payment Method</label>
+        <select id="ad-method">
+          <option value="cash">Cash</option>
+          <option value="card">Card</option>
+        </select>
+      </div>
+      <div class="field" id="ad-fee-field" style="display:none;">
+        <label>Card Processing Fee (%)</label>
+        <input type="number" id="ad-fee-rate" step="0.1" min="0" value="3">
+        <div style="font-size:0.8rem;color:#666;margin-top:6px;">
+          Fee charged to customer: <strong id="ad-fee-amount">$0.00</strong><br>
+          Total to collect: <strong id="ad-total-amount">$0.00</strong>
+        </div>
+      </div>
+      <div style="font-size:0.8rem;color:#666;margin-bottom:14px;">Held as a refundable liability — it will not count toward rental revenue.</div>
+      <button class="btn btn-block" id="ad-submit">Save Deposit</button>
+    </div>
+  </div>
+</div>
+
+<div id="resolve-deposit-overlay" class="simple-modal-overlay" style="display:none;">
+  <div class="simple-modal">
+    <div class="simple-modal__header">
+      <div class="simple-modal__title">Resolve Security Deposit</div>
+      <button class="simple-modal__close" id="resolve-deposit-close">&times;</button>
+    </div>
+    <div class="simple-modal__body">
+      <div style="font-size:0.85rem;color:#444;margin-bottom:14px;">Deposit amount: <strong id="rs-deposit-amount"></strong></div>
+      <div class="field"><label>Refund to Customer ($)</label><input type="number" id="rs-refund" step="0.01"></div>
+      <div class="field"><label>Forfeited / Kept ($)</label><input type="number" id="rs-forfeit" step="0.01"></div>
+      <div class="field"><label>Notes (e.g. reason for forfeiture)</label><textarea id="rs-notes" rows="2"></textarea></div>
+      <div style="font-size:0.8rem;color:#666;margin-bottom:14px;">Refund + forfeited must add up to the deposit amount. Any forfeited amount is recorded as revenue at this point.</div>
+      <button class="btn btn-block" id="rs-submit">Save Resolution</button>
     </div>
   </div>
 </div>
@@ -235,6 +292,7 @@ function render() {
 
   renderNotes();
   renderPaymentLog();
+  renderDepositLog();
   initBreakdown();
   renderBreakdown();
   initFinCal();
@@ -273,6 +331,34 @@ function renderPaymentLog() {
   feesSummary.textContent = booking.fees_total
     ? `Card processing fees collected to date: ${fmtExact(booking.fees_total)}`
     : '';
+}
+
+function depositStatusBadge(d) {
+  if (d.status === 'held') return '<span class="badge badge-reserved">Held</span>';
+  if (Number(d.forfeited_amount) > 0 && Number(d.refunded_amount) > 0) return '<span class="badge badge-completed">Partially Refunded</span>';
+  if (Number(d.forfeited_amount) > 0) return '<span class="badge badge-rejected">Forfeited</span>';
+  return '<span class="badge badge-completed">Refunded</span>';
+}
+
+function renderDepositLog() {
+  const body = document.getElementById('rd-deposit-log-body');
+  body.innerHTML = booking.deposits.length
+    ? booking.deposits.map(d => `
+      <tr>
+        <td>${fmtDate(d.collected_at)}</td>
+        <td><span class="badge ${d.method === 'card' ? 'badge-reserved' : 'badge-available'}">${d.method === 'card' ? 'Card' : 'Cash'}</span></td>
+        <td style="text-align:right;font-weight:600;">${fmtExact(d.amount)}</td>
+        <td>${depositStatusBadge(d)}</td>
+        <td style="text-align:right;">${d.refunded_amount ? fmtExact(d.refunded_amount) : '—'}</td>
+        <td style="text-align:right;">${d.forfeited_amount ? fmtExact(d.forfeited_amount) : '—'}</td>
+        <td>${d.status === 'held' ? `<button class="btn btn-outline resolve-deposit-btn" data-id="${d.id}" style="padding:4px 10px;font-size:0.72rem;">Resolve</button>` : ''}</td>
+      </tr>
+    `).join('')
+    : `<tr><td colspan="7" style="text-align:center;color:#888;padding:24px;">No security deposit collected yet.</td></tr>`;
+
+  body.querySelectorAll('.resolve-deposit-btn').forEach(btn => {
+    btn.addEventListener('click', () => openResolveDepositModal(Number(btn.dataset.id)));
+  });
 }
 
 function initFinCal() {
@@ -526,6 +612,81 @@ document.getElementById('ap-submit').addEventListener('click', async () => {
   const processing_fee = method === 'card' ? Math.round(Number(amount) * (rate / 100) * 100) / 100 : 0;
   await api(`/api/applications/${id}/payments`, { method: 'POST', body: JSON.stringify({ amount, paid_at, method, processing_fee }) });
   document.getElementById('add-payment-overlay').style.display = 'none';
+  await load();
+});
+
+function updateDepositFeePreview() {
+  const method = document.getElementById('ad-method').value;
+  const feeField = document.getElementById('ad-fee-field');
+  feeField.style.display = method === 'card' ? '' : 'none';
+  if (method !== 'card') return;
+  const amount = Number(document.getElementById('ad-amount').value) || 0;
+  const rate = Number(document.getElementById('ad-fee-rate').value) || 0;
+  const fee = Math.round(amount * (rate / 100) * 100) / 100;
+  document.getElementById('ad-fee-amount').textContent = fmtExact(fee);
+  document.getElementById('ad-total-amount').textContent = fmtExact(amount + fee);
+}
+
+document.getElementById('rd-add-deposit-btn').addEventListener('click', () => {
+  document.getElementById('ad-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('ad-amount').value = '';
+  document.getElementById('ad-method').value = 'cash';
+  document.getElementById('ad-fee-rate').value = DEFAULT_CARD_FEE_RATE;
+  updateDepositFeePreview();
+  document.getElementById('add-deposit-overlay').style.display = 'flex';
+});
+document.getElementById('add-deposit-close').addEventListener('click', () => {
+  document.getElementById('add-deposit-overlay').style.display = 'none';
+});
+document.getElementById('add-deposit-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'add-deposit-overlay') e.target.style.display = 'none';
+});
+document.getElementById('ad-method').addEventListener('change', updateDepositFeePreview);
+document.getElementById('ad-amount').addEventListener('input', updateDepositFeePreview);
+document.getElementById('ad-fee-rate').addEventListener('input', updateDepositFeePreview);
+document.getElementById('ad-submit').addEventListener('click', async () => {
+  const amount = document.getElementById('ad-amount').value;
+  const collected_at = document.getElementById('ad-date').value;
+  const method = document.getElementById('ad-method').value;
+  if (!amount || Number(amount) <= 0) { alert('Enter a valid amount'); return; }
+  const rate = Number(document.getElementById('ad-fee-rate').value) || 0;
+  const processing_fee = method === 'card' ? Math.round(Number(amount) * (rate / 100) * 100) / 100 : 0;
+  await api(`/api/applications/${id}/deposits`, { method: 'POST', body: JSON.stringify({ amount, collected_at, method, processing_fee }) });
+  document.getElementById('add-deposit-overlay').style.display = 'none';
+  await load();
+});
+
+let resolvingDepositId = null;
+function openResolveDepositModal(depositId) {
+  const deposit = booking.deposits.find(d => d.id === depositId);
+  if (!deposit) return;
+  resolvingDepositId = depositId;
+  document.getElementById('rs-deposit-amount').textContent = fmtExact(deposit.amount);
+  document.getElementById('rs-refund').value = deposit.amount;
+  document.getElementById('rs-forfeit').value = 0;
+  document.getElementById('rs-notes').value = '';
+  document.getElementById('resolve-deposit-overlay').style.display = 'flex';
+}
+document.getElementById('resolve-deposit-close').addEventListener('click', () => {
+  document.getElementById('resolve-deposit-overlay').style.display = 'none';
+});
+document.getElementById('resolve-deposit-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'resolve-deposit-overlay') e.target.style.display = 'none';
+});
+document.getElementById('rs-submit').addEventListener('click', async () => {
+  const deposit = booking.deposits.find(d => d.id === resolvingDepositId);
+  const refund_amount = Number(document.getElementById('rs-refund').value) || 0;
+  const forfeit_amount = Number(document.getElementById('rs-forfeit').value) || 0;
+  const notes = document.getElementById('rs-notes').value;
+  if (Math.round((refund_amount + forfeit_amount) * 100) !== Math.round(deposit.amount * 100)) {
+    alert(`Refund + forfeited must add up to ${fmtExact(deposit.amount)}`);
+    return;
+  }
+  await api(`/api/applications/${id}/deposits/${resolvingDepositId}/resolve`, {
+    method: 'POST',
+    body: JSON.stringify({ refund_amount, forfeit_amount, notes }),
+  });
+  document.getElementById('resolve-deposit-overlay').style.display = 'none';
   await load();
 });
 

@@ -25,6 +25,10 @@
       <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;">Expected Daily Total</div>
       <div style="font-size:1.6rem;font-weight:800;" id="m-expected-daily">—</div>
     </div>
+    <div>
+      <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;">Security Deposits Held</div>
+      <div style="font-size:1.6rem;font-weight:800;" id="m-deposits-held">—</div>
+    </div>
   </div>
 
   <div id="period-cards"></div>
@@ -87,6 +91,10 @@ function periodCard(title, p, sub) {
           <div style="font-size:1.3rem;font-weight:800;" class="${p.cardFees ? 'text-green' : ''}">${p.cardFees ? '+' : ''}${fmtMoney(p.cardFees)}</div>
         </div>
         <div>
+          <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.06em;">Deposit Forfeitures</div>
+          <div style="font-size:1.3rem;font-weight:800;" class="${p.depositForfeitures ? 'text-green' : ''}">${p.depositForfeitures ? '+' : ''}${fmtMoney(p.depositForfeitures)}</div>
+        </div>
+        <div>
           <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.06em;">P&amp;L (Variance)</div>
           <div style="font-size:1.3rem;font-weight:800;" class="${color}">${positive ? '+' : ''}${fmtMoney(p.variance)} <span style="font-size:0.85rem;font-weight:600;">(${pct(p.variance, p.expected)})</span></div>
         </div>
@@ -105,6 +113,7 @@ async function load() {
 
   document.getElementById('m-active-count').textContent = data.activeRenters.length;
   document.getElementById('m-expected-daily').textContent = fmtMoney(data.expectedDailyTotal);
+  document.getElementById('m-deposits-held').textContent = fmtMoney(data.depositsHeld);
 
   document.getElementById('period-cards').innerHTML = [
     periodCard('Daily', data.periods.daily),

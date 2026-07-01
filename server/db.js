@@ -142,6 +142,22 @@ CREATE TABLE IF NOT EXISTS payments (
   FOREIGN KEY (application_id) REFERENCES applications(id)
 );
 
+CREATE TABLE IF NOT EXISTS deposits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  application_id INTEGER NOT NULL,
+  amount REAL NOT NULL,
+  method TEXT NOT NULL DEFAULT 'cash', -- cash | card
+  processing_fee REAL NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'held', -- held | resolved
+  collected_at TEXT NOT NULL,
+  refunded_amount REAL NOT NULL DEFAULT 0,
+  forfeited_amount REAL NOT NULL DEFAULT 0,
+  resolved_at TEXT,
+  notes TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (application_id) REFERENCES applications(id)
+);
+
 CREATE TABLE IF NOT EXISTS maintenance_photos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   maintenance_id INTEGER NOT NULL,
