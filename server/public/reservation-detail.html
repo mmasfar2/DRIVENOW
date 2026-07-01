@@ -87,7 +87,7 @@
     <div class="panel">
       <div class="panel-title">Payment Log</div>
       <table>
-        <thead><tr><th>Date Paid</th><th>Method</th><th style="text-align:right;">Amount Paid</th><th style="text-align:right;">Processing Fee</th></tr></thead>
+        <thead><tr><th>Date Paid</th><th>Method</th><th style="text-align:right;">Amount Paid</th><th style="text-align:right;">Processing Fee</th><th></th></tr></thead>
         <tbody id="rd-payment-log-body"></tbody>
       </table>
       <div id="rd-fees-summary" style="font-size:0.82rem;color:#888;margin-top:8px;"></div>
@@ -128,7 +128,7 @@
 <div id="add-payment-overlay" class="simple-modal-overlay" style="display:none;">
   <div class="simple-modal">
     <div class="simple-modal__header">
-      <div class="simple-modal__title">Add Payment</div>
+      <div class="simple-modal__title" id="ap-modal-title">Add Payment</div>
       <button class="simple-modal__close" id="add-payment-close">&times;</button>
     </div>
     <div class="simple-modal__body">
@@ -147,6 +147,10 @@
           Fee charged to customer: <strong id="ap-fee-amount">$0.00</strong><br>
           Total to collect: <strong id="ap-total-amount">$0.00</strong>
         </div>
+      </div>
+      <div style="font-size:0.82rem;color:#444;margin-bottom:14px;padding-top:10px;border-top:1px solid var(--gray-border);">
+        Current balance: <strong id="ap-current-balance">—</strong><br>
+        Balance after this payment: <strong id="ap-remaining-balance">—</strong>
       </div>
       <button class="btn btn-block" id="ap-submit">Save Payment</button>
     </div>
@@ -218,6 +222,15 @@ function fmtExact(n) {
   return '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Signed balance -> a label + magnitude to display, positive is money owed,
+// negative is an overpayment (credit) that should read as a credit, not a
+// negative dollar amount.
+function balanceDisplay(n) {
+  const v = Math.round(Number(n || 0) * 100) / 100;
+  if (v < 0) return { label: 'Credit', amount: Math.abs(v), isCredit: true };
+  return { label: 'Balance Owed', amount: v, isCredit: false };
+}
+
 let vehiclePhotos = [];
 
 async function load() {
@@ -266,14 +279,20 @@ function render() {
   const dailyRateExact = weeklyRate / 7;
   const subtotal = Math.round(dailyRateExact * days * 100) / 100;
   const salesTax = Math.round(subtotal * SALES_TAX_RATE * 100) / 100;
-  const total = booking.invoice_amount || booking.total_due_at_pickup || Math.round((subtotal + salesTax) * 100) / 100;
+  // Total/Balance come straight from the server (booking.charge/booking.owed)
+  // rather than being recomputed here, so this panel can never show a
+  // different number than the Financials tab or the Reservations list — the
+  // Lease Rate/Sales Tax rows below are just an informational breakdown of
+  // the current rate x dates, which may differ from Total once an invoice
+  // has actually been sent and frozen.
+  const bal = balanceDisplay(booking.owed);
 
   document.getElementById('rd-charges').innerHTML = `
     <div class="rd-charge-row"><span>Lease Rate (${days}d x ${fmtExact(Math.round(dailyRateExact * 100) / 100)}/d)</span><span>${fmtExact(subtotal)}</span></div>
     <div class="rd-charge-row"><span>Sales Tax (7.25%)</span><span>${fmtExact(salesTax)}</span></div>
-    <div class="rd-charge-row--total"><span>Total</span><span>${fmtExact(total)}</span></div>
+    <div class="rd-charge-row--total"><span>Total</span><span>${fmtExact(booking.charge)}</span></div>
     <div class="rd-charge-row--collected"><span>Collected</span><span>${fmtExact(booking.paid_total)}</span></div>
-    <div class="rd-charge-row--balance"><span>Balance Owed</span><span>${fmtExact(booking.owed)}</span></div>
+    <div class="rd-charge-row--balance${bal.isCredit ? ' is-credit' : ''}"><span>${bal.label}</span><span>${fmtExact(bal.amount)}</span></div>
   `;
 
   document.getElementById('rd-cust-name').innerHTML = `<a href="customer-detail.html?email=${encodeURIComponent(booking.email)}" style="color:inherit;">${booking.first_name} ${booking.last_name}</a>`;
@@ -323,14 +342,32 @@ function renderPaymentLog() {
         <td><span class="badge ${p.method === 'card' ? 'badge-reserved' : 'badge-available'}">${p.method === 'card' ? 'Card' : 'Cash'}</span></td>
         <td style="text-align:right;font-weight:600;">${fmtExact(p.amount)}</td>
         <td style="text-align:right;">${p.processing_fee ? fmtExact(p.processing_fee) : '—'}</td>
+        <td style="text-align:right;white-space:nowrap;">
+          <button class="btn btn-outline edit-payment-btn" data-id="${p.id}" style="padding:4px 10px;font-size:0.72rem;">Edit</button>
+          <button class="btn btn-outline delete-payment-btn" data-id="${p.id}" style="padding:4px 10px;font-size:0.72rem;color:#c62828;border-color:#c62828;">Delete</button>
+        </td>
       </tr>
     `).join('')
-    : `<tr><td colspan="4" style="text-align:center;color:#888;padding:24px;">No payments recorded yet.</td></tr>`;
+    : `<tr><td colspan="5" style="text-align:center;color:#888;padding:24px;">No payments recorded yet.</td></tr>`;
 
   const feesSummary = document.getElementById('rd-fees-summary');
   feesSummary.textContent = booking.fees_total
     ? `Card processing fees collected to date: ${fmtExact(booking.fees_total)}`
     : '';
+
+  body.querySelectorAll('.edit-payment-btn').forEach(btn => {
+    btn.addEventListener('click', () => openPaymentModal(Number(btn.dataset.id)));
+  });
+  body.querySelectorAll('.delete-payment-btn').forEach(btn => {
+    btn.addEventListener('click', () => deletePayment(Number(btn.dataset.id)));
+  });
+}
+
+async function deletePayment(paymentId) {
+  if (!confirm('Delete this payment? You can undo this from the Undo button at the top of the page.')) return;
+  await api(`/api/applications/${id}/payments/${paymentId}`, { method: 'DELETE' });
+  await load();
+  refreshUndoButton();
 }
 
 function depositStatusBadge(d) {
@@ -468,14 +505,22 @@ function renderFinCal() {
   });
 }
 
+// Once the owner actually edits a breakdown row in this session, the panel
+// switches from "show the frozen/current balance" to "show what a new
+// invoice built from these edits would total" — that's what gets sent when
+// "Send Invoice" is clicked. Until then it mirrors booking.charge/owed
+// exactly, so it can never disagree with the Booking Summary tab.
+let breakdownDirty = false;
+
 function initBreakdown() {
+  breakdownDirty = false;
   const days = (booking.pickup_scheduled_at && booking.rental_end_at)
     ? Math.round((new Date(booking.rental_end_at) - new Date(booking.pickup_scheduled_at)) / 86400000)
     : 0;
   const dailyRate = Math.round(((booking.weekly_rate || 0) / 7) * 100) / 100;
   paymentBreakdownItems = [
     { key: 'daily', type: 'rate', days, rate: dailyRate, checked: true },
-    { key: 'highway', type: 'amount', label: 'Highway Tax (8%, included in rate)', amount: 0, checked: true },
+    { key: 'highway', type: 'amount', label: 'Highway Tax (8%, included in rate)', amount: 0, checked: true, informational: true },
     { key: 'sales', type: 'amount', label: 'Sales Tax (7.25%)', amount: 0, checked: true },
     { key: 'misc', type: 'amount', label: 'Miscellaneous', amount: 0, checked: false },
     { key: 'tolls', type: 'amount', label: 'Tolls', amount: 0, checked: false },
@@ -495,31 +540,40 @@ function recalcTaxes() {
   const highway = paymentBreakdownItems.find(i => i.key === 'highway');
   const sales = paymentBreakdownItems.find(i => i.key === 'sales');
   const subtotal = getItemAmount(daily);
+  // Highway tax is described as "included in rate" — it's already inside the
+  // lease-rate subtotal, so it must stay excluded from the summed total
+  // below (it's shown for informational breakdown only, not added again).
   highway.amount = Math.round((subtotal - subtotal / (1 + HIGHWAY_TAX_RATE)) * 100) / 100;
   sales.amount = Math.round(subtotal * SALES_TAX_RATE * 100) / 100;
 }
 function getInvoiceTotal() {
-  return Math.round(paymentBreakdownItems.filter(i => i.checked).reduce((sum, i) => sum + getItemAmount(i), 0) * 100) / 100;
+  if (!breakdownDirty) return Math.round(Number(booking.charge || 0) * 100) / 100;
+  return Math.round(paymentBreakdownItems.filter(i => i.checked && !i.informational).reduce((sum, i) => sum + getItemAmount(i), 0) * 100) / 100;
 }
 function getPaidTotal() {
-  return Math.round(booking.payments.reduce((sum, p) => sum + Number(p.amount || 0), 0) * 100) / 100;
+  return Math.round(Number(booking.paid_total || 0) * 100) / 100;
 }
 function getBalanceDue() {
-  return Math.max(0, Math.round((getInvoiceTotal() - getPaidTotal()) * 100) / 100);
+  if (!breakdownDirty) return Math.round(Number(booking.owed || 0) * 100) / 100;
+  return Math.round((getInvoiceTotal() - getPaidTotal()) * 100) / 100;
 }
 function updateInvoiceTotals() {
   document.getElementById('invoice-total-display').textContent = `Invoice Total: ${fmtExact(getInvoiceTotal())}`;
-  document.getElementById('balance-due-display').textContent = `Balance Due: ${fmtExact(getBalanceDue())}`;
+  const bal = balanceDisplay(getBalanceDue());
+  const balEl = document.getElementById('balance-due-display');
+  balEl.textContent = `${bal.label}: ${fmtExact(bal.amount)}`;
+  balEl.classList.toggle('is-credit', bal.isCredit);
 }
 
 function renderBreakdown() {
   const box = document.getElementById('rd-rate-breakdown');
+  const bal = balanceDisplay(getBalanceDue());
   box.innerHTML = `
     <div class="payment-breakdown-header">
       <div>Invoice Adjustments</div>
       <div>
         <div id="invoice-total-display">Invoice Total: ${fmtExact(getInvoiceTotal())}</div>
-        <div id="balance-due-display" class="payment-breakdown-header__balance">Balance Due: ${fmtExact(getBalanceDue())}</div>
+        <div id="balance-due-display" class="payment-breakdown-header__balance${bal.isCredit ? ' is-credit' : ''}">${bal.label}: ${fmtExact(bal.amount)}</div>
       </div>
     </div>
     ${paymentBreakdownItems.map((item, i) => `
@@ -533,12 +587,14 @@ function renderBreakdown() {
 
   box.querySelectorAll('.pb-checkbox').forEach(cb => {
     cb.addEventListener('change', () => {
+      breakdownDirty = true;
       paymentBreakdownItems[Number(cb.dataset.i)].checked = cb.checked;
       updateInvoiceTotals();
     });
   });
   box.querySelectorAll('.pb-amount').forEach(inp => {
     inp.addEventListener('input', () => {
+      breakdownDirty = true;
       const item = paymentBreakdownItems[Number(inp.dataset.i)];
       const value = Number(inp.value) || 0;
       if (item.type === 'rate') {
@@ -574,26 +630,56 @@ document.getElementById('rd-send-invoice-btn').addEventListener('click', async (
   await load();
 });
 
+// null = adding a new payment; a payment id = editing that row in place.
+let editingPaymentId = null;
+
+// What the balance would be right now if this payment didn't exist yet —
+// used as the "before" figure in the modal preview. When editing, the
+// payment being edited is backed out of booking.owed first so the preview
+// reflects "if I hadn't recorded the old amount at all".
+function balanceBeforeThisPayment() {
+  const base = Number(booking.owed || 0);
+  if (editingPaymentId == null) return base;
+  const original = booking.payments.find(p => p.id === editingPaymentId);
+  return original ? base + Number(original.amount || 0) : base;
+}
+
 function updatePaymentFeePreview() {
   const method = document.getElementById('ap-method').value;
   const feeField = document.getElementById('ap-fee-field');
   feeField.style.display = method === 'card' ? '' : 'none';
-  if (method !== 'card') return;
+  if (method === 'card') {
+    const amount = Number(document.getElementById('ap-amount').value) || 0;
+    const rate = Number(document.getElementById('ap-fee-rate').value) || 0;
+    const fee = Math.round(amount * (rate / 100) * 100) / 100;
+    document.getElementById('ap-fee-amount').textContent = fmtExact(fee);
+    document.getElementById('ap-total-amount').textContent = fmtExact(amount + fee);
+  }
+
   const amount = Number(document.getElementById('ap-amount').value) || 0;
-  const rate = Number(document.getElementById('ap-fee-rate').value) || 0;
-  const fee = Math.round(amount * (rate / 100) * 100) / 100;
-  document.getElementById('ap-fee-amount').textContent = fmtExact(fee);
-  document.getElementById('ap-total-amount').textContent = fmtExact(amount + fee);
+  const before = balanceBeforeThisPayment();
+  const beforeDisplay = balanceDisplay(before);
+  const afterDisplay = balanceDisplay(Math.round((before - amount) * 100) / 100);
+  document.getElementById('ap-current-balance').textContent = `${beforeDisplay.label}: ${fmtExact(beforeDisplay.amount)}`;
+  document.getElementById('ap-remaining-balance').textContent = `${afterDisplay.label}: ${fmtExact(afterDisplay.amount)}`;
 }
 
-document.getElementById('rd-add-payment-btn').addEventListener('click', () => {
-  document.getElementById('ap-date').value = new Date().toISOString().slice(0, 10);
-  document.getElementById('ap-amount').value = '';
-  document.getElementById('ap-method').value = 'cash';
-  document.getElementById('ap-fee-rate').value = DEFAULT_CARD_FEE_RATE;
+function openPaymentModal(paymentId) {
+  editingPaymentId = paymentId;
+  const payment = paymentId != null ? booking.payments.find(p => p.id === paymentId) : null;
+  document.getElementById('ap-modal-title').textContent = payment ? 'Edit Payment' : 'Add Payment';
+  document.getElementById('ap-submit').textContent = payment ? 'Save Changes' : 'Save Payment';
+  document.getElementById('ap-date').value = payment ? payment.paid_at.slice(0, 10) : new Date().toISOString().slice(0, 10);
+  document.getElementById('ap-amount').value = payment ? payment.amount : '';
+  document.getElementById('ap-method').value = payment ? payment.method : 'cash';
+  document.getElementById('ap-fee-rate').value = (payment && payment.processing_fee && payment.amount)
+    ? Math.round((payment.processing_fee / payment.amount) * 1000) / 10
+    : DEFAULT_CARD_FEE_RATE;
   updatePaymentFeePreview();
   document.getElementById('add-payment-overlay').style.display = 'flex';
-});
+}
+
+document.getElementById('rd-add-payment-btn').addEventListener('click', () => openPaymentModal(null));
 document.getElementById('add-payment-close').addEventListener('click', () => {
   document.getElementById('add-payment-overlay').style.display = 'none';
 });
@@ -610,7 +696,13 @@ document.getElementById('ap-submit').addEventListener('click', async () => {
   if (!amount || Number(amount) <= 0) { alert('Enter a valid amount'); return; }
   const rate = Number(document.getElementById('ap-fee-rate').value) || 0;
   const processing_fee = method === 'card' ? Math.round(Number(amount) * (rate / 100) * 100) / 100 : 0;
-  await api(`/api/applications/${id}/payments`, { method: 'POST', body: JSON.stringify({ amount, paid_at, method, processing_fee }) });
+  const body = JSON.stringify({ amount, paid_at, method, processing_fee });
+  if (editingPaymentId != null) {
+    await api(`/api/applications/${id}/payments/${editingPaymentId}`, { method: 'PUT', body });
+    refreshUndoButton();
+  } else {
+    await api(`/api/applications/${id}/payments`, { method: 'POST', body });
+  }
   document.getElementById('add-payment-overlay').style.display = 'none';
   await load();
 });

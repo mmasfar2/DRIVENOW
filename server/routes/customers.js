@@ -1,6 +1,7 @@
 const express = require('express');
 const { db, upsertCustomer } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { computeCharge, computeOwed } = require('../billing');
 
 const router = express.Router();
 
@@ -14,7 +15,7 @@ function getProfile(email) {
   }
 
   const bookings = db.prepare(`
-    SELECT a.id, a.first_name, a.last_name, a.status, a.payment_status, a.invoice_amount, a.total_due_at_pickup,
+    SELECT a.id, a.first_name, a.last_name, a.status, a.payment_status, a.invoice_amount, a.total_due_at_pickup, a.weekly_rate,
            a.pickup_scheduled_at, a.rental_end_at, a.created_at, a.license_path, a.insurance_path,
            a.occupation, a.use_type, a.rental_duration, a.notes, a.has_own_insurance,
            v.make, v.model, v.year, v.status as vehicle_status,
@@ -24,8 +25,8 @@ function getProfile(email) {
     WHERE lower(a.email) = lower(?)
     ORDER BY a.created_at DESC
   `).all(email).map(b => {
-    const charge = b.invoice_amount || b.total_due_at_pickup || 0;
-    const owed = b.status === 'active' ? Math.max(0, Math.round((charge - b.paid_total) * 100) / 100) : 0;
+    const charge = computeCharge(b);
+    const owed = computeOwed(b, b.paid_total);
     let stageLabel;
     if (b.status === 'rejected') stageLabel = 'Rejected';
     else if (b.status === 'completed') stageLabel = 'Completed';
@@ -39,7 +40,7 @@ function getProfile(email) {
   const completed = bookings.filter(b => b.status === 'completed');
   const totalSpent = Math.round(bookings.reduce((sum, b) => sum + b.paid_total, 0) * 100) / 100;
   const avgPerRental = completed.length ? Math.round((completed.reduce((sum, b) => sum + b.charge, 0) / completed.length) * 100) / 100 : null;
-  const outstanding = Math.round(bookings.reduce((sum, b) => sum + b.owed, 0) * 100) / 100;
+  const outstanding = Math.round(bookings.reduce((sum, b) => sum + Math.max(0, b.owed), 0) * 100) / 100;
 
   const tags = db.prepare('SELECT * FROM customer_tags WHERE customer_id = ? ORDER BY created_at ASC').all(customer.id);
 

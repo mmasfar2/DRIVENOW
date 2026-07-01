@@ -3,6 +3,7 @@ const multer = require('multer');
 const { db, logActivity, queueMessage, upsertCustomer, logUndo } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
+const { computeCharge, computeOwed } = require('../billing');
 
 const router = express.Router();
 
@@ -313,6 +314,34 @@ router.post('/:id/payments', requireAuth, (req, res) => {
   res.status(201).json({ ok: true });
 });
 
+router.put('/:id/payments/:paymentId', requireAuth, (req, res) => {
+  const { amount, paid_at, method, processing_fee } = req.body;
+  const id = req.params.id;
+  const existing = db.prepare('SELECT * FROM payments WHERE id = ? AND application_id = ?').get(req.params.paymentId, id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+  if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'A valid amount is required' });
+
+  const paymentMethod = method === 'card' ? 'card' : 'cash';
+  const fee = paymentMethod === 'card' ? Math.max(0, Number(processing_fee) || 0) : 0;
+
+  logUndo('payment_edit', `Edited a payment on reservation #${id}`, { previous: existing });
+  db.prepare('UPDATE payments SET amount = ?, paid_at = ?, method = ?, processing_fee = ? WHERE id = ?')
+    .run(amount, paid_at || existing.paid_at, paymentMethod, fee, existing.id);
+  logActivity(id, `Payment edited — now $${amount} (${paymentMethod}${fee ? `, +$${fee} processing fee` : ''})`);
+  res.json({ ok: true });
+});
+
+router.delete('/:id/payments/:paymentId', requireAuth, (req, res) => {
+  const id = req.params.id;
+  const existing = db.prepare('SELECT * FROM payments WHERE id = ? AND application_id = ?').get(req.params.paymentId, id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+
+  logUndo('payment_delete', `Deleted a payment on reservation #${id}`, { payment: existing });
+  db.prepare('DELETE FROM payments WHERE id = ?').run(existing.id);
+  logActivity(id, `Payment of $${existing.amount} deleted`);
+  res.json({ ok: true });
+});
+
 // ── AUTHED: Security Deposits — held separately from rental payments so they
 // never flow into rent balances or revenue reporting. A deposit is collected
 // as 'held', then later resolved into some refunded amount and/or some
@@ -383,10 +412,14 @@ router.get('/:id/detail', requireAuth, (req, res) => {
   const paidTotal = Math.round(payments.reduce((sum, p) => sum + Number(p.amount), 0) * 100) / 100;
   const feesTotal = Math.round(payments.reduce((sum, p) => sum + Number(p.processing_fee || 0), 0) * 100) / 100;
   const depositsHeld = Math.round(deposits.filter(d => d.status === 'held').reduce((sum, d) => sum + Number(d.amount), 0) * 100) / 100;
-  const charge = row.invoice_amount || row.total_due_at_pickup || 0;
-  const owed = row.status === 'active' ? Math.max(0, Math.round((charge - paidTotal) * 100) / 100) : 0;
+  // `charge`/`owed` (signed — negative means the customer has a credit) are
+  // computed once here and echoed back as-is everywhere else that shows this
+  // booking's balance (reservations list, customer profile), so the number
+  // can't drift depending on which page you're looking at.
+  const charge = computeCharge(row);
+  const owed = computeOwed(row, paidTotal);
 
-  res.json({ ...row, payments, paid_total: paidTotal, fees_total: feesTotal, deposits, deposits_held: depositsHeld, owed, notes });
+  res.json({ ...row, payments, paid_total: paidTotal, fees_total: feesTotal, deposits, deposits_held: depositsHeld, charge, owed, notes });
 });
 
 // ── AUTHED: Booking notes (internal, VA/owner only) ──
@@ -505,8 +538,8 @@ router.get('/bookings/all', requireAuth, (req, res) => {
   `).all();
 
   const bookings = rows.map(r => {
-    const charge = r.invoice_amount || r.total_due_at_pickup || 0;
-    const owed = r.status === 'active' ? Math.max(0, Math.round((charge - r.paid_total) * 100) / 100) : 0;
+    const charge = computeCharge(r);
+    const owed = computeOwed(r, r.paid_total);
     let bucket;
     if (r.payment_status === 'unpaid' && r.invoice_amount) bucket = 'potential_arrival';
     else if (r.vehicle_status === 'rented') bucket = 'on_rental';
@@ -518,7 +551,10 @@ router.get('/bookings/all', requireAuth, (req, res) => {
   const totalBookings = bookings.length;
   const upcoming = bookings.filter(b => b.bucket === 'upcoming').length;
   const onRental = bookings.filter(b => b.bucket === 'on_rental').length;
-  const outstandingBalance = bookings.reduce((sum, b) => sum + b.owed, 0);
+  // Individual bookings can show a credit (negative owed), but the aggregate
+  // "outstanding balance" stat should only total up what's actually still
+  // owed — a credit on one booking shouldn't net against another's debt.
+  const outstandingBalance = bookings.reduce((sum, b) => sum + Math.max(0, b.owed), 0);
 
   res.json({ bookings, stats: { totalBookings, upcoming, onRental, outstandingBalance } });
 });

@@ -179,6 +179,7 @@ tr:hover td { background: var(--gray-light); }
 .payment-breakdown-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 12px; }
 .payment-breakdown-header #invoice-total-display { color: var(--black); font-size: 0.85rem; }
 .payment-breakdown-header__balance { color: #c0392b; font-size: 0.9rem; font-weight: 800; margin-top: 4px; text-align: right; }
+.payment-breakdown-header__balance.is-credit { color: #2e7d32; }
 .payment-breakdown-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
 .payment-breakdown-row__label { flex: 1; font-size: 0.78rem; }
 .payment-breakdown-row .pb-checkbox { width: 14px; height: 14px; flex-shrink: 0; }
@@ -233,6 +234,7 @@ tr:hover td { background: var(--gray-light); }
 .rd-charge-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 0.9rem; color: var(--text-muted); }
 .rd-charge-row--total { display: flex; justify-content: space-between; padding: 10px 0; font-weight: 800; font-size: 1.05rem; border-top: 2px solid var(--gray-border); margin-top: 4px; }
 .rd-charge-row--balance { display: flex; justify-content: space-between; padding: 8px 0; font-weight: 800; color: #c62828; }
+.rd-charge-row--balance.is-credit { color: #2e7d32; }
 .rd-charge-row--collected { display: flex; justify-content: space-between; padding: 8px 0; font-weight: 700; color: #2e7d32; }
 .rd-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 .rd-note { background: var(--gray-light); border-radius: 6px; padding: 12px 14px; margin-bottom: 10px; font-size: 0.85rem; }
