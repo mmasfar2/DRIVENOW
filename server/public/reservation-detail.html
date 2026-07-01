@@ -87,9 +87,10 @@
     <div class="panel">
       <div class="panel-title">Payment Log</div>
       <table>
-        <thead><tr><th>Date Paid</th><th style="text-align:right;">Amount Paid</th></tr></thead>
+        <thead><tr><th>Date Paid</th><th>Method</th><th style="text-align:right;">Amount Paid</th><th style="text-align:right;">Processing Fee</th></tr></thead>
         <tbody id="rd-payment-log-body"></tbody>
       </table>
+      <div id="rd-fees-summary" style="font-size:0.82rem;color:#888;margin-top:8px;"></div>
       <div id="rd-rate-breakdown" class="payment-rate-breakdown"></div>
       <div class="payment-log-actions">
         <button class="btn btn-outline" id="rd-send-invoice-btn">Send Invoice</button>
@@ -122,6 +123,20 @@
     <div class="simple-modal__body">
       <div class="field"><label>Date Paid</label><input type="date" id="ap-date"></div>
       <div class="field"><label>Amount Paid ($)</label><input type="number" id="ap-amount" step="0.01"></div>
+      <div class="field"><label>Payment Method</label>
+        <select id="ap-method">
+          <option value="cash">Cash</option>
+          <option value="card">Card</option>
+        </select>
+      </div>
+      <div class="field" id="ap-fee-field" style="display:none;">
+        <label>Card Processing Fee (%)</label>
+        <input type="number" id="ap-fee-rate" step="0.1" min="0" value="3">
+        <div style="font-size:0.8rem;color:#666;margin-top:6px;">
+          Fee charged to customer: <strong id="ap-fee-amount">$0.00</strong><br>
+          Total to collect: <strong id="ap-total-amount">$0.00</strong>
+        </div>
+      </div>
       <button class="btn btn-block" id="ap-submit">Save Payment</button>
     </div>
   </div>
@@ -132,6 +147,7 @@
 const id = new URLSearchParams(window.location.search).get('id');
 const HIGHWAY_TAX_RATE = 0.08;
 const SALES_TAX_RATE = 0.0725;
+const DEFAULT_CARD_FEE_RATE = 3; // % — editable per payment in the Add Payment modal
 let booking, paymentBreakdownItems = [];
 let finCalMonth = null, finNewPickup = '', finNewReturn = '';
 
@@ -243,8 +259,20 @@ document.getElementById('rd-note-save').addEventListener('click', async () => {
 function renderPaymentLog() {
   const body = document.getElementById('rd-payment-log-body');
   body.innerHTML = booking.payments.length
-    ? booking.payments.map(p => `<tr><td>${fmtDate(p.paid_at)}</td><td style="text-align:right;font-weight:600;">${fmtExact(p.amount)}</td></tr>`).join('')
-    : `<tr><td colspan="2" style="text-align:center;color:#888;padding:24px;">No payments recorded yet.</td></tr>`;
+    ? booking.payments.map(p => `
+      <tr>
+        <td>${fmtDate(p.paid_at)}</td>
+        <td><span class="badge ${p.method === 'card' ? 'badge-reserved' : 'badge-available'}">${p.method === 'card' ? 'Card' : 'Cash'}</span></td>
+        <td style="text-align:right;font-weight:600;">${fmtExact(p.amount)}</td>
+        <td style="text-align:right;">${p.processing_fee ? fmtExact(p.processing_fee) : '—'}</td>
+      </tr>
+    `).join('')
+    : `<tr><td colspan="4" style="text-align:center;color:#888;padding:24px;">No payments recorded yet.</td></tr>`;
+
+  const feesSummary = document.getElementById('rd-fees-summary');
+  feesSummary.textContent = booking.fees_total
+    ? `Card processing fees collected to date: ${fmtExact(booking.fees_total)}`
+    : '';
 }
 
 function initFinCal() {
@@ -460,9 +488,24 @@ document.getElementById('rd-send-invoice-btn').addEventListener('click', async (
   await load();
 });
 
+function updatePaymentFeePreview() {
+  const method = document.getElementById('ap-method').value;
+  const feeField = document.getElementById('ap-fee-field');
+  feeField.style.display = method === 'card' ? '' : 'none';
+  if (method !== 'card') return;
+  const amount = Number(document.getElementById('ap-amount').value) || 0;
+  const rate = Number(document.getElementById('ap-fee-rate').value) || 0;
+  const fee = Math.round(amount * (rate / 100) * 100) / 100;
+  document.getElementById('ap-fee-amount').textContent = fmtExact(fee);
+  document.getElementById('ap-total-amount').textContent = fmtExact(amount + fee);
+}
+
 document.getElementById('rd-add-payment-btn').addEventListener('click', () => {
   document.getElementById('ap-date').value = new Date().toISOString().slice(0, 10);
   document.getElementById('ap-amount').value = '';
+  document.getElementById('ap-method').value = 'cash';
+  document.getElementById('ap-fee-rate').value = DEFAULT_CARD_FEE_RATE;
+  updatePaymentFeePreview();
   document.getElementById('add-payment-overlay').style.display = 'flex';
 });
 document.getElementById('add-payment-close').addEventListener('click', () => {
@@ -471,11 +514,17 @@ document.getElementById('add-payment-close').addEventListener('click', () => {
 document.getElementById('add-payment-overlay').addEventListener('click', (e) => {
   if (e.target.id === 'add-payment-overlay') e.target.style.display = 'none';
 });
+document.getElementById('ap-method').addEventListener('change', updatePaymentFeePreview);
+document.getElementById('ap-amount').addEventListener('input', updatePaymentFeePreview);
+document.getElementById('ap-fee-rate').addEventListener('input', updatePaymentFeePreview);
 document.getElementById('ap-submit').addEventListener('click', async () => {
   const amount = document.getElementById('ap-amount').value;
   const paid_at = document.getElementById('ap-date').value;
+  const method = document.getElementById('ap-method').value;
   if (!amount || Number(amount) <= 0) { alert('Enter a valid amount'); return; }
-  await api(`/api/applications/${id}/payments`, { method: 'POST', body: JSON.stringify({ amount, paid_at }) });
+  const rate = Number(document.getElementById('ap-fee-rate').value) || 0;
+  const processing_fee = method === 'card' ? Math.round(Number(amount) * (rate / 100) * 100) / 100 : 0;
+  await api(`/api/applications/${id}/payments`, { method: 'POST', body: JSON.stringify({ amount, paid_at, method, processing_fee }) });
   document.getElementById('add-payment-overlay').style.display = 'none';
   await load();
 });
