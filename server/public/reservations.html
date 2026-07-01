@@ -179,6 +179,7 @@
 .resv-table__unapprove-btn:hover { background: #c62828; color: #fff; }
 .resv-table__balance { margin-top: 6px; font-size: 0.82rem; font-weight: 700; }
 .resv-table__balance--due { color: #c62828; }
+.resv-table__balance--credit { color: #2e7d32; }
 .resv-table__view {
   display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px;
   color: var(--text-muted); text-decoration: none;
@@ -509,7 +510,7 @@ function renderList() {
         </td>
         <td>
           ${b.bucket !== 'upcoming' ? `<button class="btn btn-sm resv-table__pay-btn" data-id="${b.id}">Payment</button>` : ''}
-          <div class="resv-table__balance ${owed > 0 ? 'resv-table__balance--due' : ''}">${fmtMoney(owed)}</div>
+          <div class="resv-table__balance ${owed > 0 ? 'resv-table__balance--due' : owed < 0 ? 'resv-table__balance--credit' : ''}">${owed < 0 ? `Credit ${fmtMoney(Math.abs(owed))}` : fmtMoney(owed)}</div>
         </td>
         <td>
           ${b.bucket === 'potential_arrival' ? `<button class="btn btn-sm resv-table__complete-btn" data-id="${b.id}">Approve</button>` : ''}

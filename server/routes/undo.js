@@ -55,6 +55,14 @@ router.post('/', requireAuth, (req, res) => {
     messages.forEach(m => insMessage.run(m.id, m.application_id, m.channel, m.to_value, m.body, m.status, m.created_at));
     const insNote = db.prepare('INSERT INTO booking_notes (id, application_id, note, created_at) VALUES (?, ?, ?, ?)');
     notes.forEach(n => insNote.run(n.id, n.application_id, n.note, n.created_at));
+  } else if (row.entity_type === 'payment_delete') {
+    const { payment } = payload;
+    db.prepare('INSERT INTO payments (id, application_id, amount, paid_at, method, processing_fee, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(payment.id, payment.application_id, payment.amount, payment.paid_at, payment.method, payment.processing_fee, payment.created_at);
+  } else if (row.entity_type === 'payment_edit') {
+    const { previous } = payload;
+    db.prepare('UPDATE payments SET amount = ?, paid_at = ?, method = ?, processing_fee = ? WHERE id = ?')
+      .run(previous.amount, previous.paid_at, previous.method, previous.processing_fee, previous.id);
   }
 
   db.prepare('DELETE FROM undo_log WHERE id = ?').run(row.id);
