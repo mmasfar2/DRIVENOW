@@ -37,13 +37,18 @@ router.post('/', requireAuth, (req, res) => {
     db.prepare('INSERT INTO vehicle_photos (id, vehicle_id, photo_path, created_at) VALUES (?, ?, ?, ?)').run(p.id, p.vehicle_id, p.photo_path, p.created_at);
     db.prepare('UPDATE vehicles SET photo_path = ? WHERE id = ?').run(p.photo_path, p.vehicle_id);
   } else if (row.entity_type === 'application_delete') {
-    const { application, payments, activity, messages, notes } = payload;
+    const { application, payments, deposits, activity, messages, notes } = payload;
     const cols = Object.keys(application);
     db.prepare(`
       INSERT INTO applications (${cols.join(', ')}) VALUES (${cols.map(c => `@${c}`).join(', ')})
     `).run(application);
-    const insPayment = db.prepare('INSERT INTO payments (id, application_id, amount, paid_at, created_at) VALUES (?, ?, ?, ?, ?)');
-    payments.forEach(p => insPayment.run(p.id, p.application_id, p.amount, p.paid_at, p.created_at));
+    const insPayment = db.prepare('INSERT INTO payments (id, application_id, amount, paid_at, method, processing_fee, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    payments.forEach(p => insPayment.run(p.id, p.application_id, p.amount, p.paid_at, p.method || 'cash', p.processing_fee || 0, p.created_at));
+    const insDeposit = db.prepare(`
+      INSERT INTO deposits (id, application_id, amount, method, processing_fee, status, collected_at, refunded_amount, forfeited_amount, resolved_at, notes, created_at)
+      VALUES (@id, @application_id, @amount, @method, @processing_fee, @status, @collected_at, @refunded_amount, @forfeited_amount, @resolved_at, @notes, @created_at)
+    `);
+    (deposits || []).forEach(d => insDeposit.run(d));
     const insActivity = db.prepare('INSERT INTO activity_log (id, application_id, message, created_at) VALUES (?, ?, ?, ?)');
     activity.forEach(a => insActivity.run(a.id, a.application_id, a.message, a.created_at));
     const insMessage = db.prepare('INSERT INTO messages_outbox (id, application_id, channel, to_value, body, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');

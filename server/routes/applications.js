@@ -313,6 +313,59 @@ router.post('/:id/payments', requireAuth, (req, res) => {
   res.status(201).json({ ok: true });
 });
 
+// ── AUTHED: Security Deposits — held separately from rental payments so they
+// never flow into rent balances or revenue reporting. A deposit is collected
+// as 'held', then later resolved into some refunded amount and/or some
+// forfeited amount (see /:id/deposits/:depositId/resolve for how forfeited
+// amounts are reported). ──
+router.get('/:id/deposits', requireAuth, (req, res) => {
+  const rows = db.prepare('SELECT * FROM deposits WHERE application_id = ? ORDER BY collected_at DESC, id DESC').all(req.params.id);
+  res.json(rows);
+});
+
+router.post('/:id/deposits', requireAuth, (req, res) => {
+  const { amount, collected_at, method, processing_fee } = req.body;
+  const id = req.params.id;
+  const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
+  if (!app) return res.status(404).json({ error: 'Not found' });
+  if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'A valid amount is required' });
+
+  const depositMethod = method === 'card' ? 'card' : 'cash';
+  const fee = depositMethod === 'card' ? Math.max(0, Number(processing_fee) || 0) : 0;
+
+  db.prepare('INSERT INTO deposits (application_id, amount, method, processing_fee, collected_at) VALUES (?, ?, ?, ?, ?)')
+    .run(id, amount, depositMethod, fee, collected_at || new Date().toISOString().slice(0, 10));
+  logActivity(id, `Security deposit of $${amount} collected (${depositMethod}${fee ? `, +$${fee} processing fee` : ''})`);
+  res.status(201).json({ ok: true });
+});
+
+router.post('/:id/deposits/:depositId/resolve', requireAuth, (req, res) => {
+  const { refund_amount, forfeit_amount, resolved_at, notes } = req.body;
+  const id = req.params.id;
+  const deposit = db.prepare('SELECT * FROM deposits WHERE id = ? AND application_id = ?').get(req.params.depositId, id);
+  if (!deposit) return res.status(404).json({ error: 'Not found' });
+  if (deposit.status !== 'held') return res.status(400).json({ error: 'Deposit already resolved' });
+
+  const refund = Math.max(0, Number(refund_amount) || 0);
+  const forfeit = Math.max(0, Number(forfeit_amount) || 0);
+  if (Math.round((refund + forfeit) * 100) !== Math.round(deposit.amount * 100)) {
+    return res.status(400).json({ error: 'Refund + forfeited amount must equal the deposit amount' });
+  }
+
+  const resolvedAt = resolved_at || new Date().toISOString().slice(0, 10);
+  db.prepare(`
+    UPDATE deposits SET status = 'resolved', refunded_amount = ?, forfeited_amount = ?, resolved_at = ?, notes = ?
+    WHERE id = ?
+  `).run(refund, forfeit, resolvedAt, notes || null, deposit.id);
+
+  // Forfeited amounts are booked as their own revenue category (see
+  // /api/metrics/cashflow's depositForfeitures) rather than inserted into
+  // `payments`, since `payments` also drives the booking's rent balance —
+  // a forfeiture isn't rent and shouldn't shrink what the customer owes.
+  logActivity(id, `Security deposit resolved — refunded $${refund}${forfeit ? `, forfeited $${forfeit}` : ''}`);
+  res.json({ ok: true });
+});
+
 // ── AUTHED: Full reservation detail (booking + vehicle + payments + notes) ──
 router.get('/:id/detail', requireAuth, (req, res) => {
   const row = db.prepare(`
@@ -325,13 +378,15 @@ router.get('/:id/detail', requireAuth, (req, res) => {
   if (!row) return res.status(404).json({ error: 'Not found' });
 
   const payments = db.prepare('SELECT * FROM payments WHERE application_id = ? ORDER BY paid_at DESC, id DESC').all(req.params.id);
+  const deposits = db.prepare('SELECT * FROM deposits WHERE application_id = ? ORDER BY collected_at DESC, id DESC').all(req.params.id);
   const notes = db.prepare('SELECT * FROM booking_notes WHERE application_id = ? ORDER BY created_at DESC').all(req.params.id);
   const paidTotal = Math.round(payments.reduce((sum, p) => sum + Number(p.amount), 0) * 100) / 100;
   const feesTotal = Math.round(payments.reduce((sum, p) => sum + Number(p.processing_fee || 0), 0) * 100) / 100;
+  const depositsHeld = Math.round(deposits.filter(d => d.status === 'held').reduce((sum, d) => sum + Number(d.amount), 0) * 100) / 100;
   const charge = row.invoice_amount || row.total_due_at_pickup || 0;
   const owed = row.status === 'active' ? Math.max(0, Math.round((charge - paidTotal) * 100) / 100) : 0;
 
-  res.json({ ...row, payments, paid_total: paidTotal, fees_total: feesTotal, owed, notes });
+  res.json({ ...row, payments, paid_total: paidTotal, fees_total: feesTotal, deposits, deposits_held: depositsHeld, owed, notes });
 });
 
 // ── AUTHED: Booking notes (internal, VA/owner only) ──
@@ -417,16 +472,18 @@ router.delete('/:id', requireAuth, (req, res) => {
   if (!application) return res.status(404).json({ error: 'Not found' });
 
   const payments = db.prepare('SELECT * FROM payments WHERE application_id = ?').all(id);
+  const deposits = db.prepare('SELECT * FROM deposits WHERE application_id = ?').all(id);
   const activity = db.prepare('SELECT * FROM activity_log WHERE application_id = ?').all(id);
   const messages = db.prepare('SELECT * FROM messages_outbox WHERE application_id = ?').all(id);
   const notes = db.prepare('SELECT * FROM booking_notes WHERE application_id = ?').all(id);
 
-  logUndo('application_delete', `Removed reservation for ${application.first_name} ${application.last_name}`, { application, payments, activity, messages, notes });
+  logUndo('application_delete', `Removed reservation for ${application.first_name} ${application.last_name}`, { application, payments, deposits, activity, messages, notes });
 
   if (application.assigned_vehicle_id) {
     db.prepare("UPDATE vehicles SET status = 'available' WHERE id = ? AND status IN ('reserved', 'rented')").run(application.assigned_vehicle_id);
   }
   db.prepare('DELETE FROM payments WHERE application_id = ?').run(id);
+  db.prepare('DELETE FROM deposits WHERE application_id = ?').run(id);
   db.prepare('DELETE FROM activity_log WHERE application_id = ?').run(id);
   db.prepare('DELETE FROM messages_outbox WHERE application_id = ?').run(id);
   db.prepare('DELETE FROM booking_notes WHERE application_id = ?').run(id);

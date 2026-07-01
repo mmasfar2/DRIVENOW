@@ -63,6 +63,18 @@ router.get('/cashflow', requireAuth, (req, res) => {
     SELECT COALESCE(SUM(processing_fee), 0) as total FROM payments WHERE paid_at >= ? AND paid_at <= ? AND method = 'card'
   `).get(monthStartStr, todayStr).total;
 
+  // Forfeited deposits are their own revenue category — kept out of `actual`
+  // (rent collected) so it doesn't distort the expected-vs-actual rent P&L.
+  const forfeituresToday = db.prepare(`
+    SELECT COALESCE(SUM(forfeited_amount), 0) as total FROM deposits WHERE resolved_at = ?
+  `).get(todayStr).total;
+  const forfeituresWeek = db.prepare(`
+    SELECT COALESCE(SUM(forfeited_amount), 0) as total FROM deposits WHERE resolved_at >= ? AND resolved_at <= ?
+  `).get(weekStartStr, todayStr).total;
+  const forfeituresMonth = db.prepare(`
+    SELECT COALESCE(SUM(forfeited_amount), 0) as total FROM deposits WHERE resolved_at >= ? AND resolved_at <= ?
+  `).get(monthStartStr, todayStr).total;
+
   const expensesToday = db.prepare(`
     SELECT COALESCE(SUM(cost), 0) as total FROM vehicle_maintenance WHERE performed_at = ?
   `).get(todayStr).total;
@@ -79,6 +91,7 @@ router.get('/cashflow', requireAuth, (req, res) => {
       actual: actualToday,
       expenses: expensesToday,
       cardFees: feesToday,
+      depositForfeitures: forfeituresToday,
     },
     weekly: {
       expected: expectedDailyTotal * daysElapsedThisWeek,
@@ -86,6 +99,7 @@ router.get('/cashflow', requireAuth, (req, res) => {
       actual: actualWeek,
       expenses: expensesWeek,
       cardFees: feesWeek,
+      depositForfeitures: forfeituresWeek,
     },
     monthly: {
       expected: expectedDailyTotal * daysElapsedThisMonth,
@@ -93,6 +107,7 @@ router.get('/cashflow', requireAuth, (req, res) => {
       actual: actualMonth,
       expenses: expensesMonth,
       cardFees: feesMonth,
+      depositForfeitures: forfeituresMonth,
     },
   };
   for (const p of Object.values(periods)) {
@@ -100,7 +115,11 @@ router.get('/cashflow', requireAuth, (req, res) => {
     p.variance = p.netActual - p.expected;
   }
 
-  res.json({ activeRenters, flaggedRenters, expectedDailyTotal, periods });
+  // Held security deposits are a liability, not revenue — surfaced separately
+  // from the periods above so they never get mixed into the P&L figures.
+  const depositsHeld = db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM deposits WHERE status = 'held'`).get().total;
+
+  res.json({ activeRenters, flaggedRenters, expectedDailyTotal, depositsHeld, periods });
 });
 
 module.exports = router;
