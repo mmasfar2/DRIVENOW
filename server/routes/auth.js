@@ -29,6 +29,11 @@ router.get('/me', (req, res) => {
   res.json({ id: req.session.userId, name: req.session.name, role: req.session.role });
 });
 
+router.get('/users', (req, res) => {
+  if (!req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  res.json(db.prepare('SELECT id, name, role FROM users ORDER BY name').all());
+});
+
 router.post('/change-password', (req, res) => {
   if (!req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
   const { currentPassword, newPassword } = req.body;

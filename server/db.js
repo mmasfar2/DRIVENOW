@@ -387,6 +387,30 @@ CREATE TABLE IF NOT EXISTS insurance_records (
 );
 `);
 
+db.exec(`
+CREATE TABLE IF NOT EXISTS claims (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vehicle_id INTEGER NOT NULL,
+  application_id INTEGER, -- the booking during which the damage occurred, if known
+  insurance_record_id INTEGER, -- which policy this claim is filed against
+  assigned_to INTEGER, -- staff member (users.id) handling the claim
+  status TEXT NOT NULL DEFAULT 'initial_claim', -- initial_claim | pending_payment | closed | collections
+  detailed_status TEXT,
+  incident_type TEXT,
+  external_reference_id TEXT,
+  event_source TEXT,
+  damage_notes TEXT,
+  damage_reported_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  next_task TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (vehicle_id) REFERENCES vehicles(id),
+  FOREIGN KEY (application_id) REFERENCES applications(id),
+  FOREIGN KEY (insurance_record_id) REFERENCES insurance_records(id),
+  FOREIGN KEY (assigned_to) REFERENCES users(id)
+);
+`);
+
 // Backfill: build a customers record for every distinct email already in
 // applications, so existing leads/bookings get a profile retroactively.
 const existingCustomerEmails = new Set(db.prepare('SELECT lower(email) as e FROM customers').all().map(r => r.e));
