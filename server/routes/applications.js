@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { db, logActivity, queueMessage, upsertCustomer, logUndo } = require('../db');
+const { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
 const { computeCharge, computeOwed } = require('../billing');
@@ -51,7 +51,10 @@ router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (r
   if (assignedVehicleId) {
     db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ? AND status = 'available'").run(assignedVehicleId);
   }
-  upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob, license_number });
+  const customerId = upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob, license_number });
+  if (has_own_insurance === 'yes' || insurancePath) {
+    upsertInsuranceRecord(customerId, 'private', { document_path: insurancePath });
+  }
   logActivity(appId, `New application submitted by ${first_name} ${last_name}`);
   queueMessage(appId, 'sms', phone, "We've received your application and are currently reviewing it.");
 
@@ -215,10 +218,17 @@ router.post('/:id/background-check', requireAuth, (req, res) => {
 router.post('/:id/insurance-quote', requireAuth, (req, res) => {
   const { insurance_quote_amount, insurance_notes } = req.body;
   const id = req.params.id;
+  const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
   db.prepare(`
     UPDATE applications SET insurance_quote_amount = ?, insurance_notes = ?, stage = 5, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(insurance_quote_amount, insurance_notes || null, id);
+  if (app) {
+    // A quote here means DriveNow is covering this customer under its own
+    // policy — reflect that in the Insurance panel right away.
+    const customerId = upsertCustomer(app);
+    upsertInsuranceRecord(customerId, 'our_policy', { notes: insurance_notes });
+  }
   logActivity(id, `Insurance quote received: $${insurance_quote_amount}`);
   res.json({ ok: true });
 });
@@ -619,7 +629,9 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
 
   const appId = result.lastInsertRowid;
   db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ?").run(assigned_vehicle_id);
-  upsertCustomer({ email, first_name, last_name, phone, address, dob, license_number });
+  const customerId = upsertCustomer({ email, first_name, last_name, phone, address, dob, license_number });
+  if (insurancePrivatePath) upsertInsuranceRecord(customerId, 'private', { document_path: insurancePrivatePath });
+  if (insurancePolicyPath) upsertInsuranceRecord(customerId, 'our_policy', { document_path: insurancePolicyPath });
   logActivity(appId, `Manual reservation created for ${first_name} ${last_name} — ${vehicle.make} ${vehicle.model} at $${weekly_rate}/week`);
 
   res.status(201).json({ id: appId, message: 'Reservation created' });

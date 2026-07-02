@@ -28,9 +28,9 @@ const SIDEBAR_LINKS = [
   { key: 'metrics', label: 'Metrics', href: 'metrics.html' },
   { key: 'clients', label: 'Clients', href: 'clients.html' },
   {
-    key: 'insurance', label: 'Insurance', href: 'insurance.html?section=our_policies',
+    key: 'insurance', label: 'Insurance',
     children: [
-      { key: 'insurance-our-policies', label: 'Our Policies', href: 'insurance.html?section=our_policies' },
+      { key: 'insurance-our-policies', label: 'Our Policy', href: 'insurance.html?section=our_policies' },
       { key: 'insurance-private', label: 'Private', href: 'insurance.html?section=private' },
     ],
   },
@@ -63,14 +63,19 @@ function renderSidebar(activeKey) {
       <div class="sidebar__nav" id="sidebar-nav">
         ${links.map(l => `
           <div class="sidebar__nav-item" draggable="true" data-key="${l.key}">
-            <a href="${l.href}" class="${l.key === activeKey ? 'active' : ''}"${l.external ? ' target="_blank" rel="noopener"' : ''}>
-              <span class="sidebar__drag-handle">⠿</span>${l.label}${l.external ? ' ↗' : ''}
-            </a>
-            ${l.children && isGroupActive(l) ? `
-              <div class="sidebar__subnav">
+            ${l.children ? `
+              <a href="#" class="sidebar__nav-toggle${isGroupActive(l) ? ' active' : ''}" data-toggle-key="${l.key}">
+                <span class="sidebar__drag-handle">⠿</span>${l.label}
+                <span class="sidebar__caret">${isGroupActive(l) ? '▾' : '▸'}</span>
+              </a>
+              <div class="sidebar__subnav" data-submenu-for="${l.key}" style="${isGroupActive(l) ? '' : 'display:none;'}">
                 ${l.children.map(c => `<a href="${c.href}" class="sidebar__sublink${c.key === activeKey ? ' active' : ''}">${c.label}</a>`).join('')}
               </div>
-            ` : ''}
+            ` : `
+              <a href="${l.href}" class="${l.key === activeKey ? 'active' : ''}"${l.external ? ' target="_blank" rel="noopener"' : ''}>
+                <span class="sidebar__drag-handle">⠿</span>${l.label}${l.external ? ' ↗' : ''}
+              </a>
+            `}
           </div>`).join('')}
       </div>
       <div class="sidebar__footer">
@@ -80,7 +85,21 @@ function renderSidebar(activeKey) {
     </div>
   `;
   initSidebarDragReorder();
+  initSidebarToggles();
   ensureUndoButton();
+}
+
+function initSidebarToggles() {
+  document.querySelectorAll('.sidebar__nav-toggle').forEach(toggle => {
+    toggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      const submenu = document.querySelector(`.sidebar__subnav[data-submenu-for="${toggle.dataset.toggleKey}"]`);
+      if (!submenu) return;
+      const opening = submenu.style.display === 'none';
+      submenu.style.display = opening ? '' : 'none';
+      toggle.querySelector('.sidebar__caret').textContent = opening ? '▾' : '▸';
+    });
+  });
 }
 
 function ensureUndoButton() {

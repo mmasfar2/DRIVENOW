@@ -119,7 +119,11 @@
   </div>
 
   <div id="rd-panel-documents" style="display:none;">
-    <div class="panel"><div class="panel-title">Documents</div><p class="rd-empty">Signed agreements and uploaded license documents will appear here.</p></div>
+    <div class="panel">
+      <div class="panel-title">Documents</div>
+      <div class="info-row"><div class="info-row__label">License</div><div class="info-row__val" id="rd-doc-license"></div></div>
+      <div class="info-row" style="border-bottom:none;"><div class="info-row__label">Rental Agreement</div><div class="info-row__val" id="rd-doc-agreement"></div></div>
+    </div>
     <div class="panel">
       <div class="panel-title">Insurance</div>
       <div id="rd-insurance-list"></div>
@@ -329,6 +333,11 @@ function render() {
   document.getElementById('rd-veh-trans').textContent = booking.transmission || '—';
   document.getElementById('rd-veh-pickup-loc').textContent = booking.pickup_location || '—';
   document.getElementById('rd-veh-dropoff-loc').textContent = booking.dropoff_location || '—';
+
+  document.getElementById('rd-doc-license').innerHTML = filePreviewHtml(booking.license_path);
+  document.getElementById('rd-doc-agreement').textContent = booking.agreement_signed_at
+    ? `Signed ${fmtDate(booking.agreement_signed_at)}`
+    : booking.agreement_sent_at ? `Sent ${fmtDate(booking.agreement_sent_at)} — awaiting signature` : 'Not sent yet';
 
   renderNotes();
   renderPaymentLog();
