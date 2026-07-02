@@ -55,7 +55,6 @@
         <div class="field"><label>ZIP Code</label><input id="cd-f-zip"></div>
         <div class="field"><label>Date of Birth</label><input type="date" id="cd-f-dob"></div>
         <div class="field"><label>License Number</label><input id="cd-f-license"></div>
-        <div class="field-row"><div class="field"><label>Insurance Company</label><input id="cd-f-ins-company"></div><div class="field"><label>Insurance Policy #</label><input id="cd-f-ins-policy"></div></div>
         <button class="btn" id="cd-save-btn">Save Changes</button>
       </div>
 
@@ -144,9 +143,13 @@ function render() {
 
   const firstBooking = customer.bookings[customer.bookings.length - 1];
   const latestBooking = customer.bookings[0];
+  // A later booking made without re-attaching a license (VA already has one
+  // on file) shouldn't hide an earlier upload — use the most recent booking
+  // that actually has a file, not just the most recent booking.
+  const bookingWithLicense = customer.bookings.find(b => b.license_path) || latestBooking;
 
   document.getElementById('cd-license').innerHTML = `
-    <div class="info-row"><div class="info-row__label">License</div><div class="info-row__val">${filePreviewHtml(latestBooking?.license_path)}</div></div>
+    <div class="info-row"><div class="info-row__label">License</div><div class="info-row__val">${filePreviewHtml(bookingWithLicense?.license_path)}</div></div>
   `;
 
   // The Insurance panel — synced with the Insurance admin page (insurance.html /
@@ -243,8 +246,6 @@ document.getElementById('cd-edit-btn').addEventListener('click', () => {
   document.getElementById('cd-f-zip').value = customer.zip_code || '';
   document.getElementById('cd-f-dob').value = customer.dob ? customer.dob.slice(0, 10) : '';
   document.getElementById('cd-f-license').value = customer.license_number || '';
-  document.getElementById('cd-f-ins-company').value = customer.insurance_company || '';
-  document.getElementById('cd-f-ins-policy').value = customer.insurance_policy_number || '';
   document.getElementById('cd-contact-view').style.display = 'none';
   document.getElementById('cd-contact-edit').style.display = '';
   document.getElementById('cd-edit-btn').textContent = 'Cancel';
@@ -261,8 +262,6 @@ document.getElementById('cd-save-btn').addEventListener('click', async () => {
     zip_code: document.getElementById('cd-f-zip').value,
     dob: document.getElementById('cd-f-dob').value || null,
     license_number: document.getElementById('cd-f-license').value,
-    insurance_company: document.getElementById('cd-f-ins-company').value,
-    insurance_policy_number: document.getElementById('cd-f-ins-policy').value,
   })});
   document.getElementById('cd-contact-edit').style.display = 'none';
   document.getElementById('cd-contact-view').style.display = '';
