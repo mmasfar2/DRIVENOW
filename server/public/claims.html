@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claims — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+.claim-section { background: var(--white); border: 1px solid var(--gray-border); border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+.claim-section__head { display: flex; align-items: center; gap: 10px; padding: 16px 20px; cursor: pointer; }
+.claim-section__title { font-weight: 800; font-size: 1rem; }
+.claim-section__count { color: var(--text-muted); font-size: 0.85rem; }
+.claim-section__chevron { margin-left: auto; transition: transform 0.15s; color: var(--text-muted); }
+.claim-section__chevron.open { transform: rotate(90deg); }
+.claim-section__body { border-top: 1px solid var(--gray-border); }
+.claim-row { cursor: pointer; }
+
+.claim-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100;
+}
+.claim-modal { background: var(--white); border-radius: 10px; width: 520px; max-width: 92vw; max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; }
+.claim-modal__header { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; border-bottom: 1px solid var(--gray-border); }
+.claim-modal__title { font-weight: 800; font-size: 1.05rem; }
+.claim-modal__close { background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text-muted); line-height: 1; }
+.claim-steps { display: flex; padding: 16px 22px 0; gap: 8px; }
+.claim-step-dot {
+  flex: 1; text-align: center; font-size: 0.72rem; font-weight: 700; color: var(--text-muted);
+  padding-bottom: 12px; border-bottom: 3px solid var(--gray-border); display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.claim-step-dot span {
+  width: 22px; height: 22px; border-radius: 50%; background: var(--gray-light); color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center; font-size: 0.7rem;
+}
+.claim-step-dot.active { color: var(--black); border-bottom-color: var(--black); }
+.claim-step-dot.active span { background: var(--black); color: #fff; }
+.claim-step-dot.done { color: var(--black); border-bottom-color: var(--black); }
+.claim-step-dot.done span { background: #fff; color: var(--black); border: 1.5px solid var(--black); }
+.claim-modal__body { padding: 22px; overflow-y: auto; flex: 1; }
+.claim-modal__footer { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 16px 22px; border-top: 1px solid var(--gray-border); }
+.claim-vehicle-option {
+  display: flex; justify-content: space-between; align-items: center; padding: 12px 14px;
+  border: 1.5px solid var(--gray-border); border-radius: 6px; margin-bottom: 8px; cursor: pointer;
+}
+.claim-vehicle-option:hover { border-color: var(--black); }
+.claim-vehicle-option.selected { border-color: var(--black); background: var(--gray-light); }
+</style>
+</head>
+<body>
+
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
+<div class="page">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+    <div>
+      <div class="page-title">Claims</div>
+      <div class="page-sub">Track vehicle damage claims from report through payout or closure.</div>
+    </div>
+    <button class="btn" id="cl-create-btn">+ Create Claim</button>
+  </div>
+
+  <div style="margin-bottom:20px;">
+    <input id="cl-search" placeholder="Search by claim ID, vehicle, or reference…" style="width:100%;max-width:420px;padding:10px 14px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;">
+  </div>
+
+  <div id="claim-sections"></div>
+</div>
+</div>
+</div>
+
+<div id="claim-modal-overlay" class="claim-modal-overlay" style="display:none;">
+  <div class="claim-modal">
+    <div class="claim-modal__header">
+      <div class="claim-modal__title">Create Claim</div>
+      <button class="claim-modal__close" id="claim-modal-close">&times;</button>
+    </div>
+    <div class="claim-steps" id="claim-steps"></div>
+    <div class="claim-modal__body" id="claim-modal-body"></div>
+    <div class="claim-modal__footer" id="claim-modal-footer"></div>
+  </div>
+</div>
+
+<script src="js/admin-common.js"></script>
+<script>
+const STATUS_LABELS = { initial_claim: 'Initial Claim', pending_payment: 'Pending Payment', closed: 'Closed', collections: 'Collections' };
+const STATUS_ORDER = ['initial_claim', 'pending_payment', 'closed', 'collections'];
+const DETAILED_STATUS_OPTIONS = [
+  'In Review', 'Paid and In Repair', 'Unpaid and In Repair', 'Ready to Relist', 'Sent to Debt Collection',
+  'Total Loss Pending Payment', 'Total Loss Collections', 'Total Loss Closed', 'Pending Title Paperwork',
+  'Pending Valuation', 'Awaiting Adjuster', 'Confirmed Denied Coverage', 'Quotes from Shop',
+  'Sent in Documentation', 'Waiting Payment', 'Closed Collections',
+];
+const INCIDENT_TYPE_OPTIONS = ['Collision', 'Theft', 'Vandalism', 'Weather Damage', 'Mechanical Failure', 'Other'];
+
+let claims = [];
+let vehicles = [];
+let insuranceRecords = [];
+let users = [];
+let openSections = new Set(STATUS_ORDER);
+
+function fmtDateOnly(d) {
+  if (!d) return '—';
+  return new Date(d.length <= 10 ? d + 'T00:00:00' : d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function renderSections() {
+  const search = document.getElementById('cl-search').value.trim().toLowerCase();
+  const filtered = claims.filter(c => {
+    if (!search) return true;
+    const haystack = `#${c.id} ${c.make} ${c.model} ${c.external_reference_id || ''}`.toLowerCase();
+    return haystack.includes(search);
+  });
+
+  const box = document.getElementById('claim-sections');
+  box.innerHTML = STATUS_ORDER.map(status => {
+    const rows = filtered.filter(c => c.status === status);
+    const open = openSections.has(status);
+    return `
+      <div class="claim-section">
+        <div class="claim-section__head" data-status="${status}">
+          <div class="claim-section__title">${STATUS_LABELS[status]}</div>
+          <div class="claim-section__count">${rows.length}</div>
+          <div class="claim-section__chevron ${open ? 'open' : ''}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+          </div>
+        </div>
+        ${open ? `
+          <div class="claim-section__body">
+            <table>
+              <thead>
+                <tr><th>Claim ID</th><th>Vehicle</th><th>Damage Reported</th><th>Detailed Status</th><th>Insurance</th><th>Assigned To</th><th>Next Task</th></tr>
+              </thead>
+              <tbody>
+                ${rows.length ? rows.map(c => `
+                  <tr class="claim-row" data-id="${c.id}">
+                    <td>#${String(c.id).padStart(4, '0')}</td>
+                    <td>${c.year} ${c.make} ${c.model}${c.color ? ` (${c.color})` : ''}</td>
+                    <td>${fmtDateOnly(c.damage_reported_at)}</td>
+                    <td>${c.detailed_status || '—'}</td>
+                    <td>${c.insurance_carrier || '—'}</td>
+                    <td>${c.assigned_to_name || '—'}</td>
+                    <td>${c.next_task || '—'}</td>
+                  </tr>
+                `).join('') : `<tr><td colspan="7" style="text-align:center;color:#888;padding:24px;">No claims in this section</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+
+  box.querySelectorAll('.claim-section__head').forEach(el => {
+    el.addEventListener('click', () => {
+      const status = el.dataset.status;
+      if (openSections.has(status)) openSections.delete(status); else openSections.add(status);
+      renderSections();
+    });
+  });
+  box.querySelectorAll('.claim-row').forEach(el => {
+    el.addEventListener('click', () => { window.location.href = `claim-detail.html?id=${el.dataset.id}`; });
+  });
+}
+
+async function load() {
+  [claims, vehicles, insuranceRecords, users] = await Promise.all([
+    api('/api/claims'),
+    api('/api/vehicles'),
+    api('/api/insurance'),
+    api('/api/auth/users'),
+  ]);
+  renderSections();
+}
+
+document.getElementById('cl-search').addEventListener('input', renderSections);
+
+// ── Create Claim wizard: Step 1 select vehicle, Step 2 claim details ──
+let claimStep = 1;
+let claimForm = {};
+
+function resetClaimForm() {
+  claimStep = 1;
+  claimForm = {
+    vehicle_id: null, status: 'initial_claim', detailed_status: '', incident_type: '',
+    external_reference_id: '', event_source: '', damage_notes: '', insurance_record_id: '', assigned_to: '',
+  };
+}
+
+function renderClaimSteps() {
+  document.getElementById('claim-steps').innerHTML = `
+    <div class="claim-step-dot ${claimStep === 1 ? 'active' : 'done'}"><span>${claimStep > 1 ? '✓' : '1'}</span>Select Unit</div>
+    <div class="claim-step-dot ${claimStep === 2 ? 'active' : ''}"><span>2</span>Claim Details</div>
+  `;
+}
+
+function renderClaimStep() {
+  renderClaimSteps();
+  const body = document.getElementById('claim-modal-body');
+  const footer = document.getElementById('claim-modal-footer');
+
+  if (claimStep === 1) {
+    body.innerHTML = vehicles.length ? vehicles.map(v => `
+      <div class="claim-vehicle-option ${claimForm.vehicle_id === v.id ? 'selected' : ''}" data-id="${v.id}">
+        <div><strong>${v.year} ${v.make} ${v.model}</strong>${v.color ? ` (${v.color})` : ''}</div>
+        <span class="badge badge-${v.status === 'available' ? 'available' : v.status === 'reserved' ? 'reserved' : v.status === 'rented' ? 'rented' : 'rejected'}">${v.status}</span>
+      </div>
+    `).join('') : '<p class="rd-empty">No vehicles on file</p>';
+    body.querySelectorAll('.claim-vehicle-option').forEach(el => {
+      el.addEventListener('click', () => { claimForm.vehicle_id = Number(el.dataset.id); renderClaimStep(); });
+    });
+    footer.innerHTML = `<button class="btn" id="claim-next-btn" ${claimForm.vehicle_id ? '' : 'disabled'}>Next</button>`;
+    document.getElementById('claim-next-btn').addEventListener('click', () => {
+      if (!claimForm.vehicle_id) return;
+      claimStep = 2;
+      renderClaimStep();
+    });
+  } else {
+    body.innerHTML = `
+      <div class="field-row">
+        <div class="field"><label>Status</label>
+          <select id="cf-status">${STATUS_ORDER.map(s => `<option value="${s}" ${claimForm.status === s ? 'selected' : ''}>${STATUS_LABELS[s]}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label>Detailed Status</label>
+          <select id="cf-detailed-status">
+            <option value="">—</option>
+            ${DETAILED_STATUS_OPTIONS.map(o => `<option value="${o}" ${claimForm.detailed_status === o ? 'selected' : ''}>${o}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="field"><label>External Claim Reference ID</label><input id="cf-ref" placeholder="e.g. 2026-RAC003838" value="${claimForm.external_reference_id}"></div>
+      <div class="field"><label>Event Source</label><input id="cf-source" placeholder="e.g. Uber, Private Rental" value="${claimForm.event_source}"></div>
+      <div class="field"><label>Claim Incident Type *</label>
+        <select id="cf-incident-type">
+          <option value="">—</option>
+          ${INCIDENT_TYPE_OPTIONS.map(o => `<option value="${o}" ${claimForm.incident_type === o ? 'selected' : ''}>${o}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>Insurance Policy</label>
+        <select id="cf-insurance">
+          <option value="">—</option>
+          ${insuranceRecords.map(ir => `<option value="${ir.id}" ${String(claimForm.insurance_record_id) === String(ir.id) ? 'selected' : ''}>${ir.first_name} ${ir.last_name} — ${ir.carrier || 'No carrier'} (${ir.type === 'our_policy' ? 'Our Policy' : 'Private'})</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>Assigned To</label>
+        <select id="cf-assigned">
+          <option value="">—</option>
+          ${users.map(u => `<option value="${u.id}" ${String(claimForm.assigned_to) === String(u.id) ? 'selected' : ''}>${u.name}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>Damage Notes</label><textarea id="cf-notes" rows="3" placeholder="Describe the damage…">${claimForm.damage_notes}</textarea></div>
+    `;
+    footer.innerHTML = `
+      <button class="btn btn-outline" id="claim-back-btn">Back</button>
+      <button class="btn" id="claim-submit-btn">Create Claim</button>
+    `;
+    document.getElementById('claim-back-btn').addEventListener('click', () => { claimStep = 1; renderClaimStep(); });
+    document.getElementById('claim-submit-btn').addEventListener('click', async () => {
+      claimForm.status = document.getElementById('cf-status').value;
+      claimForm.detailed_status = document.getElementById('cf-detailed-status').value;
+      claimForm.external_reference_id = document.getElementById('cf-ref').value;
+      claimForm.event_source = document.getElementById('cf-source').value;
+      claimForm.incident_type = document.getElementById('cf-incident-type').value;
+      claimForm.insurance_record_id = document.getElementById('cf-insurance').value;
+      claimForm.assigned_to = document.getElementById('cf-assigned').value;
+      claimForm.damage_notes = document.getElementById('cf-notes').value;
+      if (!claimForm.incident_type) { alert('Claim Incident Type is required'); return; }
+      await api('/api/claims', { method: 'POST', body: JSON.stringify(claimForm) });
+      document.getElementById('claim-modal-overlay').style.display = 'none';
+      await load();
+    });
+  }
+}
+
+document.getElementById('cl-create-btn').addEventListener('click', () => {
+  resetClaimForm();
+  renderClaimStep();
+  document.getElementById('claim-modal-overlay').style.display = 'flex';
+});
+document.getElementById('claim-modal-close').addEventListener('click', () => {
+  document.getElementById('claim-modal-overlay').style.display = 'none';
+});
+document.getElementById('claim-modal-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'claim-modal-overlay') e.target.style.display = 'none';
+});
+
+(async () => {
+  renderSidebar('claims');
+  await requireLogin();
+  load();
+})();
+</script>
+</body>
+</html>

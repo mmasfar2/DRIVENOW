@@ -75,6 +75,16 @@ router.post('/', requireAuth, (req, res) => {
       INSERT INTO waitlist (id, first_name, last_name, phone, email, desired_vehicle, notes, status, created_at, updated_at)
       VALUES (@id, @first_name, @last_name, @phone, @email, @desired_vehicle, @notes, @status, @created_at, @updated_at)
     `).run(entry);
+  } else if (row.entity_type === 'claim_delete') {
+    const { claim } = payload;
+    db.prepare(`
+      INSERT INTO claims
+        (id, vehicle_id, application_id, insurance_record_id, assigned_to, status, detailed_status,
+         incident_type, external_reference_id, event_source, damage_notes, damage_reported_at, next_task, created_at, updated_at)
+      VALUES
+        (@id, @vehicle_id, @application_id, @insurance_record_id, @assigned_to, @status, @detailed_status,
+         @incident_type, @external_reference_id, @event_source, @damage_notes, @damage_reported_at, @next_task, @created_at, @updated_at)
+    `).run(claim);
   }
 
   db.prepare('DELETE FROM undo_log WHERE id = ?').run(row.id);

@@ -19,6 +19,7 @@ const customerRoutes = require('./routes/customers');
 const metricsRoutes = require('./routes/metrics');
 const undoRoutes = require('./routes/undo');
 const insuranceRoutes = require('./routes/insurance');
+const claimRoutes = require('./routes/claims');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -61,6 +62,7 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/undo', undoRoutes);
 app.use('/api/insurance', insuranceRoutes);
+app.use('/api/claims', claimRoutes);
 
 app.use('/uploads', express.static(UPLOADS_DIR));
 app.use(express.static(path.join(__dirname, 'public')));

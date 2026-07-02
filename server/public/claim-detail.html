@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claim Detail — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
+<div class="page">
+  <a href="#" id="cld-back" style="font-size:0.82rem;color:#888;">← Back to Claims</a>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:12px;">
+    <div>
+      <div class="page-title" id="cld-title" style="margin-bottom:4px;">Loading…</div>
+      <div class="page-sub" style="margin-bottom:0;" id="cld-sub"></div>
+    </div>
+    <span class="badge" id="cld-status-badge"></span>
+  </div>
+
+  <div class="rd-tabs">
+    <div class="rd-tab active" data-tab="details">Details</div>
+  </div>
+
+  <div id="cld-panel-details">
+    <div class="panel">
+      <div class="panel-title">Vehicle</div>
+      <div class="info-row"><div class="info-row__label">Vehicle</div><div class="info-row__val" id="cld-vehicle"></div></div>
+      <div class="info-row" style="border-bottom:none;"><div class="info-row__label">License Plate</div><div class="info-row__val" id="cld-plate"></div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Claim Details</div>
+      <div class="field-row">
+        <div class="field"><label>Status</label><select id="cld-f-status"></select></div>
+        <div class="field"><label>Detailed Status</label><select id="cld-f-detailed-status"></select></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Claim Incident Type</label><select id="cld-f-incident-type"></select></div>
+        <div class="field"><label>Damage Reported</label><input type="date" id="cld-f-reported-at"></div>
+      </div>
+      <div class="field"><label>External Claim Reference ID</label><input id="cld-f-ref"></div>
+      <div class="field"><label>Event Source</label><input id="cld-f-source"></div>
+      <div class="field-row">
+        <div class="field"><label>Insurance Policy</label><select id="cld-f-insurance"></select></div>
+        <div class="field"><label>Assigned To</label><select id="cld-f-assigned"></select></div>
+      </div>
+      <div class="field"><label>Next Task</label><input id="cld-f-next-task" placeholder="e.g. Follow up with adjuster"></div>
+      <div class="field"><label>Damage Notes</label><textarea id="cld-f-notes" rows="4"></textarea></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <button class="btn btn-outline" id="cld-delete-btn" style="color:#c62828;border-color:#c62828;">Delete Claim</button>
+        <button class="btn" id="cld-save-btn">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<script src="js/admin-common.js"></script>
+<script>
+const id = new URLSearchParams(window.location.search).get('id');
+const STATUS_LABELS = { initial_claim: 'Initial Claim', pending_payment: 'Pending Payment', closed: 'Closed', collections: 'Collections' };
+const STATUS_ORDER = ['initial_claim', 'pending_payment', 'closed', 'collections'];
+const DETAILED_STATUS_OPTIONS = [
+  'In Review', 'Paid and In Repair', 'Unpaid and In Repair', 'Ready to Relist', 'Sent to Debt Collection',
+  'Total Loss Pending Payment', 'Total Loss Collections', 'Total Loss Closed', 'Pending Title Paperwork',
+  'Pending Valuation', 'Awaiting Adjuster', 'Confirmed Denied Coverage', 'Quotes from Shop',
+  'Sent in Documentation', 'Waiting Payment', 'Closed Collections',
+];
+const INCIDENT_TYPE_OPTIONS = ['Collision', 'Theft', 'Vandalism', 'Weather Damage', 'Mechanical Failure', 'Other'];
+
+let claim, insuranceRecords, users;
+
+async function load() {
+  [claim, insuranceRecords, users] = await Promise.all([
+    api(`/api/claims/${id}`),
+    api('/api/insurance'),
+    api('/api/auth/users'),
+  ]);
+  render();
+}
+
+function render() {
+  document.getElementById('cld-title').textContent = `Claim #${String(claim.id).padStart(4, '0')} — ${claim.year} ${claim.make} ${claim.model}`;
+  document.getElementById('cld-sub').textContent = claim.incident_type || 'No incident type set';
+  const badge = document.getElementById('cld-status-badge');
+  badge.textContent = STATUS_LABELS[claim.status] || claim.status;
+  badge.className = `badge ${claim.status === 'closed' ? 'badge-completed' : claim.status === 'collections' ? 'badge-rejected' : claim.status === 'pending_payment' ? 'badge-reserved' : 'badge-active'}`;
+
+  document.getElementById('cld-vehicle').textContent = `${claim.year} ${claim.make} ${claim.model}${claim.color ? ` (${claim.color})` : ''}`;
+  document.getElementById('cld-plate').textContent = claim.license_plate || '—';
+
+  document.getElementById('cld-f-status').innerHTML = STATUS_ORDER.map(s => `<option value="${s}" ${claim.status === s ? 'selected' : ''}>${STATUS_LABELS[s]}</option>`).join('');
+  document.getElementById('cld-f-detailed-status').innerHTML = '<option value="">—</option>' +
+    DETAILED_STATUS_OPTIONS.map(o => `<option value="${o}" ${claim.detailed_status === o ? 'selected' : ''}>${o}</option>`).join('');
+  document.getElementById('cld-f-incident-type').innerHTML = '<option value="">—</option>' +
+    INCIDENT_TYPE_OPTIONS.map(o => `<option value="${o}" ${claim.incident_type === o ? 'selected' : ''}>${o}</option>`).join('');
+  document.getElementById('cld-f-reported-at').value = claim.damage_reported_at ? claim.damage_reported_at.slice(0, 10) : '';
+  document.getElementById('cld-f-ref').value = claim.external_reference_id || '';
+  document.getElementById('cld-f-source').value = claim.event_source || '';
+  document.getElementById('cld-f-insurance').innerHTML = '<option value="">—</option>' +
+    insuranceRecords.map(ir => `<option value="${ir.id}" ${String(claim.insurance_record_id) === String(ir.id) ? 'selected' : ''}>${ir.first_name} ${ir.last_name} — ${ir.carrier || 'No carrier'} (${ir.type === 'our_policy' ? 'Our Policy' : 'Private'})</option>`).join('');
+  document.getElementById('cld-f-assigned').innerHTML = '<option value="">—</option>' +
+    users.map(u => `<option value="${u.id}" ${String(claim.assigned_to) === String(u.id) ? 'selected' : ''}>${u.name}</option>`).join('');
+  document.getElementById('cld-f-next-task').value = claim.next_task || '';
+  document.getElementById('cld-f-notes').value = claim.damage_notes || '';
+}
+
+document.getElementById('cld-save-btn').addEventListener('click', async () => {
+  await api(`/api/claims/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      status: document.getElementById('cld-f-status').value,
+      detailed_status: document.getElementById('cld-f-detailed-status').value,
+      incident_type: document.getElementById('cld-f-incident-type').value,
+      damage_reported_at: document.getElementById('cld-f-reported-at').value,
+      external_reference_id: document.getElementById('cld-f-ref').value,
+      event_source: document.getElementById('cld-f-source').value,
+      insurance_record_id: document.getElementById('cld-f-insurance').value,
+      assigned_to: document.getElementById('cld-f-assigned').value,
+      next_task: document.getElementById('cld-f-next-task').value,
+      damage_notes: document.getElementById('cld-f-notes').value,
+    }),
+  });
+  await load();
+});
+
+document.getElementById('cld-delete-btn').addEventListener('click', async () => {
+  if (!confirm('Delete this claim? You can undo this from the Undo button at the top of the page.')) return;
+  await api(`/api/claims/${id}`, { method: 'DELETE' });
+  refreshUndoButton();
+  window.location.href = 'claims.html';
+});
+
+document.getElementById('cld-back').addEventListener('click', (e) => {
+  e.preventDefault();
+  if (window.history.length > 1) window.history.back();
+  else window.location.href = 'claims.html';
+});
+
+(async () => {
+  renderSidebar('claims');
+  await requireLogin();
+  load();
+})();
+</script>
+</body>
+</html>
