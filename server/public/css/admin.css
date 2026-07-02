@@ -54,6 +54,8 @@ a { text-decoration: none; color: inherit; }
 .sidebar__nav-item { cursor: grab; }
 .sidebar__nav-item.dragging { opacity: 0.4; }
 .sidebar__drag-handle { color: rgba(255,255,255,0.3); font-size: 0.9rem; }
+.sidebar__nav-toggle { cursor: pointer; }
+.sidebar__caret { margin-left: auto; font-size: 0.7rem; color: rgba(255,255,255,0.4); }
 .sidebar__subnav { display: flex; flex-direction: column; }
 .sidebar__sublink {
   display: block; padding: 9px 24px 9px 46px; font-size: 0.76rem; font-weight: 600;

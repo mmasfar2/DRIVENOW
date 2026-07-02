@@ -454,6 +454,32 @@ function upsertCustomer({ email, first_name, last_name, phone, address, city, st
   return result.lastInsertRowid;
 }
 
+// Keeps the Insurance panel in sync with intake — called whenever a public
+// application, manual booking, or insurance-quote submission includes an
+// insurance document/detail, so it shows up there without a separate manual
+// entry step. One record per (customer, type); re-submitting only fills in
+// gaps (via COALESCE) rather than overwriting anything an admin already
+// edited from the Insurance panel itself.
+function upsertInsuranceRecord(customerId, type, { document_path, notes } = {}) {
+  if (!customerId || !type) return;
+  const existing = db.prepare('SELECT id FROM insurance_records WHERE customer_id = ? AND type = ?').get(customerId, type);
+  if (existing) {
+    db.prepare(`
+      UPDATE insurance_records SET
+        document_path = COALESCE(?, document_path),
+        notes = COALESCE(notes, ?),
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(document_path || null, notes || null, existing.id);
+    return existing.id;
+  }
+  const result = db.prepare(`
+    INSERT INTO insurance_records (customer_id, type, document_path, notes)
+    VALUES (?, ?, ?, ?)
+  `).run(customerId, type, document_path || null, notes || null);
+  return result.lastInsertRowid;
+}
+
 // Backfill: any vehicle with a legacy single photo_path but no rows yet in
 // vehicle_photos gets that photo carried over so it isn't lost.
 const vehiclesWithLegacyPhoto = db.prepare(`
@@ -500,4 +526,4 @@ function queueMessage(applicationId, channel, to, body) {
     .run(applicationId, channel, to, body);
 }
 
-module.exports = { db, logActivity, queueMessage, upsertCustomer, logUndo };
+module.exports = { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo };
