@@ -27,6 +27,13 @@ const SIDEBAR_LINKS = [
   { key: 'maintenance', label: 'Maintenance', href: 'maintenance.html' },
   { key: 'metrics', label: 'Metrics', href: 'metrics.html' },
   { key: 'clients', label: 'Clients', href: 'clients.html' },
+  {
+    key: 'insurance', label: 'Insurance', href: 'insurance.html?section=our_policies',
+    children: [
+      { key: 'insurance-our-policies', label: 'Our Policies', href: 'insurance.html?section=our_policies' },
+      { key: 'insurance-private', label: 'Private', href: 'insurance.html?section=private' },
+    ],
+  },
   { key: 'mysite', label: 'My Site', href: 'https://mmasfar2.github.io/drivenow/', external: true },
 ];
 
@@ -49,14 +56,22 @@ function renderSidebar(activeKey) {
   const root = document.getElementById('sidebar-root');
   if (!root) return;
   const links = getOrderedSidebarLinks();
+  const isGroupActive = (l) => l.key === activeKey || (l.children && l.children.some(c => c.key === activeKey));
   root.innerHTML = `
     <div class="sidebar">
       <div class="sidebar__logo">Drive<span>Now</span></div>
       <div class="sidebar__nav" id="sidebar-nav">
         ${links.map(l => `
-          <a href="${l.href}" draggable="true" data-key="${l.key}" class="${l.key === activeKey ? 'active' : ''}"${l.external ? ' target="_blank" rel="noopener"' : ''}>
-            <span class="sidebar__drag-handle">⠿</span>${l.label}${l.external ? ' ↗' : ''}
-          </a>`).join('')}
+          <div class="sidebar__nav-item" draggable="true" data-key="${l.key}">
+            <a href="${l.href}" class="${l.key === activeKey ? 'active' : ''}"${l.external ? ' target="_blank" rel="noopener"' : ''}>
+              <span class="sidebar__drag-handle">⠿</span>${l.label}${l.external ? ' ↗' : ''}
+            </a>
+            ${l.children && isGroupActive(l) ? `
+              <div class="sidebar__subnav">
+                ${l.children.map(c => `<a href="${c.href}" class="sidebar__sublink${c.key === activeKey ? ' active' : ''}">${c.label}</a>`).join('')}
+              </div>
+            ` : ''}
+          </div>`).join('')}
       </div>
       <div class="sidebar__footer">
         <div class="sidebar__user" id="nav-user"></div>
@@ -115,23 +130,23 @@ function initSidebarDragReorder() {
   if (!nav) return;
   let dragEl = null;
 
-  nav.querySelectorAll('a').forEach(a => {
-    a.addEventListener('dragstart', (e) => {
-      dragEl = a;
-      a.classList.add('dragging');
+  nav.querySelectorAll(':scope > .sidebar__nav-item').forEach(item => {
+    item.addEventListener('dragstart', (e) => {
+      dragEl = item;
+      item.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
     });
-    a.addEventListener('dragend', () => {
-      a.classList.remove('dragging');
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
       dragEl = null;
-      saveSidebarOrder(Array.from(nav.querySelectorAll('a')).map(el => el.dataset.key));
+      saveSidebarOrder(Array.from(nav.querySelectorAll(':scope > .sidebar__nav-item')).map(el => el.dataset.key));
     });
-    a.addEventListener('dragover', (e) => {
+    item.addEventListener('dragover', (e) => {
       e.preventDefault();
-      if (!dragEl || dragEl === a) return;
-      const rect = a.getBoundingClientRect();
+      if (!dragEl || dragEl === item) return;
+      const rect = item.getBoundingClientRect();
       const before = (e.clientY - rect.top) / rect.height < 0.5;
-      nav.insertBefore(dragEl, before ? a : a.nextSibling);
+      nav.insertBefore(dragEl, before ? item : item.nextSibling);
     });
   });
 }

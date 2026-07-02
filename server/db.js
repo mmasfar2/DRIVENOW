@@ -369,6 +369,24 @@ if (!customerCols.includes('insurance_policy_number')) {
   db.exec('ALTER TABLE customers ADD COLUMN insurance_policy_number TEXT');
 }
 
+db.exec(`
+CREATE TABLE IF NOT EXISTS insurance_records (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id INTEGER NOT NULL,
+  type TEXT NOT NULL, -- 'private' | 'our_policy'
+  carrier TEXT,
+  protection_type TEXT,
+  policy_number TEXT,
+  document_path TEXT,
+  last_verified_at TEXT,
+  next_payment_date TEXT,
+  notes TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (customer_id) REFERENCES customers(id)
+);
+`);
+
 // Backfill: build a customers record for every distinct email already in
 // applications, so existing leads/bookings get a profile retroactively.
 const existingCustomerEmails = new Set(db.prepare('SELECT lower(email) as e FROM customers').all().map(r => r.e));

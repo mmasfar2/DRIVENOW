@@ -43,6 +43,7 @@ function getProfile(email) {
   const outstanding = Math.round(bookings.reduce((sum, b) => sum + Math.max(0, b.owed), 0) * 100) / 100;
 
   const tags = db.prepare('SELECT * FROM customer_tags WHERE customer_id = ? ORDER BY created_at ASC').all(customer.id);
+  const insuranceRecords = db.prepare('SELECT * FROM insurance_records WHERE customer_id = ? ORDER BY type').all(customer.id);
 
   return {
     ...customer,
@@ -56,6 +57,7 @@ function getProfile(email) {
       outstanding,
     },
     bookings,
+    insurance_records: insuranceRecords,
     tags,
   };
 }

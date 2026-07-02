@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Insurance Detail — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
+<div class="page">
+  <a href="#" id="ind-back" style="font-size:0.82rem;color:#888;">← Back to Insurance</a>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:12px;">
+    <div>
+      <div class="page-title" id="ind-title" style="margin-bottom:4px;">Loading…</div>
+      <div class="page-sub" style="margin-bottom:0;" id="ind-sub"></div>
+    </div>
+    <span class="badge" id="ind-type-badge"></span>
+  </div>
+
+  <div class="rd-tabs">
+    <div class="rd-tab active" data-tab="details">Details</div>
+  </div>
+
+  <div id="ind-panel-details">
+    <div class="panel">
+      <div class="panel-title">Customer</div>
+      <div class="info-row"><div class="info-row__label">Name</div><div class="info-row__val" id="ind-cust-name"></div></div>
+      <div class="info-row"><div class="info-row__label">Email</div><div class="info-row__val" id="ind-cust-email"></div></div>
+      <div class="info-row"><div class="info-row__label">Phone</div><div class="info-row__val" id="ind-cust-phone"></div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Insurance Details</div>
+      <div class="field-row">
+        <div class="field"><label>Carrier</label><input id="ind-f-carrier"></div>
+        <div class="field"><label>Protection Type</label><input id="ind-f-protection-type"></div>
+      </div>
+      <div class="field"><label>Policy Number</label><input id="ind-f-policy-number"></div>
+      <div class="field-row">
+        <div class="field"><label>Last Date Verified</label><input type="date" id="ind-f-last-verified"></div>
+        <div class="field"><label>Next Payment Date</label><input type="date" id="ind-f-next-payment"></div>
+      </div>
+      <div class="field"><label>Additional Notes</label><textarea id="ind-f-notes" rows="3" placeholder="Internal notes about this policy…"></textarea></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <button class="btn btn-outline" id="ind-delete-btn" style="color:#c62828;border-color:#c62828;">Delete Record</button>
+        <button class="btn" id="ind-save-btn">Save Changes</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Insurance Document</div>
+      <div class="info-row"><div class="info-row__label">Uploaded File</div><div class="info-row__val" id="ind-doc-view"></div></div>
+      <div class="field" style="margin-top:14px;">
+        <label>Upload / Replace Document</label>
+        <input type="file" id="ind-doc-file">
+      </div>
+      <button class="btn btn-sm" id="ind-doc-upload-btn">Upload</button>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<script src="js/admin-common.js"></script>
+<script>
+const id = new URLSearchParams(window.location.search).get('id');
+const TYPE_LABELS = { our_policy: 'Our Policy', private: 'Private' };
+let record;
+
+async function load() {
+  record = await api(`/api/insurance/${id}`);
+  render();
+}
+
+function render() {
+  document.getElementById('ind-title').textContent = `${record.first_name} ${record.last_name} — Insurance`;
+  document.getElementById('ind-sub').textContent = record.carrier ? `${record.carrier}${record.protection_type ? ` · ${record.protection_type}` : ''}` : 'No carrier on file yet';
+  const badge = document.getElementById('ind-type-badge');
+  badge.textContent = TYPE_LABELS[record.type] || record.type;
+  badge.className = `badge ${record.type === 'our_policy' ? 'badge-reserved' : 'badge-available'}`;
+
+  document.getElementById('ind-cust-name').innerHTML = `<a href="customer-detail.html?email=${encodeURIComponent(record.email)}" style="color:inherit;">${record.first_name} ${record.last_name}</a>`;
+  document.getElementById('ind-cust-email').textContent = record.email || '—';
+  document.getElementById('ind-cust-phone').textContent = record.phone || '—';
+
+  document.getElementById('ind-f-carrier').value = record.carrier || '';
+  document.getElementById('ind-f-protection-type').value = record.protection_type || '';
+  document.getElementById('ind-f-policy-number').value = record.policy_number || '';
+  document.getElementById('ind-f-last-verified').value = record.last_verified_at ? record.last_verified_at.slice(0, 10) : '';
+  document.getElementById('ind-f-next-payment').value = record.next_payment_date ? record.next_payment_date.slice(0, 10) : '';
+  document.getElementById('ind-f-notes').value = record.notes || '';
+
+  document.getElementById('ind-doc-view').innerHTML = filePreviewHtml(record.document_path);
+}
+
+document.getElementById('ind-save-btn').addEventListener('click', async () => {
+  await api(`/api/insurance/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      carrier: document.getElementById('ind-f-carrier').value,
+      protection_type: document.getElementById('ind-f-protection-type').value,
+      policy_number: document.getElementById('ind-f-policy-number').value,
+      last_verified_at: document.getElementById('ind-f-last-verified').value,
+      next_payment_date: document.getElementById('ind-f-next-payment').value,
+      notes: document.getElementById('ind-f-notes').value,
+    }),
+  });
+  await load();
+});
+
+document.getElementById('ind-delete-btn').addEventListener('click', async () => {
+  if (!confirm('Delete this insurance record? You can undo this from the Undo button at the top of the page.')) return;
+  await api(`/api/insurance/${id}`, { method: 'DELETE' });
+  refreshUndoButton();
+  window.location.href = `insurance.html?section=${record.type}`;
+});
+
+document.getElementById('ind-doc-upload-btn').addEventListener('click', async () => {
+  const fileInput = document.getElementById('ind-doc-file');
+  if (!fileInput.files.length) { alert('Choose a file first'); return; }
+  const fd = new FormData();
+  fd.append('document', fileInput.files[0]);
+  const res = await fetch(`/api/insurance/${id}/document`, { method: 'POST', body: fd });
+  if (!res.ok) { alert('Upload failed'); return; }
+  fileInput.value = '';
+  await load();
+});
+
+document.getElementById('ind-back').addEventListener('click', (e) => {
+  e.preventDefault();
+  if (window.history.length > 1) window.history.back();
+  else window.location.href = 'insurance.html';
+});
+
+(async () => {
+  renderSidebar('insurance');
+  await requireLogin();
+  load();
+})();
+</script>
+</body>
+</html>
