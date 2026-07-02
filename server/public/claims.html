@@ -44,6 +44,16 @@
 }
 .claim-vehicle-option:hover { border-color: var(--black); }
 .claim-vehicle-option.selected { border-color: var(--black); background: var(--gray-light); }
+
+.claim-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 1.5px solid var(--gray-border); border-radius: 6px; margin-bottom: 18px; }
+.claim-toggle-row__text { font-size: 0.85rem; font-weight: 600; }
+.claim-toggle-row__sub { font-size: 0.76rem; color: var(--text-muted); margin-top: 2px; font-weight: 400; }
+.claim-toggle { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+.claim-toggle input { opacity: 0; width: 0; height: 0; }
+.claim-toggle__slider { position: absolute; inset: 0; background: var(--gray-border); border-radius: 999px; cursor: pointer; transition: 0.15s; }
+.claim-toggle__slider::before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: 0.15s; }
+.claim-toggle input:checked + .claim-toggle__slider { background: var(--black); }
+.claim-toggle input:checked + .claim-toggle__slider::before { transform: translateX(18px); }
 </style>
 </head>
 <body>
@@ -86,10 +96,12 @@
 const STATUS_LABELS = { initial_claim: 'Initial Claim', pending_payment: 'Pending Payment', closed: 'Closed', collections: 'Collections' };
 const STATUS_ORDER = ['initial_claim', 'pending_payment', 'closed', 'collections'];
 const DETAILED_STATUS_OPTIONS = [
-  'In Review', 'Paid and In Repair', 'Unpaid and In Repair', 'Ready to Relist', 'Sent to Debt Collection',
-  'Total Loss Pending Payment', 'Total Loss Collections', 'Total Loss Closed', 'Pending Title Paperwork',
-  'Pending Valuation', 'Awaiting Adjuster', 'Confirmed Denied Coverage', 'Quotes from Shop',
-  'Sent in Documentation', 'Waiting Payment', 'Closed Collections',
+  'Awaiting 3rd Party', 'Payment Plan', 'Non Payment', 'Supplement Submitted', 'Waiting Customer Response',
+  'Pending Deductible', 'Paid / Ready for Collections', 'Denied', 'Turo Pay', 'Total Loss Awaiting Payment',
+  'Damage Awaiting Payment', 'In Review', 'Paid and In Repair', 'Unpaid and In Repair', 'Ready to Relist',
+  'Sent to Debt Collection', 'Total Loss Pending Payment', 'Total Loss Collections', 'Total Loss Closed',
+  'Pending Title Paperwork', 'Pending Valuation', 'Awaiting Adjuster', 'Confirmed Denied Coverage',
+  'Quotes from Shop', 'Sent in Documentation', 'Waiting Payment', 'Closed Collections',
 ];
 const INCIDENT_TYPE_OPTIONS = ['Collision', 'Theft', 'Vandalism', 'Weather Damage', 'Mechanical Failure', 'Other'];
 
@@ -184,6 +196,8 @@ function resetClaimForm() {
   claimForm = {
     vehicle_id: null, status: 'initial_claim', detailed_status: '', incident_type: '',
     external_reference_id: '', event_source: '', damage_notes: '', insurance_record_id: '', assigned_to: '',
+    damage_reported_at: new Date().toISOString().slice(0, 10), deductible_amount: '', max_out_of_pocket: '',
+    vehicle_location: '', mark_vehicle_inactive: false,
   };
 }
 
@@ -229,26 +243,46 @@ function renderClaimStep() {
         </div>
       </div>
       <div class="field"><label>External Claim Reference ID</label><input id="cf-ref" placeholder="e.g. 2026-RAC003838" value="${claimForm.external_reference_id}"></div>
-      <div class="field"><label>Event Source</label><input id="cf-source" placeholder="e.g. Uber, Private Rental" value="${claimForm.event_source}"></div>
-      <div class="field"><label>Claim Incident Type *</label>
-        <select id="cf-incident-type">
-          <option value="">—</option>
-          ${INCIDENT_TYPE_OPTIONS.map(o => `<option value="${o}" ${claimForm.incident_type === o ? 'selected' : ''}>${o}</option>`).join('')}
-        </select>
-      </div>
       <div class="field"><label>Insurance Policy</label>
         <select id="cf-insurance">
           <option value="">—</option>
           ${insuranceRecords.map(ir => `<option value="${ir.id}" ${String(claimForm.insurance_record_id) === String(ir.id) ? 'selected' : ''}>${ir.first_name} ${ir.last_name} — ${ir.carrier || 'No carrier'} (${ir.type === 'our_policy' ? 'Our Policy' : 'Private'})</option>`).join('')}
         </select>
       </div>
-      <div class="field"><label>Assigned To</label>
-        <select id="cf-assigned">
-          <option value="">—</option>
-          ${users.map(u => `<option value="${u.id}" ${String(claimForm.assigned_to) === String(u.id) ? 'selected' : ''}>${u.name}</option>`).join('')}
-        </select>
+      <div class="field-row">
+        <div class="field"><label>Event Source</label><input id="cf-source" placeholder="e.g. Uber, Private Rental" value="${claimForm.event_source}"></div>
+        <div class="field"><label>Assigned To</label>
+          <select id="cf-assigned">
+            <option value="">Unassigned</option>
+            ${users.map(u => `<option value="${u.id}" ${String(claimForm.assigned_to) === String(u.id) ? 'selected' : ''}>${u.name}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Claim Incident Type *</label>
+          <select id="cf-incident-type">
+            <option value="">—</option>
+            ${INCIDENT_TYPE_OPTIONS.map(o => `<option value="${o}" ${claimForm.incident_type === o ? 'selected' : ''}>${o}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>Date Damage Reported *</label><input type="date" id="cf-reported-at" value="${claimForm.damage_reported_at}"></div>
       </div>
       <div class="field"><label>Damage Notes</label><textarea id="cf-notes" rows="3" placeholder="Describe the damage…">${claimForm.damage_notes}</textarea></div>
+      <div class="field-row">
+        <div class="field"><label>Deductible Amount</label><input type="number" id="cf-deductible" step="0.01" placeholder="$" value="${claimForm.deductible_amount}"></div>
+        <div class="field"><label>Max Out of Pocket</label><input type="number" id="cf-max-oop" step="0.01" placeholder="$" value="${claimForm.max_out_of_pocket}"></div>
+      </div>
+      <div class="field"><label>Current Vehicle Location</label><input id="cf-location" placeholder="e.g. With renter, Body shop…" value="${claimForm.vehicle_location}"></div>
+      <div class="claim-toggle-row">
+        <div>
+          <div class="claim-toggle-row__text">Mark vehicle inactive on submit</div>
+          <div class="claim-toggle-row__sub">Vehicle will be unavailable for booking until claim moves to Collections or Closed</div>
+        </div>
+        <label class="claim-toggle">
+          <input type="checkbox" id="cf-mark-inactive" ${claimForm.mark_vehicle_inactive ? 'checked' : ''}>
+          <span class="claim-toggle__slider"></span>
+        </label>
+      </div>
     `;
     footer.innerHTML = `
       <button class="btn btn-outline" id="claim-back-btn">Back</button>
@@ -259,12 +293,18 @@ function renderClaimStep() {
       claimForm.status = document.getElementById('cf-status').value;
       claimForm.detailed_status = document.getElementById('cf-detailed-status').value;
       claimForm.external_reference_id = document.getElementById('cf-ref').value;
-      claimForm.event_source = document.getElementById('cf-source').value;
-      claimForm.incident_type = document.getElementById('cf-incident-type').value;
       claimForm.insurance_record_id = document.getElementById('cf-insurance').value;
+      claimForm.event_source = document.getElementById('cf-source').value;
       claimForm.assigned_to = document.getElementById('cf-assigned').value;
+      claimForm.incident_type = document.getElementById('cf-incident-type').value;
+      claimForm.damage_reported_at = document.getElementById('cf-reported-at').value;
       claimForm.damage_notes = document.getElementById('cf-notes').value;
+      claimForm.deductible_amount = document.getElementById('cf-deductible').value;
+      claimForm.max_out_of_pocket = document.getElementById('cf-max-oop').value;
+      claimForm.vehicle_location = document.getElementById('cf-location').value;
+      claimForm.mark_vehicle_inactive = document.getElementById('cf-mark-inactive').checked;
       if (!claimForm.incident_type) { alert('Claim Incident Type is required'); return; }
+      if (!claimForm.damage_reported_at) { alert('Date Damage Reported is required'); return; }
       await api('/api/claims', { method: 'POST', body: JSON.stringify(claimForm) });
       document.getElementById('claim-modal-overlay').style.display = 'none';
       await load();
