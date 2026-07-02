@@ -506,8 +506,21 @@ function renderFinCal() {
   const days = (finNewPickup && finNewReturn)
     ? Math.round((new Date(finNewReturn) - new Date(finNewPickup)) / 86400000)
     : null;
+
+  // While the calendar still matches the booking's saved dates, show the
+  // actual invoice total (same number as the Payment Log panel below) rather
+  // than a fresh weekly-rate estimate — those two only ever agree by
+  // coincidence once an invoice/quote amount has overridden the raw rate x
+  // days math. Only recompute a live estimate once the owner picks dates
+  // that differ from what's saved, since there's no real total for those yet.
+  const savedPickup = booking.pickup_scheduled_at ? booking.pickup_scheduled_at.slice(0, 10) : '';
+  const savedReturn = booking.rental_end_at ? booking.rental_end_at.slice(0, 10) : '';
+  const datesChanged = finNewPickup !== savedPickup || finNewReturn !== savedReturn;
   const dailyRateExact = (booking.weekly_rate || 0) / 7;
-  const estimate = days ? Math.round(dailyRateExact * days * (1 + SALES_TAX_RATE) * 100) / 100 : null;
+  const estimate = !days ? null
+    : !datesChanged ? Math.round(Number(booking.charge || 0) * 100) / 100
+    : Math.round(dailyRateExact * days * (1 + SALES_TAX_RATE) * 100) / 100;
+  const estimateLabel = datesChanged ? 'Est. Total' : 'Total';
 
   box.innerHTML = `
     <div class="resv-cal">
@@ -529,7 +542,7 @@ function renderFinCal() {
       </div>
       <div class="resv-cal__apply-row">
         <div class="resv-cal__total-days"><span>Duration:</span>${days !== null ? `${days} day${days === 1 ? '' : 's'}` : '—'}</div>
-        <div class="resv-cal__est-amount"><span>Est. Total:</span>${estimate !== null ? fmtExact(estimate) : '—'}</div>
+        <div class="resv-cal__est-amount"><span>${estimateLabel}:</span>${estimate !== null ? fmtExact(estimate) : '—'}</div>
         <button class="resv-cal__apply-btn" id="fin-cal-apply" ${!(finNewPickup && finNewReturn) ? 'disabled' : ''}>Save Dates</button>
       </div>
     </div>
