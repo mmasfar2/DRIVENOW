@@ -41,9 +41,16 @@ a { text-decoration: none; color: inherit; }
   position: fixed; top: 0; left: 0; bottom: 0; display: flex; flex-direction: column;
   padding: 24px 0; z-index: 10;
 }
-.sidebar__logo { padding: 0 24px 28px; font-size: 1.25rem; font-weight: 900; }
+.sidebar__logo { padding: 0 24px 28px; font-size: 1.25rem; font-weight: 900; flex-shrink: 0; }
 .sidebar__logo span { opacity: 0.4; }
-.sidebar__nav { flex: 1; }
+.sidebar__nav {
+  flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
+  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.25) transparent;
+}
+.sidebar__nav::-webkit-scrollbar { width: 6px; }
+.sidebar__nav::-webkit-scrollbar-track { background: transparent; }
+.sidebar__nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+.sidebar__nav::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.35); }
 .sidebar__nav a {
   display: block; padding: 13px 24px; font-size: 0.85rem; font-weight: 600;
   color: rgba(255,255,255,0.65); border-left: 3px solid transparent;
@@ -63,14 +70,14 @@ a { text-decoration: none; color: inherit; }
 }
 .sidebar__sublink:hover { color: #fff; background: rgba(255,255,255,0.04); }
 .sidebar__sublink.active { color: #fff; background: rgba(255,255,255,0.08); }
-.sidebar__footer { padding: 16px 24px 0; border-top: 1px solid rgba(255,255,255,0.1); }
+.sidebar__footer { padding: 16px 24px 0; border-top: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; }
 .sidebar__user { font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-bottom: 10px; }
 .main-content { margin-left: 230px; flex: 1; min-width: 0; }
 
 @media (max-width: 900px) {
   .sidebar { width: 100%; height: auto; position: relative; flex-direction: row; align-items: center; padding: 12px 16px; overflow-x: auto; }
   .sidebar__logo { padding: 0 16px 0 0; }
-  .sidebar__nav { display: flex; }
+  .sidebar__nav { display: flex; overflow: visible; }
   .sidebar__nav a { padding: 10px 14px; border-left: none; border-bottom: 3px solid transparent; white-space: nowrap; }
   .sidebar__nav a.active { border-left-color: transparent; border-bottom-color: #fff; }
   .sidebar__footer { border-top: none; padding: 0 0 0 16px; }
