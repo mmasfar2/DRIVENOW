@@ -1,5 +1,5 @@
 const express = require('express');
-const { db } = require('../db');
+const { db, logUndo } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -42,6 +42,9 @@ router.patch('/:id', requireAuth, (req, res) => {
 });
 
 router.delete('/:id', requireAuth, (req, res) => {
+  const entry = db.prepare('SELECT * FROM waitlist WHERE id = ?').get(req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Not found' });
+  logUndo('waitlist_delete', `Removed ${entry.first_name} ${entry.last_name} from the waitlist`, { entry });
   db.prepare('DELETE FROM waitlist WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });

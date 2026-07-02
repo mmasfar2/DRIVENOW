@@ -40,8 +40,15 @@ router.get('/:id', requireAuth, (req, res) => {
   const photos = db.prepare('SELECT * FROM vehicle_photos WHERE vehicle_id = ? ORDER BY created_at ASC').all(req.params.id);
   const maintenance = db.prepare('SELECT * FROM vehicle_maintenance WHERE vehicle_id = ? ORDER BY performed_at DESC').all(req.params.id);
 
-  const applications = db.prepare('SELECT * FROM applications WHERE assigned_vehicle_id = ?').all(req.params.id);
-  const dailyRate = (vehicle.weekly_rate || 0) / 7;
+  // Revenue per booking is what was actually collected (payments table),
+  // not an untaxed rate x days estimate — matches the definition used
+  // everywhere else (Reservations, Metrics, Customer Profile), and excludes
+  // rejected applications that never became a real rental.
+  const applications = db.prepare(`
+    SELECT a.*, COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.application_id = a.id), 0) as paid_total
+    FROM applications a
+    WHERE a.assigned_vehicle_id = ? AND a.status != 'rejected'
+  `).all(req.params.id);
   const bookings = applications.map(a => {
     const pickup = a.pickup_scheduled_at || null;
     const dropoff = a.rental_end_at || null;
@@ -49,13 +56,12 @@ router.get('/:id', requireAuth, (req, res) => {
     if (pickup && dropoff) {
       days = Math.round((new Date(dropoff) - new Date(pickup)) / 86400000);
     }
-    const revenue = Math.round(dailyRate * days * 100) / 100;
     return {
       applicant: `${a.first_name} ${a.last_name}`,
       pickup,
       dropoff,
       days,
-      revenue,
+      revenue: Math.round(Number(a.paid_total) * 100) / 100,
     };
   });
 

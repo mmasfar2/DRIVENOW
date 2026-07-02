@@ -69,6 +69,12 @@ router.post('/', requireAuth, (req, res) => {
       INSERT INTO insurance_records (id, customer_id, type, carrier, protection_type, policy_number, document_path, last_verified_at, next_payment_date, notes, created_at, updated_at)
       VALUES (@id, @customer_id, @type, @carrier, @protection_type, @policy_number, @document_path, @last_verified_at, @next_payment_date, @notes, @created_at, @updated_at)
     `).run(record);
+  } else if (row.entity_type === 'waitlist_delete') {
+    const { entry } = payload;
+    db.prepare(`
+      INSERT INTO waitlist (id, first_name, last_name, phone, email, desired_vehicle, notes, status, created_at, updated_at)
+      VALUES (@id, @first_name, @last_name, @phone, @email, @desired_vehicle, @notes, @status, @created_at, @updated_at)
+    `).run(entry);
   }
 
   db.prepare('DELETE FROM undo_log WHERE id = ?').run(row.id);

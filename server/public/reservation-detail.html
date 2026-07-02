@@ -19,7 +19,10 @@
       <div class="page-title" id="rd-title" style="margin-bottom:4px;">Loading…</div>
       <div class="page-sub" style="margin-bottom:0;" id="rd-created"></div>
     </div>
-    <span class="badge" id="rd-status-badge"></span>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <button class="btn btn-outline" id="rd-complete-rental-btn" style="display:none;">Complete Rental</button>
+      <span class="badge" id="rd-status-badge"></span>
+    </div>
   </div>
 
   <div class="rd-tabs">
@@ -288,6 +291,7 @@ function render() {
   const badge = document.getElementById('rd-status-badge');
   badge.textContent = s.text;
   badge.className = `badge badge-${s.cls}`;
+  document.getElementById('rd-complete-rental-btn').style.display = booking.vehicle_status === 'rented' ? '' : 'none';
 
   document.getElementById('rd-pickup').textContent = booking.pickup_scheduled_at ? fmtDate(booking.pickup_scheduled_at) : '—';
   document.getElementById('rd-return').textContent = booking.rental_end_at ? fmtDate(booking.rental_end_at) : '—';
@@ -658,6 +662,13 @@ document.getElementById('rd-send-invoice-btn').addEventListener('click', async (
   const amount = prompt('Invoice amount ($):', getInvoiceTotal() || '');
   if (amount === null || !amount) return;
   await api(`/api/applications/${id}/invoice`, { method: 'POST', body: JSON.stringify({ invoice_amount: amount }) });
+  await load();
+});
+
+document.getElementById('rd-complete-rental-btn').addEventListener('click', async () => {
+  if (!confirm('Complete this rental? The vehicle will be checked back in and made available again.')) return;
+  const odometer_in = prompt('Odometer reading at return (optional):', booking.odometer_in || '');
+  await api(`/api/applications/${id}/complete-rental`, { method: 'POST', body: JSON.stringify({ odometer_in: odometer_in || null }) });
   await load();
 });
 

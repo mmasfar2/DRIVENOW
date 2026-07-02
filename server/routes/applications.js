@@ -3,9 +3,28 @@ const multer = require('multer');
 const { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
-const { computeCharge, computeOwed } = require('../billing');
+const { computeCharge, computeOwed, SALES_TAX_RATE } = require('../billing');
 
 const router = express.Router();
+
+// A customer's contact info can be edited later from their profile
+// (Customer Detail), but each application row is a frozen snapshot taken at
+// intake time. Any query that displays a booking's customer info joins in
+// the canonical `customers` row and prefers it, so an edit to a customer's
+// name/phone/address shows up on their existing bookings instead of only
+// applying to future ones.
+const CUSTOMER_JOIN = 'LEFT JOIN customers c ON lower(c.email) = lower(a.email)';
+const CUSTOMER_SYNC_COLUMNS = `
+  COALESCE(c.first_name, a.first_name) as first_name,
+  COALESCE(c.last_name, a.last_name) as last_name,
+  COALESCE(c.phone, a.phone) as phone,
+  COALESCE(c.address, a.address) as address,
+  COALESCE(c.city, a.city) as city,
+  COALESCE(c.state, a.state) as state,
+  COALESCE(c.zip_code, a.zip_code) as zip_code,
+  COALESCE(c.dob, a.dob) as dob,
+  COALESCE(c.license_number, a.license_number) as license_number
+`;
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -133,9 +152,10 @@ router.post('/:id/undo-lead-decision', requireAuth, (req, res) => {
 router.get('/', requireAuth, (req, res) => {
   const { stage, status, decided } = req.query;
   let query = `
-    SELECT a.*, v.make as vehicle_make, v.model as vehicle_model, v.year as vehicle_year
+    SELECT a.*, v.make as vehicle_make, v.model as vehicle_model, v.year as vehicle_year, ${CUSTOMER_SYNC_COLUMNS}
     FROM applications a
     LEFT JOIN vehicles v ON v.id = a.assigned_vehicle_id
+    ${CUSTOMER_JOIN}
     WHERE 1=1
   `;
   const params = [];
@@ -149,7 +169,12 @@ router.get('/', requireAuth, (req, res) => {
 
 // ── AUTHED: Get single application + its activity log ──
 router.get('/:id', requireAuth, (req, res) => {
-  const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
+  const app = db.prepare(`
+    SELECT a.*, ${CUSTOMER_SYNC_COLUMNS}
+    FROM applications a
+    ${CUSTOMER_JOIN}
+    WHERE a.id = ?
+  `).get(req.params.id);
   if (!app) return res.status(404).json({ error: 'Not found' });
   const activity = db.prepare('SELECT * FROM activity_log WHERE application_id = ? ORDER BY created_at DESC').all(req.params.id);
   res.json({ ...app, activity });
@@ -237,6 +262,15 @@ router.post('/:id/insurance-quote', requireAuth, (req, res) => {
 router.post('/:id/quote', requireAuth, (req, res) => {
   const { assigned_vehicle_id, weekly_rate, total_due_at_pickup } = req.body;
   const id = req.params.id;
+  if (assigned_vehicle_id) {
+    const current = db.prepare('SELECT assigned_vehicle_id FROM applications WHERE id = ?').get(id);
+    const vehicle = db.prepare('SELECT status FROM vehicles WHERE id = ?').get(assigned_vehicle_id);
+    if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
+    const alreadyAssignedHere = current && Number(current.assigned_vehicle_id) === Number(assigned_vehicle_id);
+    if (!alreadyAssignedHere && vehicle.status !== 'available') {
+      return res.status(400).json({ error: 'That vehicle is not available — it may already be reserved or rented' });
+    }
+  }
   db.prepare(`
     UPDATE applications SET assigned_vehicle_id = ?, weekly_rate = ?, total_due_at_pickup = ?, stage = 6, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
@@ -409,9 +443,10 @@ router.post('/:id/deposits/:depositId/resolve', requireAuth, (req, res) => {
 router.get('/:id/detail', requireAuth, (req, res) => {
   const row = db.prepare(`
     SELECT a.*, v.id as vehicle_id, v.make, v.model, v.year, v.status as vehicle_status,
-           v.vin, v.license_plate, v.color, v.fuel_type, v.transmission
+           v.vin, v.license_plate, v.color, v.fuel_type, v.transmission, ${CUSTOMER_SYNC_COLUMNS}
     FROM applications a
     LEFT JOIN vehicles v ON v.id = a.assigned_vehicle_id
+    ${CUSTOMER_JOIN}
     WHERE a.id = ?
   `).get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
@@ -472,7 +507,7 @@ router.patch('/:id', requireAuth, (req, res) => {
       const days = Math.round((new Date(app.rental_end_at) - new Date(app.pickup_scheduled_at)) / 86400000);
       const dailyRateExact = app.weekly_rate / 7;
       const subtotal = Math.round(dailyRateExact * days * 100) / 100;
-      const salesTax = Math.round(subtotal * 0.0725 * 100) / 100;
+      const salesTax = Math.round(subtotal * SALES_TAX_RATE * 100) / 100;
       const total = Math.round((subtotal + salesTax) * 100) / 100;
       db.prepare('UPDATE applications SET total_due_at_pickup = ? WHERE id = ?').run(total, id);
       logActivity(id, `Reservation dates updated (${app.pickup_scheduled_at} → ${app.rental_end_at}) — balance recalculated to $${total}`);
@@ -508,6 +543,28 @@ router.post('/:id/revert-arrival', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── AUTHED: Complete a rental — frees the vehicle and closes out the booking.
+// Previously the only way to free up a vehicle after a rental was deleting
+// the entire reservation (which also wipes its payment/deposit history) —
+// this keeps the booking's records intact and just marks it done. ──
+router.post('/:id/complete-rental', requireAuth, (req, res) => {
+  const { odometer_in } = req.body;
+  const id = req.params.id;
+  const app = db.prepare('SELECT assigned_vehicle_id, status FROM applications WHERE id = ?').get(id);
+  if (!app) return res.status(404).json({ error: 'Not found' });
+  if (app.status !== 'active') return res.status(400).json({ error: 'Only an active booking can be completed' });
+
+  db.prepare(`
+    UPDATE applications SET status = 'completed', odometer_in = COALESCE(?, odometer_in), updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(odometer_in || null, id);
+  if (app.assigned_vehicle_id) {
+    db.prepare("UPDATE vehicles SET status = 'available' WHERE id = ?").run(app.assigned_vehicle_id);
+  }
+  logActivity(id, 'Rental completed — vehicle checked back in and now available');
+  res.json({ ok: true });
+});
+
 // ── AUTHED: Delete a reservation/booking entirely ──
 router.delete('/:id', requireAuth, (req, res) => {
   const id = req.params.id;
@@ -537,12 +594,16 @@ router.delete('/:id', requireAuth, (req, res) => {
 // ── AUTHED: Bookings/Reservations — applications that have an assigned vehicle ──
 router.get('/bookings/all', requireAuth, (req, res) => {
   const rows = db.prepare(`
-    SELECT a.id, a.first_name, a.last_name, a.phone, a.email, a.weekly_rate, a.total_due_at_pickup,
+    SELECT a.id, a.email, a.weekly_rate, a.total_due_at_pickup,
            a.payment_status, a.invoice_amount, a.invoice_sent_at, a.pickup_scheduled_at, a.rental_end_at, a.status, a.updated_at,
            v.id as vehicle_id, v.make, v.model, v.year, v.status as vehicle_status,
-           COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.application_id = a.id), 0) as paid_total
+           COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.application_id = a.id), 0) as paid_total,
+           COALESCE(c.first_name, a.first_name) as first_name,
+           COALESCE(c.last_name, a.last_name) as last_name,
+           COALESCE(c.phone, a.phone) as phone
     FROM applications a
     JOIN vehicles v ON v.id = a.assigned_vehicle_id
+    ${CUSTOMER_JOIN}
     WHERE a.assigned_vehicle_id IS NOT NULL
     ORDER BY a.updated_at DESC
   `).all();
@@ -609,6 +670,9 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
 
   const vehicle = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(assigned_vehicle_id);
   if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
+  if (vehicle.status !== 'available') {
+    return res.status(400).json({ error: 'That vehicle is not available — it may already be reserved or rented' });
+  }
 
   const bookingSource = source === 'online' ? 'manual_booking_online' : 'manual_booking_in_person';
   const licensePath = req.files?.license?.[0]?.filename || null;
