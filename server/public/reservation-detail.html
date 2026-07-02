@@ -126,6 +126,11 @@
       <div class="panel-title">Documents</div>
 
       <div class="panel" style="margin-top:24px;box-shadow:none;border-style:dashed;">
+        <div class="panel-title">Contact Information</div>
+        <div id="rd-doc-contact"></div>
+      </div>
+
+      <div class="panel" style="margin-top:24px;box-shadow:none;border-style:dashed;">
         <div class="panel-title">License</div>
         <div class="info-row" style="border-bottom:none;"><div class="info-row__label">License</div><div class="info-row__val" id="rd-doc-license"></div></div>
       </div>
@@ -346,6 +351,17 @@ function render() {
   document.getElementById('rd-veh-trans').textContent = booking.transmission || '—';
   document.getElementById('rd-veh-pickup-loc').textContent = booking.pickup_location || '—';
   document.getElementById('rd-veh-dropoff-loc').textContent = booking.dropoff_location || '—';
+
+  document.getElementById('rd-doc-contact').innerHTML = `
+    <div class="info-row"><div class="info-row__label">Email</div><div class="info-row__val">${booking.email || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">Phone</div><div class="info-row__val">${booking.phone || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">Address</div><div class="info-row__val">${booking.address || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">City</div><div class="info-row__val">${booking.city || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">State</div><div class="info-row__val">${booking.state || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">ZIP Code</div><div class="info-row__val">${booking.zip_code || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">Date of Birth</div><div class="info-row__val">${booking.dob ? fmtDate(booking.dob) : '—'}</div></div>
+    <div class="info-row" style="border-bottom:none;"><div class="info-row__label">License Number</div><div class="info-row__val">${booking.license_number || '—'}</div></div>
+  `;
 
   document.getElementById('rd-doc-license').innerHTML = filePreviewHtml(booking.license_path);
   document.getElementById('rd-doc-agreement').textContent = booking.agreement_signed_at
