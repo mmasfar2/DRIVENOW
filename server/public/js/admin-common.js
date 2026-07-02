@@ -11,6 +11,8 @@ const ICONS = {
   card: '<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>',
   eye: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
   trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+  inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+  flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>',
 };
 
 function icon(name, size = 18) {
@@ -26,7 +28,7 @@ const SIDEBAR_LINKS = [
   { key: 'fleet', label: 'Fleet Management', href: 'fleet-admin.html' },
   { key: 'maintenance', label: 'Maintenance', href: 'maintenance.html' },
   { key: 'claims', label: 'Claims', href: 'claims.html' },
-  { key: 'metrics', label: 'Metrics', href: 'metrics.html' },
+  { key: 'metrics', label: 'Reports', href: 'metrics.html' },
   { key: 'clients', label: 'Clients', href: 'clients.html' },
   {
     key: 'insurance', label: 'Insurance',

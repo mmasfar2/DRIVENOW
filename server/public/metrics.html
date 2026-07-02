@@ -3,9 +3,32 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Metrics — DriveNow Portal</title>
+<title>Reports — DriveNow Portal</title>
 <link rel="stylesheet" href="css/admin.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  .cat-header { display: flex; align-items: center; gap: 10px; margin: 32px 0 14px; }
+  .cat-header:first-of-type { margin-top: 8px; }
+  .cat-header__icon { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .cat-header__label { font-size: 1.05rem; font-weight: 800; }
+
+  .report-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-bottom: 8px; }
+  .report-card { background: var(--white); border: 1px solid var(--gray-border); border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; }
+  .report-card__title { font-size: 0.95rem; font-weight: 700; margin-bottom: 4px; }
+  .report-card__desc { font-size: 0.8rem; color: var(--text-muted); line-height: 1.45; margin-bottom: 14px; flex-grow: 1; }
+  .report-card__dates { display: flex; gap: 10px; margin-bottom: 14px; }
+  .report-card__dates .field { flex: 1; margin-bottom: 0; }
+  .report-card__dates label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #888; display: block; margin-bottom: 4px; }
+  .report-card__dates input { width: 100%; padding: 8px 10px; border: 1.5px solid var(--gray-border); border-radius: 4px; font-family: inherit; font-size: 0.82rem; }
+  .report-card__footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .report-card__csv { font-size: 0.78rem; font-weight: 600; color: var(--black); text-decoration: underline; cursor: pointer; }
+  .report-card__generate { padding: 9px 18px; font-size: 0.72rem; }
+  .report-results { margin-top: 14px; border-top: 1px solid var(--gray-border); padding-top: 12px; max-height: 260px; overflow: auto; display: none; }
+  .report-results table { font-size: 0.78rem; }
+  .report-results th { position: sticky; top: 0; background: var(--white); padding: 6px 8px; }
+  .report-results td { padding: 7px 8px; }
+  .report-results__empty { color: #888; font-size: 0.82rem; text-align: center; padding: 18px 0; }
+</style>
 </head>
 <body>
 
@@ -13,10 +36,10 @@
 <div id="sidebar-root"></div>
 <div class="main-content">
 <div class="page">
-  <div class="page-title">Metrics</div>
-  <div class="page-sub">Expected cash flow (based on each active renter's daily rate) vs. what's actually been collected.</div>
+  <div class="page-title">Reports</div>
+  <div class="page-sub">Every number here is pulled from the same records the rest of the portal uses — payments, deposits, maintenance logs and claims — so nothing drifts out of sync.</div>
 
-  <div class="panel" style="display:flex;gap:24px;align-items:center;">
+  <div class="panel" style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
     <div>
       <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;">Active Renters</div>
       <div style="font-size:1.6rem;font-weight:800;" id="m-active-count">—</div>
@@ -30,8 +53,6 @@
       <div style="font-size:1.6rem;font-weight:800;" id="m-deposits-held">—</div>
     </div>
   </div>
-
-  <div id="period-cards"></div>
 
   <div class="panel" id="flagged-panel" style="display:none;border-color:#e65100;background:#fff8f0;">
     <div class="panel-title" style="color:#e65100;">⚠ Renters Behind on Payment (balance &gt; $250)</div>
@@ -52,74 +73,115 @@
       <tbody id="renters-table-body"></tbody>
     </table>
   </div>
+
+  <div id="report-categories"></div>
 </div>
 </div>
 </div>
 
 <script src="js/admin-common.js"></script>
 <script>
-function pct(variance, expected) {
-  if (!expected) return '—';
-  return `${variance >= 0 ? '+' : ''}${((variance / expected) * 100).toFixed(1)}%`;
+const CATEGORY_COLORS = {
+  revenue: { bg: '#e8f5e9', fg: '#2e7d32' },
+  utilization: { bg: '#e3f2fd', fg: '#1565c0' },
+  bookings: { bg: '#f3e5f5', fg: '#6a1b9a' },
+  health: { bg: '#fff3e0', fg: '#e65100' },
+  past_due: { bg: '#ffebee', fg: '#c62828' },
+  collections: { bg: '#e0f2f1', fg: '#00695c' },
+  operational: { bg: '#eceff1', fg: '#455a64' },
+};
+
+let catalog = null;
+
+function defaultDates() {
+  const to = new Date();
+  const from = new Date();
+  from.setDate(to.getDate() - 29);
+  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
 }
 
-function periodCard(title, p, sub) {
-  const positive = p.variance >= 0;
-  const color = positive ? 'text-green' : 'text-orange';
+function fmtCell(val, type) {
+  if (val === '—' || val == null || val === '') return '—';
+  if (type === 'money') return fmtMoney(val);
+  if (type === 'percent') return `${val}%`;
+  return val;
+}
+
+function reportUrl(key, format) {
+  const from = document.getElementById(`rpt-${key}-from`);
+  const to = document.getElementById(`rpt-${key}-to`);
+  const params = new URLSearchParams();
+  if (from) params.set('from', from.value);
+  if (to) params.set('to', to.value);
+  if (format) params.set('format', format);
+  return `/api/reports/${key}/data?${params.toString()}`;
+}
+
+async function generateReport(key, columns) {
+  const box = document.getElementById(`rpt-${key}-results`);
+  box.style.display = 'block';
+  box.innerHTML = '<div class="report-results__empty">Loading…</div>';
+  try {
+    const data = await api(reportUrl(key));
+    if (!data.rows.length) {
+      box.innerHTML = '<div class="report-results__empty">No data in this range.</div>';
+      return;
+    }
+    box.innerHTML = `
+      <table>
+        <thead><tr>${columns.map(c => `<th>${c.label}</th>`).join('')}</tr></thead>
+        <tbody>
+          ${data.rows.map(r => `<tr>${columns.map(c => `<td>${fmtCell(r[c.key], c.type)}</td>`).join('')}</tr>`).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    box.innerHTML = `<div class="report-results__empty">${e.message || 'Failed to generate report'}</div>`;
+  }
+}
+
+function reportCardHtml(report) {
+  const dates = defaultDates();
   return `
-    <div class="panel">
-      <div class="panel-title">${title}</div>
-      <div style="display:flex;gap:32px;flex-wrap:wrap;">
-        <div>
-          <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.06em;">Expected${sub ? ` (${sub})` : ''}</div>
-          <div style="font-size:1.3rem;font-weight:800;">${fmtMoney(p.expected)}</div>
+    <div class="report-card">
+      <div class="report-card__title">${report.label}</div>
+      <div class="report-card__desc">${report.description}</div>
+      ${report.hasDateRange ? `
+        <div class="report-card__dates">
+          <div class="field"><label>From</label><input type="date" id="rpt-${report.key}-from" value="${dates.from}"></div>
+          <div class="field"><label>To</label><input type="date" id="rpt-${report.key}-to" value="${dates.to}"></div>
         </div>
-        <div>
-          <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.06em;">Actual Collected</div>
-          <div style="font-size:1.3rem;font-weight:800;">${fmtMoney(p.actual)}</div>
-        </div>
-        <div>
-          <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.06em;">Expenses</div>
-          <div style="font-size:1.3rem;font-weight:800;" class="${p.expenses ? 'text-orange' : ''}">${p.expenses ? '-' : ''}${fmtMoney(p.expenses)}</div>
-        </div>
-        <div>
-          <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.06em;">Net Collected</div>
-          <div style="font-size:1.3rem;font-weight:800;">${fmtMoney(p.netActual)}</div>
-        </div>
-        <div>
-          <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.06em;">Card Processing Fees</div>
-          <div style="font-size:1.3rem;font-weight:800;" class="${p.cardFees ? 'text-green' : ''}">${p.cardFees ? '+' : ''}${fmtMoney(p.cardFees)}</div>
-        </div>
-        <div>
-          <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.06em;">Deposit Forfeitures</div>
-          <div style="font-size:1.3rem;font-weight:800;" class="${p.depositForfeitures ? 'text-green' : ''}">${p.depositForfeitures ? '+' : ''}${fmtMoney(p.depositForfeitures)}</div>
-        </div>
-        <div>
-          <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.06em;">P&amp;L (Variance)</div>
-          <div style="font-size:1.3rem;font-weight:800;" class="${color}">${positive ? '+' : ''}${fmtMoney(p.variance)} <span style="font-size:0.85rem;font-weight:600;">(${pct(p.variance, p.expected)})</span></div>
-        </div>
-        ${p.expectedFull != null ? `
-        <div>
-          <div style="font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.06em;">Full Period Target</div>
-          <div style="font-size:1.3rem;font-weight:800;color:#888;">${fmtMoney(p.expectedFull)}</div>
-        </div>` : ''}
+      ` : ''}
+      <div class="report-card__footer">
+        <span class="report-card__csv" onclick="window.open(reportUrl('${report.key}', 'csv'), '_blank')">CSV Export</span>
+        <button class="btn report-card__generate" onclick='generateReport("${report.key}", ${JSON.stringify(report.columns)})'>Generate</button>
       </div>
+      <div class="report-results" id="rpt-${report.key}-results"></div>
     </div>
   `;
 }
 
-async function load() {
+async function loadCatalog() {
+  catalog = await api('/api/reports');
+  document.getElementById('report-categories').innerHTML = catalog.categories.map(cat => {
+    const color = CATEGORY_COLORS[cat.key] || { bg: '#eee', fg: '#333' };
+    const reports = catalog.reports.filter(r => r.category === cat.key);
+    return `
+      <div class="cat-header">
+        <div class="cat-header__icon" style="background:${color.bg};color:${color.fg};">${icon(cat.icon, 18)}</div>
+        <div class="cat-header__label">${cat.label}</div>
+      </div>
+      <div class="report-grid">${reports.map(reportCardHtml).join('')}</div>
+    `;
+  }).join('');
+}
+
+async function loadStats() {
   const data = await api('/api/metrics/cashflow');
 
   document.getElementById('m-active-count').textContent = data.activeRenters.length;
   document.getElementById('m-expected-daily').textContent = fmtMoney(data.expectedDailyTotal);
   document.getElementById('m-deposits-held').textContent = fmtMoney(data.depositsHeld);
-
-  document.getElementById('period-cards').innerHTML = [
-    periodCard('Daily', data.periods.daily),
-    periodCard('Weekly (to date)', data.periods.weekly, 'week-to-date'),
-    periodCard('Monthly (to date)', data.periods.monthly, 'month-to-date'),
-  ].join('');
 
   document.getElementById('renters-table-body').innerHTML = data.activeRenters.length ? data.activeRenters.map(r => `
     <tr>
@@ -151,7 +213,8 @@ async function load() {
 (async () => {
   renderSidebar('metrics');
   await requireLogin();
-  load();
+  loadStats();
+  loadCatalog();
 })();
 </script>
 </body>
