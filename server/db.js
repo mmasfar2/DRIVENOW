@@ -401,6 +401,10 @@ CREATE TABLE IF NOT EXISTS claims (
   event_source TEXT,
   damage_notes TEXT,
   damage_reported_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  deductible_amount REAL,
+  max_out_of_pocket REAL,
+  vehicle_location TEXT,
+  mark_vehicle_inactive INTEGER NOT NULL DEFAULT 0,
   next_task TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -410,6 +414,20 @@ CREATE TABLE IF NOT EXISTS claims (
   FOREIGN KEY (assigned_to) REFERENCES users(id)
 );
 `);
+
+const claimCols = db.prepare("PRAGMA table_info(claims)").all().map(c => c.name);
+if (!claimCols.includes('deductible_amount')) {
+  db.exec('ALTER TABLE claims ADD COLUMN deductible_amount REAL');
+}
+if (!claimCols.includes('max_out_of_pocket')) {
+  db.exec('ALTER TABLE claims ADD COLUMN max_out_of_pocket REAL');
+}
+if (!claimCols.includes('vehicle_location')) {
+  db.exec('ALTER TABLE claims ADD COLUMN vehicle_location TEXT');
+}
+if (!claimCols.includes('mark_vehicle_inactive')) {
+  db.exec('ALTER TABLE claims ADD COLUMN mark_vehicle_inactive INTEGER NOT NULL DEFAULT 0');
+}
 
 // Backfill: build a customers record for every distinct email already in
 // applications, so existing leads/bookings get a profile retroactively.

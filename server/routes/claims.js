@@ -32,25 +32,33 @@ router.post('/', requireAuth, (req, res) => {
     vehicle_id, application_id, insurance_record_id, assigned_to,
     status, detailed_status, incident_type, external_reference_id,
     event_source, damage_notes, damage_reported_at, next_task,
+    deductible_amount, max_out_of_pocket, vehicle_location, mark_vehicle_inactive,
   } = req.body;
 
   if (!vehicle_id) return res.status(400).json({ error: 'A vehicle is required' });
   if (!incident_type) return res.status(400).json({ error: 'Claim incident type is required' });
+  if (!damage_reported_at) return res.status(400).json({ error: 'Date damage reported is required' });
   const vehicle = db.prepare('SELECT id FROM vehicles WHERE id = ?').get(vehicle_id);
   if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
 
+  const markInactive = mark_vehicle_inactive ? 1 : 0;
   const result = db.prepare(`
     INSERT INTO claims
       (vehicle_id, application_id, insurance_record_id, assigned_to, status, detailed_status,
-       incident_type, external_reference_id, event_source, damage_notes, damage_reported_at, next_task)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       incident_type, external_reference_id, event_source, damage_notes, damage_reported_at, next_task,
+       deductible_amount, max_out_of_pocket, vehicle_location, mark_vehicle_inactive)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     vehicle_id, application_id || null, insurance_record_id || null, assigned_to || null,
     status || 'initial_claim', detailed_status || null, incident_type,
     external_reference_id || null, event_source || null, damage_notes || null,
-    damage_reported_at || new Date().toISOString().slice(0, 10), next_task || null
+    damage_reported_at, next_task || null,
+    deductible_amount || null, max_out_of_pocket || null, vehicle_location || null, markInactive
   );
 
+  if (markInactive) {
+    db.prepare("UPDATE vehicles SET status = 'maintenance' WHERE id = ?").run(vehicle_id);
+  }
   if (application_id) {
     logActivity(application_id, `Claim #${result.lastInsertRowid} opened for damage — ${incident_type}`);
   }
@@ -58,10 +66,13 @@ router.post('/', requireAuth, (req, res) => {
 });
 
 router.patch('/:id', requireAuth, (req, res) => {
+  const existing = db.prepare('SELECT * FROM claims WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+
   const allowed = [
     'application_id', 'insurance_record_id', 'assigned_to', 'status', 'detailed_status',
     'incident_type', 'external_reference_id', 'event_source', 'damage_notes',
-    'damage_reported_at', 'next_task',
+    'damage_reported_at', 'next_task', 'deductible_amount', 'max_out_of_pocket', 'vehicle_location',
   ];
   const updates = [];
   const params = [];
@@ -74,8 +85,20 @@ router.patch('/:id', requireAuth, (req, res) => {
   if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
   updates.push('updated_at = CURRENT_TIMESTAMP');
   params.push(req.params.id);
-  const result = db.prepare(`UPDATE claims SET ${updates.join(', ')} WHERE id = ?`).run(...params);
-  if (!result.changes) return res.status(404).json({ error: 'Not found' });
+  db.prepare(`UPDATE claims SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+
+  // A vehicle taken out of service for this claim comes back online once the
+  // claim wraps up (moves to Closed or Collections) — but only if it's still
+  // sitting in the 'maintenance' state this claim put it in; don't clobber a
+  // status some other process set in the meantime.
+  const newStatus = req.body.status;
+  if (existing.mark_vehicle_inactive && (newStatus === 'closed' || newStatus === 'collections') && existing.status !== newStatus) {
+    const vehicle = db.prepare('SELECT status FROM vehicles WHERE id = ?').get(existing.vehicle_id);
+    if (vehicle && vehicle.status === 'maintenance') {
+      db.prepare("UPDATE vehicles SET status = 'available' WHERE id = ?").run(existing.vehicle_id);
+    }
+  }
+
   res.json({ ok: true });
 });
 
