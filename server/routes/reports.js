@@ -44,16 +44,18 @@ function computeVehicleDays(from, to) {
 const REPORTS = {
   revenue_by_vehicle: {
     category: 'revenue', label: 'Revenue by Vehicle',
-    description: 'Payments collected per vehicle in the selected range.',
+    description: 'Payments collected per vehicle in the selected range, less maintenance expense in the same range — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
     hasDateRange: true,
     columns: [
       { key: 'vehicle', label: 'Vehicle' },
       { key: 'license_plate', label: 'License Plate' },
       { key: 'bookings', label: 'Bookings', type: 'number' },
       { key: 'revenue', label: 'Revenue', type: 'money' },
+      { key: 'expense', label: 'Expense', type: 'money' },
+      { key: 'profit', label: 'Profit', type: 'money' },
     ],
     run(from, to) {
-      return db.prepare(`
+      const revenueRows = db.prepare(`
         SELECT v.id, v.year, v.make, v.model, v.license_plate,
                COUNT(DISTINCT p.application_id) as bookings,
                COALESCE(SUM(p.amount), 0) as revenue
@@ -62,29 +64,55 @@ const REPORTS = {
         LEFT JOIN payments p ON p.application_id = a.id AND substr(p.paid_at, 1, 10) BETWEEN ? AND ?
         GROUP BY v.id
         ORDER BY revenue DESC
-      `).all(from, to).map(r => ({
-        vehicle: `${r.year} ${r.make} ${r.model}`, license_plate: r.license_plate || '—',
-        bookings: r.bookings, revenue: round2(r.revenue),
-      }));
+      `).all(from, to);
+      const expenseByVehicle = new Map(db.prepare(`
+        SELECT vehicle_id, COALESCE(SUM(cost), 0) as expense
+        FROM vehicle_maintenance WHERE substr(performed_at, 1, 10) BETWEEN ? AND ?
+        GROUP BY vehicle_id
+      `).all(from, to).map(r => [r.vehicle_id, r.expense]));
+      return revenueRows.map(r => {
+        const revenue = round2(r.revenue);
+        const expense = round2(expenseByVehicle.get(r.id) || 0);
+        return {
+          vehicle: `${r.year} ${r.make} ${r.model}`, license_plate: r.license_plate || '—',
+          bookings: r.bookings, revenue, expense, profit: round2(revenue - expense),
+        };
+      });
     },
   },
 
   revenue_by_time_period: {
     category: 'revenue', label: 'Revenue by Time Period',
-    description: 'Daily breakdown of payments collected and card processing fees.',
+    description: 'Daily payments collected less maintenance expense logged that day — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
     hasDateRange: true,
     columns: [
       { key: 'date', label: 'Date' },
       { key: 'revenue', label: 'Revenue', type: 'money' },
+      { key: 'expense', label: 'Expense', type: 'money' },
+      { key: 'profit', label: 'Profit', type: 'money' },
       { key: 'card_fees', label: 'Card Processing Fees', type: 'money' },
     ],
     run(from, to) {
-      return db.prepare(`
+      const revenueByDay = new Map(db.prepare(`
         SELECT substr(paid_at, 1, 10) as date, COALESCE(SUM(amount), 0) as revenue,
                COALESCE(SUM(processing_fee), 0) as card_fees
         FROM payments WHERE substr(paid_at, 1, 10) BETWEEN ? AND ?
-        GROUP BY date ORDER BY date
-      `).all(from, to).map(r => ({ date: r.date, revenue: round2(r.revenue), card_fees: round2(r.card_fees) }));
+        GROUP BY date
+      `).all(from, to).map(r => [r.date, r]));
+      const expenseByDay = new Map(db.prepare(`
+        SELECT substr(performed_at, 1, 10) as date, COALESCE(SUM(cost), 0) as expense
+        FROM vehicle_maintenance WHERE substr(performed_at, 1, 10) BETWEEN ? AND ?
+        GROUP BY date
+      `).all(from, to).map(r => [r.date, r.expense]));
+      const days = new Set([...revenueByDay.keys(), ...expenseByDay.keys()]);
+      return [...days].sort().map(date => {
+        const revenue = round2(revenueByDay.get(date)?.revenue || 0);
+        const expense = round2(expenseByDay.get(date) || 0);
+        return {
+          date, revenue, expense, profit: round2(revenue - expense),
+          card_fees: round2(revenueByDay.get(date)?.card_fees || 0),
+        };
+      });
     },
   },
 

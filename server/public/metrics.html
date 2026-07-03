@@ -23,11 +23,18 @@
   .report-card__footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
   .report-card__csv { font-size: 0.78rem; font-weight: 600; color: var(--black); text-decoration: underline; cursor: pointer; }
   .report-card__generate { padding: 9px 18px; font-size: 0.72rem; }
-  .report-results { margin-top: 14px; border-top: 1px solid var(--gray-border); padding-top: 12px; max-height: 260px; overflow: auto; display: none; }
-  .report-results table { font-size: 0.78rem; }
-  .report-results th { position: sticky; top: 0; background: var(--white); padding: 6px 8px; }
-  .report-results td { padding: 7px 8px; }
-  .report-results__empty { color: #888; font-size: 0.82rem; text-align: center; padding: 18px 0; }
+
+  .report-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; padding: 32px; }
+  .report-modal { background: var(--white); border-radius: 10px; width: 100%; max-width: 1240px; max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; }
+  .report-modal__header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 20px 26px; border-bottom: 1px solid var(--gray-border); }
+  .report-modal__title { font-weight: 800; font-size: 1.15rem; margin-bottom: 4px; }
+  .report-modal__sub { font-size: 0.82rem; color: var(--text-muted); }
+  .report-modal__close { background: none; border: none; font-size: 1.6rem; cursor: pointer; color: var(--text-muted); line-height: 1; flex-shrink: 0; }
+  .report-modal__body { padding: 0; overflow: auto; flex: 1; }
+  .report-modal__body table { font-size: 0.85rem; width: 100%; }
+  .report-modal__body th { position: sticky; top: 0; background: var(--white); padding: 12px 20px; }
+  .report-modal__body td { padding: 11px 20px; }
+  .report-results__empty { color: #888; font-size: 0.9rem; text-align: center; padding: 48px 0; }
 </style>
 </head>
 <body>
@@ -79,6 +86,19 @@
 </div>
 </div>
 
+<div id="report-modal-overlay" class="report-modal-overlay">
+  <div class="report-modal">
+    <div class="report-modal__header">
+      <div>
+        <div class="report-modal__title" id="report-modal-title"></div>
+        <div class="report-modal__sub" id="report-modal-sub"></div>
+      </div>
+      <button class="report-modal__close" id="report-modal-close">&times;</button>
+    </div>
+    <div class="report-modal__body" id="report-modal-body"></div>
+  </div>
+</div>
+
 <script src="js/admin-common.js"></script>
 <script>
 const CATEGORY_COLORS = {
@@ -117,17 +137,33 @@ function reportUrl(key, format) {
   return `/api/reports/${key}/data?${params.toString()}`;
 }
 
-async function generateReport(key, columns) {
-  const box = document.getElementById(`rpt-${key}-results`);
-  box.style.display = 'block';
-  box.innerHTML = '<div class="report-results__empty">Loading…</div>';
+function openReportModal(label) {
+  document.getElementById('report-modal-title').textContent = label;
+  document.getElementById('report-modal-sub').textContent = '';
+  document.getElementById('report-modal-overlay').style.display = 'flex';
+}
+function closeReportModal() {
+  document.getElementById('report-modal-overlay').style.display = 'none';
+}
+document.getElementById('report-modal-close').addEventListener('click', closeReportModal);
+document.getElementById('report-modal-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'report-modal-overlay') closeReportModal();
+});
+
+async function generateReport(key, label, columns) {
+  const body = document.getElementById('report-modal-body');
+  openReportModal(label);
+  body.innerHTML = '<div class="report-results__empty">Loading…</div>';
   try {
     const data = await api(reportUrl(key));
+    const fromEl = document.getElementById(`rpt-${key}-from`);
+    const toEl = document.getElementById(`rpt-${key}-to`);
+    document.getElementById('report-modal-sub').textContent = (fromEl && toEl) ? `${fromEl.value} – ${toEl.value} · ${data.rows.length} row${data.rows.length === 1 ? '' : 's'}` : `${data.rows.length} row${data.rows.length === 1 ? '' : 's'}`;
     if (!data.rows.length) {
-      box.innerHTML = '<div class="report-results__empty">No data in this range.</div>';
+      body.innerHTML = '<div class="report-results__empty">No data in this range.</div>';
       return;
     }
-    box.innerHTML = `
+    body.innerHTML = `
       <table>
         <thead><tr>${columns.map(c => `<th>${c.label}</th>`).join('')}</tr></thead>
         <tbody>
@@ -136,7 +172,7 @@ async function generateReport(key, columns) {
       </table>
     `;
   } catch (e) {
-    box.innerHTML = `<div class="report-results__empty">${e.message || 'Failed to generate report'}</div>`;
+    body.innerHTML = `<div class="report-results__empty">${e.message || 'Failed to generate report'}</div>`;
   }
 }
 
@@ -154,9 +190,8 @@ function reportCardHtml(report) {
       ` : ''}
       <div class="report-card__footer">
         <span class="report-card__csv" onclick="window.open(reportUrl('${report.key}', 'csv'), '_blank')">CSV Export</span>
-        <button class="btn report-card__generate" onclick='generateReport("${report.key}", ${JSON.stringify(report.columns)})'>Generate</button>
+        <button class="btn report-card__generate" onclick='generateReport("${report.key}", ${JSON.stringify(report.label)}, ${JSON.stringify(report.columns)})'>Generate</button>
       </div>
-      <div class="report-results" id="rpt-${report.key}-results"></div>
     </div>
   `;
 }
