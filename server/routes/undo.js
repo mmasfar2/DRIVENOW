@@ -85,6 +85,14 @@ router.post('/', requireAuth, (req, res) => {
         (@id, @vehicle_id, @application_id, @insurance_record_id, @assigned_to, @status, @detailed_status,
          @incident_type, @external_reference_id, @event_source, @damage_notes, @damage_reported_at, @next_task, @created_at, @updated_at)
     `).run(claim);
+  } else if (row.entity_type === 'downtime_delete') {
+    const { record } = payload;
+    db.prepare(`
+      INSERT INTO downtime_events
+        (id, vehicle_id, service_type, status, date_reported, clearance_eta, vendor, est_cost, notes, remove_from_availability, created_at, updated_at)
+      VALUES
+        (@id, @vehicle_id, @service_type, @status, @date_reported, @clearance_eta, @vendor, @est_cost, @notes, @remove_from_availability, @created_at, @updated_at)
+    `).run(record);
   }
 
   db.prepare('DELETE FROM undo_log WHERE id = ?').run(row.id);

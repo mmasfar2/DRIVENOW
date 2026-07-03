@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Downtime Detail — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+.dt-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 1.5px solid var(--gray-border); border-radius: 6px; margin-bottom: 18px; }
+.dt-toggle-row__text { font-size: 0.85rem; font-weight: 600; }
+.dt-toggle-row__sub { font-size: 0.76rem; color: var(--text-muted); margin-top: 2px; font-weight: 400; }
+.dt-toggle { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+.dt-toggle input { opacity: 0; width: 0; height: 0; }
+.dt-toggle__slider { position: absolute; inset: 0; background: var(--gray-border); border-radius: 999px; cursor: not-allowed; transition: 0.15s; opacity: 0.7; }
+.dt-toggle__slider::before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: 0.15s; }
+.dt-toggle input:checked + .dt-toggle__slider { background: var(--black); }
+.dt-toggle input:checked + .dt-toggle__slider::before { transform: translateX(18px); }
+</style>
+</head>
+<body>
+
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
+<div class="page">
+  <a href="#" id="dtd-back" style="font-size:0.82rem;color:#888;">← Back to Downtime</a>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:12px;">
+    <div>
+      <div class="page-title" id="dtd-title" style="margin-bottom:4px;">Loading…</div>
+      <div class="page-sub" style="margin-bottom:0;" id="dtd-sub"></div>
+    </div>
+    <span class="badge" id="dtd-status-badge"></span>
+  </div>
+
+  <div class="rd-tabs">
+    <div class="rd-tab active" data-tab="details">Details</div>
+  </div>
+
+  <div id="dtd-panel-details">
+    <div class="panel">
+      <div class="panel-title">Vehicle</div>
+      <div class="info-row"><div class="info-row__label">Vehicle</div><div class="info-row__val" id="dtd-vehicle"></div></div>
+      <div class="info-row" style="border-bottom:none;"><div class="info-row__label">License Plate</div><div class="info-row__val" id="dtd-plate"></div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Service Need</div>
+      <div class="field-row">
+        <div class="field"><label>Service Type</label><select id="dtd-f-service-type"></select></div>
+        <div class="field"><label>Status</label><select id="dtd-f-status"></select></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Date Reported</label><input type="date" id="dtd-f-date-reported"></div>
+        <div class="field"><label>Clearance ETA</label><input type="datetime-local" id="dtd-f-clearance-eta"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Vendor</label><input id="dtd-f-vendor" placeholder="Shop name"></div>
+        <div class="field"><label>Est. Cost ($)</label><input type="number" id="dtd-f-est-cost" step="0.01"></div>
+      </div>
+      <div class="field"><label>Notes</label><textarea id="dtd-f-notes" rows="4"></textarea></div>
+      <div class="dt-toggle-row">
+        <div>
+          <div class="dt-toggle-row__text">Remove from availability</div>
+          <div class="dt-toggle-row__sub" id="dtd-toggle-sub">Vehicle is marked unavailable while this need is Open or In Progress</div>
+        </div>
+        <label class="dt-toggle">
+          <input type="checkbox" id="dtd-f-remove-availability">
+          <span class="dt-toggle__slider"></span>
+        </label>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <button class="btn btn-outline" id="dtd-delete-btn" style="color:#c62828;border-color:#c62828;">Delete</button>
+        <button class="btn" id="dtd-save-btn">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<script src="js/admin-common.js"></script>
+<script>
+const id = new URLSearchParams(window.location.search).get('id');
+const STATUS_LABELS = { open: 'Open', in_progress: 'In Progress', snoozed: 'Snoozed', closed: 'Closed' };
+const STATUS_ORDER = ['open', 'in_progress', 'snoozed', 'closed'];
+const SERVICE_TYPE_OPTIONS = [
+  'Mechanical Repair', 'Body / Collision Repair', 'Oil Change', 'Tire Service',
+  'Brake Service', 'Detailing / Cleaning', 'Inspection', 'Recall Service', 'Electrical', 'Other',
+];
+
+let event;
+
+function badgeClass(status) {
+  if (status === 'closed') return 'badge-completed';
+  if (status === 'snoozed') return 'badge-rejected';
+  if (status === 'in_progress') return 'badge-reserved';
+  return 'badge-active';
+}
+
+function toLocalInputValue(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function load() {
+  event = await api(`/api/downtime/${id}`);
+  render();
+}
+
+function render() {
+  document.getElementById('dtd-title').textContent = `${event.year} ${event.make} ${event.model} — ${event.service_type}`;
+  document.getElementById('dtd-sub').textContent = event.vendor ? `Vendor: ${event.vendor}` : 'No vendor on file';
+  const badge = document.getElementById('dtd-status-badge');
+  badge.textContent = STATUS_LABELS[event.status] || event.status;
+  badge.className = `badge ${badgeClass(event.status)}`;
+
+  document.getElementById('dtd-vehicle').textContent = `${event.year} ${event.make} ${event.model}${event.color ? ` (${event.color})` : ''}`;
+  document.getElementById('dtd-plate').textContent = event.license_plate || '—';
+
+  document.getElementById('dtd-f-service-type').innerHTML = SERVICE_TYPE_OPTIONS.map(o => `<option value="${o}" ${event.service_type === o ? 'selected' : ''}>${o}</option>`).join('');
+  document.getElementById('dtd-f-status').innerHTML = STATUS_ORDER.map(s => `<option value="${s}" ${event.status === s ? 'selected' : ''}>${STATUS_LABELS[s]}</option>`).join('');
+  document.getElementById('dtd-f-date-reported').value = event.date_reported ? event.date_reported.slice(0, 10) : '';
+  document.getElementById('dtd-f-clearance-eta').value = toLocalInputValue(event.clearance_eta);
+  document.getElementById('dtd-f-vendor').value = event.vendor || '';
+  document.getElementById('dtd-f-est-cost').value = event.est_cost ?? '';
+  document.getElementById('dtd-f-notes').value = event.notes || '';
+  document.getElementById('dtd-f-remove-availability').checked = !!event.remove_from_availability;
+}
+
+document.getElementById('dtd-save-btn').addEventListener('click', async () => {
+  await api(`/api/downtime/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      service_type: document.getElementById('dtd-f-service-type').value,
+      status: document.getElementById('dtd-f-status').value,
+      date_reported: document.getElementById('dtd-f-date-reported').value,
+      clearance_eta: document.getElementById('dtd-f-clearance-eta').value,
+      vendor: document.getElementById('dtd-f-vendor').value,
+      est_cost: document.getElementById('dtd-f-est-cost').value,
+      notes: document.getElementById('dtd-f-notes').value,
+      remove_from_availability: document.getElementById('dtd-f-remove-availability').checked,
+    }),
+  });
+  await load();
+});
+
+document.getElementById('dtd-delete-btn').addEventListener('click', async () => {
+  if (!confirm('Delete this downtime record? You can undo this from the Undo button at the top of the page.')) return;
+  await api(`/api/downtime/${id}`, { method: 'DELETE' });
+  refreshUndoButton();
+  window.location.href = 'downtime.html';
+});
+
+document.getElementById('dtd-back').addEventListener('click', (e) => {
+  e.preventDefault();
+  if (window.history.length > 1) window.history.back();
+  else window.location.href = 'downtime.html';
+});
+
+(async () => {
+  renderSidebar('downtime');
+  await requireLogin();
+  load();
+})();
+</script>
+</body>
+</html>

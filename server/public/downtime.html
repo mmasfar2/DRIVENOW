@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Downtime — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+.dt-stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+.dt-stat-card { background: var(--white); border: 1px solid var(--gray-border); border-radius: 8px; padding: 18px 20px; }
+.dt-stat-card__label { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #888; margin-bottom: 6px; }
+.dt-stat-card__value { font-size: 1.7rem; font-weight: 800; }
+
+.dt-tabs { display: flex; gap: 28px; border-bottom: 2px solid var(--gray-border); margin-bottom: 18px; }
+.dt-tab { padding-bottom: 10px; font-weight: 700; font-size: 0.9rem; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; display: flex; align-items: center; gap: 6px; }
+.dt-tab.active { color: var(--black); border-bottom-color: var(--black); }
+.dt-tab__badge { font-size: 0.72rem; font-weight: 700; color: var(--text-muted); }
+
+.dt-filter-pills { display: flex; gap: 8px; margin-bottom: 18px; }
+.dt-pill { padding: 7px 16px; border-radius: 999px; border: 1.5px solid var(--gray-border); font-size: 0.8rem; font-weight: 600; cursor: pointer; background: var(--white); color: var(--black); }
+.dt-pill.active { background: var(--black); color: #fff; border-color: var(--black); }
+
+.dt-row { cursor: pointer; }
+.dt-empty { text-align: center; color: #888; padding: 48px 0; font-size: 0.9rem; }
+
+.dt-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.dt-modal { background: var(--white); border-radius: 10px; width: 520px; max-width: 92vw; max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; }
+.dt-modal__header { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; border-bottom: 1px solid var(--gray-border); }
+.dt-modal__title { font-weight: 800; font-size: 1.05rem; }
+.dt-modal__close { background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text-muted); line-height: 1; }
+.dt-modal__body { padding: 22px; overflow-y: auto; flex: 1; }
+.dt-modal__footer { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 16px 22px; border-top: 1px solid var(--gray-border); }
+
+.dt-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 1.5px solid var(--gray-border); border-radius: 6px; }
+.dt-toggle-row__text { font-size: 0.85rem; font-weight: 600; }
+.dt-toggle-row__sub { font-size: 0.76rem; color: var(--text-muted); margin-top: 2px; font-weight: 400; }
+.dt-toggle { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+.dt-toggle input { opacity: 0; width: 0; height: 0; }
+.dt-toggle__slider { position: absolute; inset: 0; background: var(--gray-border); border-radius: 999px; cursor: pointer; transition: 0.15s; }
+.dt-toggle__slider::before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: 0.15s; }
+.dt-toggle input:checked + .dt-toggle__slider { background: var(--black); }
+.dt-toggle input:checked + .dt-toggle__slider::before { transform: translateX(18px); }
+</style>
+</head>
+<body>
+
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
+<div class="page">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+    <div>
+      <div class="page-title">Downtime</div>
+      <div class="page-sub">Track and manage vehicle service issues.</div>
+    </div>
+    <button class="btn" id="dt-create-btn">+ Create</button>
+  </div>
+
+  <div class="dt-stat-grid">
+    <div class="dt-stat-card"><div class="dt-stat-card__label">Open</div><div class="dt-stat-card__value" id="dt-count-open">0</div></div>
+    <div class="dt-stat-card"><div class="dt-stat-card__label">In Progress</div><div class="dt-stat-card__value" id="dt-count-in_progress">0</div></div>
+    <div class="dt-stat-card"><div class="dt-stat-card__label">Snoozed</div><div class="dt-stat-card__value" id="dt-count-snoozed">0</div></div>
+    <div class="dt-stat-card"><div class="dt-stat-card__label">Closed</div><div class="dt-stat-card__value" id="dt-count-closed">0</div></div>
+  </div>
+
+  <div class="dt-tabs" id="dt-tabs"></div>
+  <div class="dt-filter-pills" id="dt-pills" style="display:none;"></div>
+
+  <div class="panel" style="padding:0;overflow-x:auto;">
+    <table>
+      <thead>
+        <tr><th>Vehicle</th><th>Service Type</th><th>Status</th><th>Date Reported</th><th>Clearance ETA</th><th>Vendor</th><th style="text-align:right;">Est. Cost</th></tr>
+      </thead>
+      <tbody id="dt-table-body"></tbody>
+    </table>
+  </div>
+</div>
+</div>
+</div>
+
+<div id="dt-modal-overlay" class="dt-modal-overlay" style="display:none;">
+  <div class="dt-modal">
+    <div class="dt-modal__header">
+      <div class="dt-modal__title">Create Service Need</div>
+      <button class="dt-modal__close" id="dt-modal-close">&times;</button>
+    </div>
+    <div class="dt-modal__body">
+      <div class="field"><label>Vehicle *</label>
+        <select id="df-vehicle"><option value="">Select a vehicle</option></select>
+      </div>
+      <div class="field"><label>Service Type *</label>
+        <select id="df-service-type"><option value="">Select service type</option></select>
+      </div>
+      <div class="field"><label>Status</label>
+        <select id="df-status"></select>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Date Reported *</label><input type="date" id="df-date-reported"></div>
+        <div class="field"><label>Clearance ETA (optional)</label><input type="datetime-local" id="df-clearance-eta"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Vendor</label><input id="df-vendor" placeholder="Shop name"></div>
+        <div class="field"><label>Est. Cost ($)</label><input type="number" id="df-est-cost" step="0.01" placeholder="0.00"></div>
+      </div>
+      <div class="field"><label>Notes</label><textarea id="df-notes" rows="3" placeholder="Additional details"></textarea></div>
+      <div class="dt-toggle-row">
+        <div>
+          <div class="dt-toggle-row__text">Remove from availability</div>
+          <div class="dt-toggle-row__sub">Vehicle will be marked unavailable while this order is active</div>
+        </div>
+        <label class="dt-toggle">
+          <input type="checkbox" id="df-remove-availability" checked>
+          <span class="dt-toggle__slider"></span>
+        </label>
+      </div>
+    </div>
+    <div class="dt-modal__footer">
+      <button class="btn btn-outline" id="dt-modal-cancel">Cancel</button>
+      <button class="btn" id="dt-modal-submit">Create</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/admin-common.js"></script>
+<script>
+const STATUS_LABELS = { open: 'Open', in_progress: 'In Progress', snoozed: 'Snoozed', closed: 'Closed' };
+const SERVICE_TYPE_OPTIONS = [
+  'Mechanical Repair', 'Body / Collision Repair', 'Oil Change', 'Tire Service',
+  'Brake Service', 'Detailing / Cleaning', 'Inspection', 'Recall Service', 'Electrical', 'Other',
+];
+
+let events = [];
+let vehicles = [];
+let activeTab = 'active'; // active | snoozed | closed
+let activePill = 'all'; // all | open | in_progress
+
+function fmtDateOnly(d) {
+  if (!d) return '—';
+  return new Date(d.length <= 10 ? d + 'T00:00:00' : d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function fmtDateTime(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function badgeClass(status) {
+  if (status === 'closed') return 'badge-completed';
+  if (status === 'snoozed') return 'badge-rejected';
+  if (status === 'in_progress') return 'badge-reserved';
+  return 'badge-active';
+}
+
+function renderTabs() {
+  const closedCount = events.filter(e => e.status === 'closed').length;
+  const tabs = [
+    { key: 'active', label: 'Active Needs' },
+    { key: 'snoozed', label: 'Snoozed' },
+    { key: 'closed', label: 'Closed', badge: closedCount },
+  ];
+  document.getElementById('dt-tabs').innerHTML = tabs.map(t => `
+    <div class="dt-tab ${activeTab === t.key ? 'active' : ''}" data-tab="${t.key}">
+      ${t.label}${t.badge ? `<span class="dt-tab__badge">${t.badge}</span>` : ''}
+    </div>
+  `).join('');
+  document.querySelectorAll('.dt-tab').forEach(el => {
+    el.addEventListener('click', () => { activeTab = el.dataset.tab; activePill = 'all'; renderAll(); });
+  });
+}
+
+function renderPills() {
+  const box = document.getElementById('dt-pills');
+  if (activeTab !== 'active') { box.style.display = 'none'; return; }
+  box.style.display = 'flex';
+  const pills = [
+    { key: 'all', label: 'All' },
+    { key: 'open', label: 'Open' },
+    { key: 'in_progress', label: 'In Progress' },
+  ];
+  box.innerHTML = pills.map(p => `<div class="dt-pill ${activePill === p.key ? 'active' : ''}" data-pill="${p.key}">${p.label}</div>`).join('');
+  box.querySelectorAll('.dt-pill').forEach(el => {
+    el.addEventListener('click', () => { activePill = el.dataset.pill; renderTable(); });
+  });
+}
+
+function currentRows() {
+  if (activeTab === 'snoozed') return events.filter(e => e.status === 'snoozed');
+  if (activeTab === 'closed') return events.filter(e => e.status === 'closed');
+  return events.filter(e => {
+    if (activePill === 'open') return e.status === 'open';
+    if (activePill === 'in_progress') return e.status === 'in_progress';
+    return e.status === 'open' || e.status === 'in_progress';
+  });
+}
+
+function renderTable() {
+  const rows = currentRows();
+  const emptyLabel = activeTab === 'snoozed' ? 'No snoozed needs' : activeTab === 'closed' ? 'No closed needs' : 'No active needs';
+  document.getElementById('dt-table-body').innerHTML = rows.length ? rows.map(e => `
+    <tr class="dt-row" data-id="${e.id}">
+      <td><strong>${e.year} ${e.make} ${e.model}</strong></td>
+      <td>${e.service_type}</td>
+      <td><span class="badge ${badgeClass(e.status)}">${STATUS_LABELS[e.status] || e.status}</span></td>
+      <td>${fmtDateOnly(e.date_reported)}</td>
+      <td>${e.clearance_eta ? fmtDateTime(e.clearance_eta) : '—'}</td>
+      <td>${e.vendor || '—'}</td>
+      <td style="text-align:right;">${e.est_cost != null ? fmtMoney(e.est_cost) : '—'}</td>
+    </tr>
+  `).join('') : `<tr><td colspan="7" class="dt-empty">${emptyLabel}</td></tr>`;
+
+  document.querySelectorAll('.dt-row').forEach(el => {
+    el.addEventListener('click', () => { window.location.href = `downtime-detail.html?id=${el.dataset.id}`; });
+  });
+}
+
+function renderStats() {
+  ['open', 'in_progress', 'snoozed', 'closed'].forEach(s => {
+    document.getElementById(`dt-count-${s}`).textContent = events.filter(e => e.status === s).length;
+  });
+}
+
+function renderAll() {
+  renderStats();
+  renderTabs();
+  renderPills();
+  renderTable();
+}
+
+async function load() {
+  [events, vehicles] = await Promise.all([api('/api/downtime'), api('/api/vehicles')]);
+  renderAll();
+}
+
+function resetForm() {
+  document.getElementById('df-vehicle').innerHTML = '<option value="">Select a vehicle</option>' +
+    vehicles.map(v => `<option value="${v.id}">${v.year} ${v.make} ${v.model}</option>`).join('');
+  document.getElementById('df-service-type').innerHTML = '<option value="">Select service type</option>' +
+    SERVICE_TYPE_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join('');
+  document.getElementById('df-status').innerHTML = Object.entries(STATUS_LABELS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+  document.getElementById('df-date-reported').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('df-clearance-eta').value = '';
+  document.getElementById('df-vendor').value = '';
+  document.getElementById('df-est-cost').value = '';
+  document.getElementById('df-notes').value = '';
+  document.getElementById('df-remove-availability').checked = true;
+}
+
+document.getElementById('dt-create-btn').addEventListener('click', () => {
+  resetForm();
+  document.getElementById('dt-modal-overlay').style.display = 'flex';
+});
+document.getElementById('dt-modal-close').addEventListener('click', () => {
+  document.getElementById('dt-modal-overlay').style.display = 'none';
+});
+document.getElementById('dt-modal-cancel').addEventListener('click', () => {
+  document.getElementById('dt-modal-overlay').style.display = 'none';
+});
+document.getElementById('dt-modal-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'dt-modal-overlay') e.target.style.display = 'none';
+});
+
+document.getElementById('dt-modal-submit').addEventListener('click', async () => {
+  const vehicle_id = document.getElementById('df-vehicle').value;
+  const service_type = document.getElementById('df-service-type').value;
+  const date_reported = document.getElementById('df-date-reported').value;
+  if (!vehicle_id) { alert('Vehicle is required'); return; }
+  if (!service_type) { alert('Service type is required'); return; }
+  if (!date_reported) { alert('Date reported is required'); return; }
+
+  await api('/api/downtime', {
+    method: 'POST',
+    body: JSON.stringify({
+      vehicle_id, service_type, date_reported,
+      status: document.getElementById('df-status').value,
+      clearance_eta: document.getElementById('df-clearance-eta').value,
+      vendor: document.getElementById('df-vendor').value,
+      est_cost: document.getElementById('df-est-cost').value,
+      notes: document.getElementById('df-notes').value,
+      remove_from_availability: document.getElementById('df-remove-availability').checked,
+    }),
+  });
+  document.getElementById('dt-modal-overlay').style.display = 'none';
+  await load();
+});
+
+(async () => {
+  renderSidebar('downtime');
+  await requireLogin();
+  load();
+})();
+</script>
+</body>
+</html>

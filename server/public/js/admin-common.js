@@ -27,6 +27,7 @@ const SIDEBAR_LINKS = [
   { key: 'automation', label: 'Automation', href: 'automation.html' },
   { key: 'fleet', label: 'Fleet Management', href: 'fleet-admin.html' },
   { key: 'maintenance', label: 'Maintenance', href: 'maintenance.html' },
+  { key: 'downtime', label: 'Downtime', href: 'downtime.html' },
   { key: 'claims', label: 'Claims', href: 'claims.html' },
   { key: 'metrics', label: 'Reports', href: 'metrics.html' },
   { key: 'clients', label: 'Clients', href: 'clients.html' },
