@@ -130,6 +130,20 @@
     <div class="resv-modal__body">
       <div class="field"><label>Date Paid</label><input type="date" id="ap-date"></div>
       <div class="field"><label>Amount Paid ($)</label><input type="number" id="ap-amount" step="0.01"></div>
+      <div class="field"><label>Payment Method</label>
+        <select id="ap-method">
+          <option value="cash">Cash</option>
+          <option value="card">Card</option>
+        </select>
+      </div>
+      <div class="field" id="ap-fee-field" style="display:none;">
+        <label>Card Processing Fee (%)</label>
+        <input type="number" id="ap-fee-rate" step="0.1" min="0" value="3">
+        <div style="font-size:0.8rem;color:#666;margin-top:6px;">
+          Fee charged to customer: <strong id="ap-fee-amount">$0.00</strong><br>
+          Total to collect: <strong id="ap-total-amount">$0.00</strong>
+        </div>
+      </div>
       <button class="btn btn-block" id="ap-submit">Save Payment</button>
     </div>
   </div>
@@ -832,9 +846,29 @@ document.getElementById('pl-send-invoice-btn').addEventListener('click', async (
   await api(`/api/applications/${paymentBooking.id}/invoice`, { method: 'POST', body: JSON.stringify({ invoice_amount: amount }) });
 });
 
+const DEFAULT_CARD_FEE_RATE = 3; // % — editable per payment
+
+function updateApFeePreview() {
+  const method = document.getElementById('ap-method').value;
+  const feeField = document.getElementById('ap-fee-field');
+  feeField.style.display = method === 'card' ? '' : 'none';
+  if (method !== 'card') return;
+  const amount = Number(document.getElementById('ap-amount').value) || 0;
+  const rate = Number(document.getElementById('ap-fee-rate').value) || 0;
+  const fee = Math.round(amount * (rate / 100) * 100) / 100;
+  document.getElementById('ap-fee-amount').textContent = fmtMoney(fee);
+  document.getElementById('ap-total-amount').textContent = fmtMoney(amount + fee);
+}
+document.getElementById('ap-method').addEventListener('change', updateApFeePreview);
+document.getElementById('ap-amount').addEventListener('input', updateApFeePreview);
+document.getElementById('ap-fee-rate').addEventListener('input', updateApFeePreview);
+
 document.getElementById('pl-add-payment-btn').addEventListener('click', () => {
   document.getElementById('ap-date').value = new Date().toISOString().slice(0, 10);
   document.getElementById('ap-amount').value = '';
+  document.getElementById('ap-method').value = 'cash';
+  document.getElementById('ap-fee-rate').value = DEFAULT_CARD_FEE_RATE;
+  updateApFeePreview();
   document.getElementById('add-payment-overlay').style.display = 'flex';
 });
 document.getElementById('add-payment-close').addEventListener('click', () => {
@@ -846,8 +880,11 @@ document.getElementById('add-payment-overlay').addEventListener('click', (e) => 
 document.getElementById('ap-submit').addEventListener('click', async () => {
   const amount = document.getElementById('ap-amount').value;
   const paid_at = document.getElementById('ap-date').value;
+  const method = document.getElementById('ap-method').value;
   if (!amount || Number(amount) <= 0) { alert('Enter a valid amount'); return; }
-  await api(`/api/applications/${paymentBooking.id}/payments`, { method: 'POST', body: JSON.stringify({ amount, paid_at }) });
+  const rate = Number(document.getElementById('ap-fee-rate').value) || 0;
+  const processing_fee = method === 'card' ? Math.round(Number(amount) * (rate / 100) * 100) / 100 : 0;
+  await api(`/api/applications/${paymentBooking.id}/payments`, { method: 'POST', body: JSON.stringify({ amount, paid_at, method, processing_fee }) });
   document.getElementById('add-payment-overlay').style.display = 'none';
   paymentLog = await api(`/api/applications/${paymentBooking.id}/payments`);
   renderPaymentLog();
