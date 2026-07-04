@@ -429,6 +429,24 @@ if (!claimCols.includes('mark_vehicle_inactive')) {
   db.exec('ALTER TABLE claims ADD COLUMN mark_vehicle_inactive INTEGER NOT NULL DEFAULT 0');
 }
 
+db.exec(`
+CREATE TABLE IF NOT EXISTS downtime_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vehicle_id INTEGER NOT NULL,
+  service_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open', -- open | in_progress | snoozed | closed
+  date_reported TEXT NOT NULL,
+  clearance_eta TEXT,
+  vendor TEXT,
+  est_cost REAL,
+  notes TEXT,
+  remove_from_availability INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
+);
+`);
+
 // Backfill: build a customers record for every distinct email already in
 // applications, so existing leads/bookings get a profile retroactively.
 const existingCustomerEmails = new Set(db.prepare('SELECT lower(email) as e FROM customers').all().map(r => r.e));

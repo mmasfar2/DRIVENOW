@@ -126,6 +126,11 @@
       <div class="panel-title">Documents</div>
 
       <div class="panel" style="margin-top:24px;box-shadow:none;border-style:dashed;">
+        <div class="panel-title">Contact Information</div>
+        <div id="rd-doc-contact"></div>
+      </div>
+
+      <div class="panel" style="margin-top:24px;box-shadow:none;border-style:dashed;">
         <div class="panel-title">License</div>
         <div class="info-row" style="border-bottom:none;"><div class="info-row__label">License</div><div class="info-row__val" id="rd-doc-license"></div></div>
       </div>
@@ -347,6 +352,17 @@ function render() {
   document.getElementById('rd-veh-pickup-loc').textContent = booking.pickup_location || '—';
   document.getElementById('rd-veh-dropoff-loc').textContent = booking.dropoff_location || '—';
 
+  document.getElementById('rd-doc-contact').innerHTML = `
+    <div class="info-row"><div class="info-row__label">Email</div><div class="info-row__val">${booking.email || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">Phone</div><div class="info-row__val">${booking.phone || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">Address</div><div class="info-row__val">${booking.address || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">City</div><div class="info-row__val">${booking.city || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">State</div><div class="info-row__val">${booking.state || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">ZIP Code</div><div class="info-row__val">${booking.zip_code || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">Date of Birth</div><div class="info-row__val">${booking.dob ? fmtDate(booking.dob) : '—'}</div></div>
+    <div class="info-row" style="border-bottom:none;"><div class="info-row__label">License Number</div><div class="info-row__val">${booking.license_number || '—'}</div></div>
+  `;
+
   document.getElementById('rd-doc-license').innerHTML = filePreviewHtml(booking.license_path);
   document.getElementById('rd-doc-agreement').textContent = booking.agreement_signed_at
     ? `Signed ${fmtDate(booking.agreement_signed_at)}`
@@ -490,8 +506,21 @@ function renderFinCal() {
   const days = (finNewPickup && finNewReturn)
     ? Math.round((new Date(finNewReturn) - new Date(finNewPickup)) / 86400000)
     : null;
+
+  // While the calendar still matches the booking's saved dates, show the
+  // actual invoice total (same number as the Payment Log panel below) rather
+  // than a fresh weekly-rate estimate — those two only ever agree by
+  // coincidence once an invoice/quote amount has overridden the raw rate x
+  // days math. Only recompute a live estimate once the owner picks dates
+  // that differ from what's saved, since there's no real total for those yet.
+  const savedPickup = booking.pickup_scheduled_at ? booking.pickup_scheduled_at.slice(0, 10) : '';
+  const savedReturn = booking.rental_end_at ? booking.rental_end_at.slice(0, 10) : '';
+  const datesChanged = finNewPickup !== savedPickup || finNewReturn !== savedReturn;
   const dailyRateExact = (booking.weekly_rate || 0) / 7;
-  const estimate = days ? Math.round(dailyRateExact * days * (1 + SALES_TAX_RATE) * 100) / 100 : null;
+  const estimate = !days ? null
+    : !datesChanged ? Math.round(Number(booking.charge || 0) * 100) / 100
+    : Math.round(dailyRateExact * days * (1 + SALES_TAX_RATE) * 100) / 100;
+  const estimateLabel = datesChanged ? 'Est. Total' : 'Total';
 
   box.innerHTML = `
     <div class="resv-cal">
@@ -513,7 +542,7 @@ function renderFinCal() {
       </div>
       <div class="resv-cal__apply-row">
         <div class="resv-cal__total-days"><span>Duration:</span>${days !== null ? `${days} day${days === 1 ? '' : 's'}` : '—'}</div>
-        <div class="resv-cal__est-amount"><span>Est. Total:</span>${estimate !== null ? fmtExact(estimate) : '—'}</div>
+        <div class="resv-cal__est-amount"><span>${estimateLabel}:</span>${estimate !== null ? fmtExact(estimate) : '—'}</div>
         <button class="resv-cal__apply-btn" id="fin-cal-apply" ${!(finNewPickup && finNewReturn) ? 'disabled' : ''}>Save Dates</button>
       </div>
     </div>

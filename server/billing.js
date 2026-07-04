@@ -6,10 +6,14 @@ const SALES_TAX_RATE = 0.0725;
 
 // A booking's charge is whatever was actually invoiced/quoted if that exists;
 // only falls back to a live rate x days estimate before a number's been set.
+// A lead/application with no confirmed pickup and return dates yet owes
+// nothing, even if a quote (total_due_at_pickup) was already presented —
+// there's nothing to bill against until dates are actually set.
 function computeCharge(row) {
+  if (!row.pickup_scheduled_at || !row.rental_end_at) return 0;
   if (row.invoice_amount) return Math.round(Number(row.invoice_amount) * 100) / 100;
   if (row.total_due_at_pickup) return Math.round(Number(row.total_due_at_pickup) * 100) / 100;
-  if (row.weekly_rate && row.pickup_scheduled_at && row.rental_end_at) {
+  if (row.weekly_rate) {
     const days = Math.round((new Date(row.rental_end_at) - new Date(row.pickup_scheduled_at)) / 86400000);
     if (days > 0) {
       const dailyRate = row.weekly_rate / 7;
