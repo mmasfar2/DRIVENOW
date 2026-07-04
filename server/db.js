@@ -200,6 +200,9 @@ if (!existingCols.includes('insurance_private_path')) {
 if (!existingCols.includes('odometer_out')) {
   db.exec('ALTER TABLE applications ADD COLUMN odometer_out REAL');
 }
+if (!existingCols.includes('gas_level_out')) {
+  db.exec('ALTER TABLE applications ADD COLUMN gas_level_out TEXT');
+}
 if (!existingCols.includes('odometer_in')) {
   db.exec('ALTER TABLE applications ADD COLUMN odometer_in REAL');
 }

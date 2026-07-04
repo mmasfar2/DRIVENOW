@@ -548,7 +548,7 @@ router.post('/:id/revert-arrival', requireAuth, (req, res) => {
 // current mileage already is, so this always starts from the truth the last
 // checkout/check-in left behind rather than a stale or guessed number. ──
 router.post('/:id/check-in', requireAuth, (req, res) => {
-  const { odometer_out } = req.body;
+  const { odometer_out, gas_level } = req.body;
   const id = req.params.id;
   if (odometer_out == null || odometer_out === '') return res.status(400).json({ error: 'Odometer reading is required' });
   const app = db.prepare('SELECT assigned_vehicle_id, status FROM applications WHERE id = ?').get(id);
@@ -556,9 +556,9 @@ router.post('/:id/check-in', requireAuth, (req, res) => {
   if (app.status !== 'active') return res.status(400).json({ error: 'Only an active booking can be checked in' });
   if (!app.assigned_vehicle_id) return res.status(400).json({ error: 'This booking has no vehicle assigned' });
 
-  db.prepare('UPDATE applications SET odometer_out = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(odometer_out, id);
+  db.prepare('UPDATE applications SET odometer_out = ?, gas_level_out = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(odometer_out, gas_level || null, id);
   db.prepare("UPDATE vehicles SET status = 'rented', mileage = ? WHERE id = ?").run(odometer_out, app.assigned_vehicle_id);
-  logActivity(id, `Checked in — vehicle checked out at ${odometer_out} mi`);
+  logActivity(id, `Checked in — vehicle checked out at ${odometer_out} mi${gas_level ? `, ${gas_level} tank` : ''}`);
   res.json({ ok: true });
 });
 
