@@ -299,7 +299,18 @@ CREATE TABLE IF NOT EXISTS undo_log (
   payload TEXT NOT NULL,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Sessions live on the same persistent disk as the rest of the data, so a
+-- logged-in user stays logged in across a server restart/redeploy — the
+-- default express-session MemoryStore is wiped on every restart, which is
+-- what was producing stray "Not authenticated" errors mid-session.
+CREATE TABLE IF NOT EXISTS sessions (
+  sid TEXT PRIMARY KEY,
+  sess TEXT NOT NULL,
+  expires INTEGER NOT NULL
+);
 `);
+db.prepare('DELETE FROM sessions WHERE expires < ?').run(Date.now());
 
 function logUndo(entityType, label, payload) {
   db.prepare('DELETE FROM undo_log').run();
@@ -520,7 +531,7 @@ function upsertCustomer({ email, first_name, last_name, phone, address, city, st
 // entry step. One record per (customer, type); re-submitting only fills in
 // gaps (via COALESCE) rather than overwriting anything an admin already
 // edited from the Insurance panel itself.
-function upsertInsuranceRecord(customerId, type, { document_path, notes } = {}) {
+function upsertInsuranceRecord(customerId, type, { document_path, notes, carrier, protection_type, policy_number } = {}) {
   if (!customerId || !type) return;
   const existing = db.prepare('SELECT id FROM insurance_records WHERE customer_id = ? AND type = ?').get(customerId, type);
   if (existing) {
@@ -528,15 +539,18 @@ function upsertInsuranceRecord(customerId, type, { document_path, notes } = {}) 
       UPDATE insurance_records SET
         document_path = COALESCE(?, document_path),
         notes = COALESCE(notes, ?),
+        carrier = COALESCE(carrier, ?),
+        protection_type = COALESCE(protection_type, ?),
+        policy_number = COALESCE(policy_number, ?),
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(document_path || null, notes || null, existing.id);
+    `).run(document_path || null, notes || null, carrier || null, protection_type || null, policy_number || null, existing.id);
     return existing.id;
   }
   const result = db.prepare(`
-    INSERT INTO insurance_records (customer_id, type, document_path, notes)
-    VALUES (?, ?, ?, ?)
-  `).run(customerId, type, document_path || null, notes || null);
+    INSERT INTO insurance_records (customer_id, type, document_path, notes, carrier, protection_type, policy_number)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(customerId, type, document_path || null, notes || null, carrier || null, protection_type || null, policy_number || null);
   return result.lastInsertRowid;
 }
 
