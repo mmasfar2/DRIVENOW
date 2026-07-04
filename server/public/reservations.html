@@ -377,8 +377,9 @@
 }
 .resv-insurance-option__label { font-size: 0.88rem; font-weight: 600; }
 .resv-insurance-option__sub { font-size: 0.74rem; color: var(--text-muted); margin-top: 2px; }
-.resv-insurance-upload { margin-top: 14px; margin-bottom: 48px; display: flex; justify-content: center; }
+.resv-insurance-upload { margin-top: 14px; margin-bottom: 48px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .resv-insurance-upload .resv-upload-box { width: 60%; }
+.resv-insurance-upload > .field-row, .resv-insurance-upload > .field { width: 60%; }
 .resv-review-panel { border: 1.5px solid var(--gray-border); border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
 .resv-review-panel__head {
   display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;
@@ -933,6 +934,7 @@ function initNewReservationModal() {
 
   let step = 1;
   let vehicles = [];
+  let vehiclesLoadError = false;
   let vehicleSearch = '';
   let calMonth = null;
   const openClasses = new Set();
@@ -1165,12 +1167,26 @@ function initNewReservationModal() {
         { id: 'our_policies', label: 'Our Policies', sub: 'Insurance provided by DriveNow' },
         { id: 'third_party', label: 'Third Party Insurance', sub: 'Not available yet', disabled: true },
       ];
+      const COVERAGE_TYPES = ['Liability', 'Comprehensive', 'Collision'];
       body.innerHTML = `
         <div class="resv-insurance-options">
           ${options.map(o => {
             let uploadHtml = '';
-            if (form.insurance_type === o.id && o.id === 'private') uploadHtml = uploadBoxHtml('f-insurance-private', form.insurance_private_file);
-            else if (form.insurance_type === o.id && o.id === 'our_policies') uploadHtml = uploadBoxHtml('f-insurance-policies', form.insurance_policy_file);
+            if (form.insurance_type === o.id && o.id === 'private') {
+              uploadHtml = `
+                <div class="field-row">
+                  <div class="field"><label>Carrier</label><input id="f-ins-carrier" value="${form.insurance_carrier}"></div>
+                  <div class="field"><label>Policy Number</label><input id="f-ins-policy" value="${form.insurance_policy_number}"></div>
+                </div>
+                <div class="field"><label>Coverage Type</label>
+                  <select id="f-ins-coverage">
+                    <option value="">Select coverage type</option>
+                    ${COVERAGE_TYPES.map(c => `<option value="${c}" ${form.insurance_coverage_type === c ? 'selected' : ''}>${c}</option>`).join('')}
+                  </select>
+                </div>
+                ${uploadBoxHtml('f-insurance-private', form.insurance_private_file)}
+              `;
+            } else if (form.insurance_type === o.id && o.id === 'our_policies') uploadHtml = uploadBoxHtml('f-insurance-policies', form.insurance_policy_file);
             return `
               <div>
                 <div class="resv-insurance-option ${form.insurance_type === o.id ? 'selected' : ''} ${o.disabled ? 'disabled' : ''}" data-id="${o.id}" ${o.disabled ? 'data-disabled="1"' : ''}>
@@ -1194,6 +1210,9 @@ function initNewReservationModal() {
         });
       });
       if (form.insurance_type === 'private') {
+        document.getElementById('f-ins-carrier').addEventListener('input', (e) => { form.insurance_carrier = e.target.value; });
+        document.getElementById('f-ins-policy').addEventListener('input', (e) => { form.insurance_policy_number = e.target.value; });
+        document.getElementById('f-ins-coverage').addEventListener('change', (e) => { form.insurance_coverage_type = e.target.value; });
         bindUploadBox('f-insurance-private', (file) => { form.insurance_private_file = file; renderStep(); });
       } else if (form.insurance_type === 'our_policies') {
         bindUploadBox('f-insurance-policies', (file) => { form.insurance_policy_file = file; renderStep(); });
@@ -1273,7 +1292,11 @@ function initNewReservationModal() {
             </div>
           </div>
         `;
-      }).join('') : `<div class="empty-state">${icon('car', 32)}<span>No vehicles match your search</span></div>`}
+      }).join('') : vehiclesLoadError === 'session'
+        ? `<div class="empty-state">${icon('alert', 32)}<span>Your session expired — close this and log in again before continuing.</span></div>`
+        : vehiclesLoadError
+        ? `<div class="empty-state">${icon('alert', 32)}<span>Couldn't load the fleet — check your connection and reopen this form.</span></div>`
+        : `<div class="empty-state">${icon('car', 32)}<span>No vehicles match your search</span></div>`}
     `;
 
     document.getElementById('f-vsearch').addEventListener('input', (e) => {
@@ -1385,6 +1408,11 @@ function initNewReservationModal() {
           <div class="field"><label>Driver License #</label><input id="f-licnum" value="${form.license_number}"></div>
         </div>
         <div class="field"><label>Current Address</label><input id="f-address" value="${form.address}"></div>
+        <div class="field-row">
+          <div class="field"><label>City</label><input id="f-city" value="${form.city}"></div>
+          <div class="field"><label>State</label><input id="f-state" value="${form.state}" maxlength="2" placeholder="NC"></div>
+          <div class="field"><label>ZIP Code</label><input id="f-zip" value="${form.zip_code}" maxlength="5"></div>
+        </div>
       `;
       document.getElementById('f-first').addEventListener('input', (e) => { form.first_name = e.target.value; });
       document.getElementById('f-last').addEventListener('input', (e) => { form.last_name = e.target.value; });
@@ -1393,6 +1421,9 @@ function initNewReservationModal() {
       document.getElementById('f-dob').addEventListener('input', (e) => { form.dob = e.target.value; });
       document.getElementById('f-licnum').addEventListener('input', (e) => { form.license_number = e.target.value; });
       document.getElementById('f-address').addEventListener('input', (e) => { form.address = e.target.value; });
+      document.getElementById('f-city').addEventListener('input', (e) => { form.city = e.target.value; });
+      document.getElementById('f-state').addEventListener('input', (e) => { form.state = e.target.value; });
+      document.getElementById('f-zip').addEventListener('input', (e) => { form.zip_code = e.target.value; });
       bindUploadBox('f-license', (file) => { form.license_file = file; renderStep(); });
     }
   }
@@ -1484,12 +1515,18 @@ function initNewReservationModal() {
     Object.assign(form, {
       source, pickup_scheduled_at: '', rental_end_at: '', pickup_time: '10:00 AM', return_time: '10:00 AM', assigned_vehicle_id: null, weekly_rate: null,
       total_due_at_pickup: '', customer_mode: 'existing', first_name: '', last_name: '', phone: '', email: '',
-      dob: '', license_number: '', address: '', license_file: null, insurance_type: null, insurance_private_file: null, insurance_policy_file: null,
+      dob: '', license_number: '', address: '', city: '', state: '', zip_code: '', license_file: null,
+      insurance_type: null, insurance_private_file: null, insurance_policy_file: null,
+      insurance_carrier: '', insurance_policy_number: '', insurance_coverage_type: '',
     });
     overlay.style.display = 'flex';
+    vehiclesLoadError = false;
     try {
       vehicles = await api('/api/vehicles');
-    } catch { vehicles = []; }
+    } catch (e) {
+      vehicles = [];
+      vehiclesLoadError = e.message === 'Not authenticated' ? 'session' : true;
+    }
     renderStep();
   }
 
@@ -1523,7 +1560,8 @@ function initNewReservationModal() {
     try {
       const fd = new FormData();
       ['source', 'pickup_scheduled_at', 'rental_end_at', 'assigned_vehicle_id', 'weekly_rate',
-       'total_due_at_pickup', 'first_name', 'last_name', 'phone', 'email', 'dob', 'license_number', 'address']
+       'total_due_at_pickup', 'first_name', 'last_name', 'phone', 'email', 'dob', 'license_number', 'address',
+       'city', 'state', 'zip_code', 'insurance_carrier', 'insurance_policy_number', 'insurance_coverage_type']
         .forEach(k => fd.append(k, form[k] ?? ''));
       if (form.license_file) fd.append('license', form.license_file);
       if (form.insurance_private_file) fd.append('insurance_private', form.insurance_private_file);
@@ -1531,6 +1569,7 @@ function initNewReservationModal() {
 
       const res = await fetch('/api/applications/manual-booking', { method: 'POST', body: fd });
       const resData = await res.json().catch(() => ({}));
+      if (res.status === 401) throw new Error('Your session expired while filling this out — log in again and re-submit (nothing was lost, just reopen this form).');
       if (!res.ok) throw new Error(resData.error || 'Request failed');
 
       overlay.style.display = 'none';

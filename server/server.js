@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { UPLOADS_DIR } = require('./paths');
 require('./db'); // initializes + seeds the database
+const { SqliteSessionStore } = require('./session-store');
 
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
@@ -32,6 +33,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(session({
+  store: new SqliteSessionStore(),
   secret: process.env.SESSION_SECRET || 'drivenow-dev-secret-change-in-production',
   resave: false,
   saveUninitialized: false,

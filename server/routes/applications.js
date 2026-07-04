@@ -658,7 +658,8 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
     first_name, last_name, phone, email,
     assigned_vehicle_id, weekly_rate, total_due_at_pickup,
     pickup_scheduled_at, rental_end_at, source,
-    dob, license_number, address,
+    dob, license_number, address, city, state, zip_code,
+    insurance_carrier, insurance_policy_number, insurance_coverage_type,
   } = req.body;
 
   if (!first_name || !last_name || !phone || !email) {
@@ -683,18 +684,24 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
     INSERT INTO applications
       (first_name, last_name, phone, email, consent_background, stage, status,
        assigned_vehicle_id, weekly_rate, total_due_at_pickup, invoice_amount, payment_status, pickup_scheduled_at, rental_end_at, source,
-       dob, license_number, address, license_path, insurance_path, insurance_private_path)
-    VALUES (?, ?, ?, ?, 1, 6, 'active', ?, ?, ?, ?, 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       dob, license_number, address, city, state, zip_code, license_path, insurance_path, insurance_private_path)
+    VALUES (?, ?, ?, ?, 1, 6, 'active', ?, ?, ?, ?, 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     first_name, last_name, phone, email, assigned_vehicle_id, weekly_rate, total_due_at_pickup || null, total_due_at_pickup || null,
     pickup_scheduled_at, rental_end_at, bookingSource,
-    dob || null, license_number || null, address || null, licensePath, insurancePolicyPath, insurancePrivatePath
+    dob || null, license_number || null, address || null, city || null, state || null, zip_code || null,
+    licensePath, insurancePolicyPath, insurancePrivatePath
   );
 
   const appId = result.lastInsertRowid;
   db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ?").run(assigned_vehicle_id);
-  const customerId = upsertCustomer({ email, first_name, last_name, phone, address, dob, license_number });
-  if (insurancePrivatePath) upsertInsuranceRecord(customerId, 'private', { document_path: insurancePrivatePath });
+  const customerId = upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob, license_number });
+  if (insurancePrivatePath || insurance_carrier || insurance_policy_number || insurance_coverage_type) {
+    upsertInsuranceRecord(customerId, 'private', {
+      document_path: insurancePrivatePath, carrier: insurance_carrier,
+      protection_type: insurance_coverage_type, policy_number: insurance_policy_number,
+    });
+  }
   if (insurancePolicyPath) upsertInsuranceRecord(customerId, 'our_policy', { document_path: insurancePolicyPath });
   logActivity(appId, `Manual reservation created for ${first_name} ${last_name} — ${vehicle.make} ${vehicle.model} at $${weekly_rate}/week`);
 
