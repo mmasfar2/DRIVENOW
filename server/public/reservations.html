@@ -411,6 +411,7 @@ const RESV_TABS = [
   { key: 'all', label: 'All Bookings' },
   { key: 'potential_arrival', label: 'Potential Arrivals' },
   { key: 'on_rental', label: 'On Lease' },
+  { key: 'pending_check_in', label: 'Pending Check In' },
   { key: 'recent', label: 'Recent Bookings' },
 ];
 const RESV_TABS_ORDER_KEY = 'dn-resv-tabs-order';
@@ -468,7 +469,7 @@ function renderList() {
   // booking that's been touched recently, in any stage, newest edit first.
   let filtered = activeBucket === 'recent'
     ? [...bookings].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
-    : bookings.filter(b => activeBucket === 'all' ? ['on_rental', 'completed'].includes(b.bucket) : b.bucket === activeBucket);
+    : bookings.filter(b => activeBucket === 'all' ? ['on_rental', 'pending_check_in', 'completed'].includes(b.bucket) : b.bucket === activeBucket);
   if (search) {
     filtered = filtered.filter(b =>
       `${b.first_name} ${b.last_name}`.toLowerCase().includes(search) ||
