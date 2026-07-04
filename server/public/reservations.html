@@ -64,7 +64,6 @@
             <th>Pickup</th>
             <th>Return</th>
             <th>Balance</th>
-            <th>Approval</th>
             <th style="width:36px;"></th>
           </tr>
         </thead>
@@ -410,10 +409,9 @@ let activeBucket = 'potential_arrival';
 
 const RESV_TABS = [
   { key: 'all', label: 'All Bookings' },
-  { key: 'upcoming', label: 'Pending Check In' },
   { key: 'potential_arrival', label: 'Potential Arrivals' },
   { key: 'on_rental', label: 'On Lease' },
-  { key: 'completed', label: 'Completed' },
+  { key: 'recent', label: 'Recent Bookings' },
 ];
 const RESV_TABS_ORDER_KEY = 'dn-resv-tabs-order';
 
@@ -466,7 +464,11 @@ function renderResvTabs() {
 
 function renderList() {
   const search = document.getElementById('r-search').value.trim().toLowerCase();
-  let filtered = bookings.filter(b => activeBucket === 'all' ? ['on_rental', 'completed'].includes(b.bucket) : b.bucket === activeBucket);
+  // "Recent Bookings" is an activity feed, not a status bucket — every
+  // booking that's been touched recently, in any stage, newest edit first.
+  let filtered = activeBucket === 'recent'
+    ? [...bookings].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
+    : bookings.filter(b => activeBucket === 'all' ? ['on_rental', 'completed'].includes(b.bucket) : b.bucket === activeBucket);
   if (search) {
     filtered = filtered.filter(b =>
       `${b.first_name} ${b.last_name}`.toLowerCase().includes(search) ||
@@ -480,7 +482,7 @@ function renderList() {
 
   const listEl = document.getElementById('r-list');
   if (!filtered.length) {
-    listEl.innerHTML = `<tr><td colspan="9"><div class="empty-state">${icon('calendar', 36)}<div style="font-size:1rem;font-weight:700;color:var(--black);">No Bookings Found</div><span>No reservations match your current filter. Try changing the filter or check back later.</span></div></td></tr>`;
+    listEl.innerHTML = `<tr><td colspan="8"><div class="empty-state">${icon('calendar', 36)}<div style="font-size:1rem;font-weight:700;color:var(--black);">No Bookings Found</div><span>No reservations match your current filter. Try changing the filter or check back later.</span></div></td></tr>`;
     return;
   }
 
@@ -510,21 +512,8 @@ function renderList() {
           </div>
         </td>
         <td>
-          ${b.bucket !== 'upcoming' ? `<button class="btn btn-sm resv-table__pay-btn" data-id="${b.id}">Payment</button>` : ''}
+          <button class="btn btn-sm resv-table__pay-btn" data-id="${b.id}">Payment</button>
           <div class="resv-table__balance ${owed > 0 ? 'resv-table__balance--due' : owed < 0 ? 'resv-table__balance--credit' : ''}">${fmtMoney(owed)}</div>
-        </td>
-        <td>
-          ${b.bucket === 'potential_arrival' ? `<button class="btn btn-sm resv-table__complete-btn" data-id="${b.id}">Approve</button>` : ''}
-          ${b.bucket === 'on_rental' ? `
-            <div class="resv-return-wrap">
-              <button class="resv-approval-arrow" data-id="${b.id}" title="Approval options">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-              </button>
-              <div class="resv-return-menu" id="approval-menu-${b.id}" style="display:none;">
-                <button class="resv-approval-menu__item resv-table__unapprove-btn" data-id="${b.id}">Send Back</button>
-              </div>
-            </div>
-          ` : ''}
         </td>
         <td style="display:flex;gap:2px;">
           <a href="reservation-detail.html?id=${b.id}" class="resv-table__view" title="View">${icon('eye', 16)}</a>
@@ -551,32 +540,8 @@ function renderList() {
       openExtendModal(Number(btn.dataset.id));
     });
   });
-  document.querySelectorAll('.resv-approval-arrow').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const id = btn.dataset.id;
-      const menu = document.getElementById(`approval-menu-${id}`);
-      const wasOpen = menu.style.display === 'block';
-      document.querySelectorAll('.resv-return-menu').forEach(m => { m.style.display = 'none'; });
-      menu.style.display = wasOpen ? 'none' : 'block';
-    });
-  });
   document.querySelectorAll('.resv-table__pay-btn').forEach(btn => {
     btn.addEventListener('click', (e) => { e.stopPropagation(); openPaymentModal(Number(btn.dataset.id)); });
-  });
-  document.querySelectorAll('.resv-table__complete-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      await api(`/api/applications/${btn.dataset.id}/approve-arrival`, { method: 'POST' });
-      await reloadBookings();
-    });
-  });
-  document.querySelectorAll('.resv-table__unapprove-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      await api(`/api/applications/${btn.dataset.id}/revert-arrival`, { method: 'POST' });
-      await reloadBookings();
-    });
   });
   document.querySelectorAll('.resv-table__delete-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -1167,7 +1132,7 @@ function initNewReservationModal() {
         { id: 'our_policies', label: 'Our Policies', sub: 'Insurance provided by DriveNow' },
         { id: 'third_party', label: 'Third Party Insurance', sub: 'Not available yet', disabled: true },
       ];
-      const COVERAGE_TYPES = ['Liability', 'Comprehensive', 'Collision'];
+      const COVERAGE_TYPES = ['Liability', 'Comprehensive & Collision'];
       body.innerHTML = `
         <div class="resv-insurance-options">
           ${options.map(o => {

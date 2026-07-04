@@ -543,50 +543,57 @@ router.post('/:id/revert-arrival', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── AUTHED: Check In — the customer picks up the vehicle. Records the
-// odometer as it leaves the lot and pre-fills from whatever the vehicle's
-// current mileage already is, so this always starts from the truth the last
-// checkout/check-in left behind rather than a stale or guessed number. ──
+// ── AUTHED: Check Out (pickup) — the vehicle leaves the lot. Records the
+// odometer as it goes out, pre-filled from the vehicle's current mileage so
+// it starts from the truth the last checkout/check-in left behind. Odometer
+// and gas level are both optional — this is a free-form stage toggle, not a
+// gated pipeline, so it's always callable regardless of the booking's state. ──
 router.post('/:id/check-in', requireAuth, (req, res) => {
   const { odometer_out, gas_level } = req.body;
   const id = req.params.id;
-  if (odometer_out == null || odometer_out === '') return res.status(400).json({ error: 'Odometer reading is required' });
   const app = db.prepare('SELECT assigned_vehicle_id, status FROM applications WHERE id = ?').get(id);
   if (!app) return res.status(404).json({ error: 'Not found' });
-  if (app.status !== 'active') return res.status(400).json({ error: 'Only an active booking can be checked in' });
   if (!app.assigned_vehicle_id) return res.status(400).json({ error: 'This booking has no vehicle assigned' });
 
-  db.prepare('UPDATE applications SET odometer_out = ?, gas_level_out = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(odometer_out, gas_level || null, id);
-  db.prepare("UPDATE vehicles SET status = 'rented', mileage = ? WHERE id = ?").run(odometer_out, app.assigned_vehicle_id);
-  logActivity(id, `Checked in — vehicle checked out at ${odometer_out} mi${gas_level ? `, ${gas_level} tank` : ''}`);
+  db.prepare(`
+    UPDATE applications SET status = 'active', odometer_out = COALESCE(?, odometer_out),
+      gas_level_out = COALESCE(?, gas_level_out), updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(odometer_out || null, gas_level || null, id);
+  db.prepare("UPDATE vehicles SET status = 'rented' WHERE id = ?").run(app.assigned_vehicle_id);
+  if (odometer_out != null && odometer_out !== '') {
+    db.prepare('UPDATE vehicles SET mileage = ? WHERE id = ?').run(odometer_out, app.assigned_vehicle_id);
+  }
+  logActivity(id, `Checked out — vehicle left the lot${odometer_out ? ` at ${odometer_out} mi` : ''}${gas_level ? `, ${gas_level} tank` : ''}`);
   res.json({ ok: true });
 });
 
-// ── AUTHED: Undo a Check In — hands the vehicle back to Reservation stage
-// without touching the odometer reading already recorded (re-checking in
-// just re-confirms/edits it). Only reverts if the vehicle is still sitting
-// in the `rented` state this check-in put it in. ──
+// ── AUTHED: Undo — hands the vehicle back to Reservation stage and reopens
+// the booking if it had been completed. Always allowed; doesn't touch any
+// odometer/gas readings already recorded (re-checking out/in later just
+// re-confirms or edits them). ──
 router.post('/:id/revert-check-in', requireAuth, (req, res) => {
   const id = req.params.id;
   const app = db.prepare('SELECT assigned_vehicle_id, status FROM applications WHERE id = ?').get(id);
   if (!app) return res.status(404).json({ error: 'Not found' });
+  db.prepare("UPDATE applications SET status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
   if (app.assigned_vehicle_id) {
-    db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ? AND status = 'rented'").run(app.assigned_vehicle_id);
+    db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ?").run(app.assigned_vehicle_id);
   }
-  logActivity(id, 'Check-in reverted — back to Reservation stage');
+  logActivity(id, 'Reverted to Reservation stage');
   res.json({ ok: true });
 });
 
-// ── AUTHED: Complete a rental — frees the vehicle and closes out the booking.
-// Previously the only way to free up a vehicle after a rental was deleting
-// the entire reservation (which also wipes its payment/deposit history) —
-// this keeps the booking's records intact and just marks it done. ──
+// ── AUTHED: Check In (return) — the vehicle comes back and the rental wraps
+// up. Previously the only way to free up a vehicle was deleting the entire
+// reservation (which also wipes its payment/deposit history) — this keeps
+// the booking's records intact and just marks it done. Odometer is optional
+// and this is always callable, not gated behind a prior stage. ──
 router.post('/:id/complete-rental', requireAuth, (req, res) => {
   const { odometer_in } = req.body;
   const id = req.params.id;
   const app = db.prepare('SELECT assigned_vehicle_id, status FROM applications WHERE id = ?').get(id);
   if (!app) return res.status(404).json({ error: 'Not found' });
-  if (app.status !== 'active') return res.status(400).json({ error: 'Only an active booking can be completed' });
 
   db.prepare(`
     UPDATE applications SET status = 'completed', odometer_in = COALESCE(?, odometer_in), updated_at = CURRENT_TIMESTAMP
@@ -648,19 +655,24 @@ router.get('/bookings/all', requireAuth, (req, res) => {
     ORDER BY a.updated_at DESC
   `).all();
 
+  // Bucket mirrors the same Reservation/Check Out/Check In stage shown on the
+  // reservation detail page, so a booking always lands in the same place
+  // here as its stage control shows there — no separate/parallel status logic.
   const bookings = rows.map(r => {
     const charge = computeCharge(r);
     const owed = computeOwed(r, r.paid_total);
     let bucket;
-    if (r.payment_status === 'unpaid' && r.invoice_amount) bucket = 'potential_arrival';
+    if (r.status === 'completed') bucket = 'completed';
     else if (r.vehicle_status === 'rented') bucket = 'on_rental';
-    else if (r.vehicle_status === 'reserved') bucket = 'upcoming';
-    else bucket = 'completed';
+    else bucket = 'potential_arrival';
     return { ...r, owed, bucket };
   });
 
   const totalBookings = bookings.length;
-  const upcoming = bookings.filter(b => b.bucket === 'upcoming').length;
+  // Field name kept as `upcoming` for the existing stat tile — it now counts
+  // Potential Arrivals (reservations not yet checked out) instead of the
+  // retired separate "Pending Check In" bucket.
+  const upcoming = bookings.filter(b => b.bucket === 'potential_arrival').length;
   const onRental = bookings.filter(b => b.bucket === 'on_rental').length;
   // Individual bookings can show a credit (negative owed), but the aggregate
   // "outstanding balance" stat should only total up what's actually still
