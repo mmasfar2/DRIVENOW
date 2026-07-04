@@ -442,7 +442,7 @@ router.post('/:id/deposits/:depositId/resolve', requireAuth, (req, res) => {
 // ── AUTHED: Full reservation detail (booking + vehicle + payments + notes) ──
 router.get('/:id/detail', requireAuth, (req, res) => {
   const row = db.prepare(`
-    SELECT a.*, v.id as vehicle_id, v.make, v.model, v.year, v.status as vehicle_status,
+    SELECT a.*, v.id as vehicle_id, v.make, v.model, v.year, v.status as vehicle_status, v.mileage as vehicle_mileage,
            v.vin, v.license_plate, v.color, v.fuel_type, v.transmission, ${CUSTOMER_SYNC_COLUMNS}
     FROM applications a
     LEFT JOIN vehicles v ON v.id = a.assigned_vehicle_id
@@ -543,6 +543,40 @@ router.post('/:id/revert-arrival', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── AUTHED: Check In — the customer picks up the vehicle. Records the
+// odometer as it leaves the lot and pre-fills from whatever the vehicle's
+// current mileage already is, so this always starts from the truth the last
+// checkout/check-in left behind rather than a stale or guessed number. ──
+router.post('/:id/check-in', requireAuth, (req, res) => {
+  const { odometer_out } = req.body;
+  const id = req.params.id;
+  if (odometer_out == null || odometer_out === '') return res.status(400).json({ error: 'Odometer reading is required' });
+  const app = db.prepare('SELECT assigned_vehicle_id, status FROM applications WHERE id = ?').get(id);
+  if (!app) return res.status(404).json({ error: 'Not found' });
+  if (app.status !== 'active') return res.status(400).json({ error: 'Only an active booking can be checked in' });
+  if (!app.assigned_vehicle_id) return res.status(400).json({ error: 'This booking has no vehicle assigned' });
+
+  db.prepare('UPDATE applications SET odometer_out = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(odometer_out, id);
+  db.prepare("UPDATE vehicles SET status = 'rented', mileage = ? WHERE id = ?").run(odometer_out, app.assigned_vehicle_id);
+  logActivity(id, `Checked in — vehicle checked out at ${odometer_out} mi`);
+  res.json({ ok: true });
+});
+
+// ── AUTHED: Undo a Check In — hands the vehicle back to Reservation stage
+// without touching the odometer reading already recorded (re-checking in
+// just re-confirms/edits it). Only reverts if the vehicle is still sitting
+// in the `rented` state this check-in put it in. ──
+router.post('/:id/revert-check-in', requireAuth, (req, res) => {
+  const id = req.params.id;
+  const app = db.prepare('SELECT assigned_vehicle_id, status FROM applications WHERE id = ?').get(id);
+  if (!app) return res.status(404).json({ error: 'Not found' });
+  if (app.assigned_vehicle_id) {
+    db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ? AND status = 'rented'").run(app.assigned_vehicle_id);
+  }
+  logActivity(id, 'Check-in reverted — back to Reservation stage');
+  res.json({ ok: true });
+});
+
 // ── AUTHED: Complete a rental — frees the vehicle and closes out the booking.
 // Previously the only way to free up a vehicle after a rental was deleting
 // the entire reservation (which also wipes its payment/deposit history) —
@@ -560,6 +594,12 @@ router.post('/:id/complete-rental', requireAuth, (req, res) => {
   `).run(odometer_in || null, id);
   if (app.assigned_vehicle_id) {
     db.prepare("UPDATE vehicles SET status = 'available' WHERE id = ?").run(app.assigned_vehicle_id);
+    // The vehicle's recorded mileage is only ever moved forward by an actual
+    // odometer reading taken at this moment — keeps Fleet Management/Reports
+    // showing the same current mileage this booking just registered.
+    if (odometer_in != null && odometer_in !== '') {
+      db.prepare('UPDATE vehicles SET mileage = ? WHERE id = ?').run(odometer_in, app.assigned_vehicle_id);
+    }
   }
   logActivity(id, 'Rental completed — vehicle checked back in and now available');
   res.json({ ok: true });
