@@ -155,7 +155,7 @@ function render() {
   // The Insurance panel — synced with the Insurance admin page (insurance.html /
   // insurance-detail.html), which is the single place these records are
   // created/edited, so this stays consistent with what shows up there.
-  const INS_TYPE_LABELS = { our_policy: 'Our Policy', private: 'Private' };
+  const INS_TYPE_LABELS = { our_policy: 'Our Policies', private: 'Private' };
   document.getElementById('cd-insurance').innerHTML = `
     ${customer.insurance_records.length ? customer.insurance_records.map(r => `
       <a href="insurance-detail.html?id=${r.id}" class="info-row" style="text-decoration:none;color:inherit;">

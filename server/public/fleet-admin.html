@@ -74,7 +74,7 @@
         </div>
       </div>
       <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-        <div class="field"><label>Weekly Rate ($)</label><input id="v-rate" type="number" placeholder="380"></div>
+        <div class="field"><label>Daily Rate ($)</label><input id="v-rate" type="number" step="0.01" placeholder="54.29"></div>
         <div class="field"><label>Notes</label><input id="v-notes" placeholder="Optional notes"></div>
       </div>
 
@@ -149,7 +149,9 @@ function openVehicleModal(id) {
   document.getElementById('v-first-date').value = v?.purchase_date || '';
   document.getElementById('v-purchase-price').value = v?.purchase_price ?? '';
   document.getElementById('v-status').value = v?.status || 'available';
-  document.getElementById('v-rate').value = v?.weekly_rate ?? '';
+  // The field takes a daily rate; weekly_rate is what's actually stored/used
+  // everywhere else in the app, so convert on the way in and back out on save.
+  document.getElementById('v-rate').value = v?.weekly_rate != null ? Math.round((v.weekly_rate / 7) * 100) / 100 : '';
   document.getElementById('v-notes').value = v?.notes || '';
   document.getElementById('v-photos').value = '';
   renderPhotoThumbs(v);
@@ -176,10 +178,10 @@ async function saveVehicle() {
     purchase_date: document.getElementById('v-first-date').value,
     purchase_price: document.getElementById('v-purchase-price').value,
     status: document.getElementById('v-status').value,
-    weekly_rate: document.getElementById('v-rate').value,
+    weekly_rate: document.getElementById('v-rate').value ? Math.round(Number(document.getElementById('v-rate').value) * 7 * 100) / 100 : '',
     notes: document.getElementById('v-notes').value,
   };
-  if (!fields.make || !fields.model || !fields.year || !fields.weekly_rate) { alert('Fill in make, model, year, and weekly rate'); return; }
+  if (!fields.make || !fields.model || !fields.year || !fields.weekly_rate) { alert('Fill in make, model, year, and daily rate'); return; }
 
   const id = editingId || (await api('/api/vehicles', { method: 'POST', body: JSON.stringify(fields) })).id;
   if (editingId) await api(`/api/vehicles/${editingId}`, { method: 'PATCH', body: JSON.stringify(fields) });
