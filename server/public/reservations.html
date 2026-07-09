@@ -795,7 +795,7 @@ function renderPaymentBreakdown() {
       <div class="payment-breakdown-row">
         <input type="checkbox" class="pb-checkbox" data-i="${i}" ${item.checked ? 'checked' : ''}>
         <div class="payment-breakdown-row__label" id="pb-label-${i}">${getItemLabel(item)}</div>
-        <input type="text" inputmode="decimal" class="pb-amount" id="pb-input-${i}" data-i="${i}" value="${item.type === 'rate' ? item.rate : item.amount}">
+        <input type="text" inputmode="decimal" class="pb-amount" id="pb-input-${i}" data-i="${i}" value="${getItemAmount(item)}">
       </div>
     `).join('')}
   `;
@@ -811,7 +811,7 @@ function renderPaymentBreakdown() {
       const item = paymentBreakdownItems[Number(inp.dataset.i)];
       const value = Number(inp.value) || 0;
       if (item.type === 'rate') {
-        item.rate = value;
+        item.rate = item.days > 0 ? Math.round((value / item.days) * 100) / 100 : value;
         document.getElementById(`pb-label-${inp.dataset.i}`).textContent = getItemLabel(item);
         recalcTaxes();
         const highwayI = paymentBreakdownItems.findIndex(i => i.key === 'highway');
