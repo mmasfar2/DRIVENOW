@@ -729,14 +729,15 @@ async function openPaymentModal(bookingId) {
   const days = (paymentBooking.pickup_scheduled_at && paymentBooking.rental_end_at)
     ? Math.round((new Date(paymentBooking.rental_end_at) - new Date(paymentBooking.pickup_scheduled_at)) / 86400000)
     : 0;
-  // Compute from the exact (unrounded) daily rate, rounding only once at the end —
-  // this is what keeps the math exact instead of drifting a few cents from chained rounding.
-  const dailyRateExact = weeklyRate / 7;
-  const dailyRate = Math.round(dailyRateExact * 100) / 100;
+  // Kept unrounded on purpose — matches billing.js's computeCharge (the canonical
+  // Invoice Total everywhere else), which multiplies by the exact rate and rounds
+  // once at the end. Rounding the per-day rate first, then multiplying, drifts a
+  // few cents off the real invoice total.
+  const dailyRate = weeklyRate / 7;
 
   paymentBreakdownItems = [
     { key: 'daily', type: 'rate', days, rate: dailyRate, checked: true },
-    { key: 'highway', type: 'amount', label: 'Highway Tax (8%, included in rate)', amount: 0, checked: true },
+    { key: 'highway', type: 'amount', label: 'Highway Tax (8%, included in rate)', amount: 0, checked: true, informational: true },
     { key: 'sales', type: 'amount', label: 'Sales Tax (7.25%)', amount: 0, checked: true },
   ];
   recalcTaxes();
@@ -751,8 +752,15 @@ function getItemAmount(item) {
     : Number(item.amount || 0);
 }
 
+// Rate labels need cent precision (fmtMoney rounds to whole dollars, which
+// would misrepresent e.g. a $54.29/day rate as "$54/day").
+function fmtCents(n) {
+  const num = Number(n || 0);
+  return '$' + Math.abs(num).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function getItemLabel(item) {
-  return item.type === 'rate' ? `Lease Rate (${item.days}d x $${item.rate}/d)` : item.label;
+  return item.type === 'rate' ? `Lease Rate (${item.days}d x ${fmtCents(item.rate)}/d)` : item.label;
 }
 
 function recalcTaxes() {
@@ -765,7 +773,10 @@ function recalcTaxes() {
 }
 
 function getInvoiceTotal() {
-  return Math.round(paymentBreakdownItems.filter(i => i.checked).reduce((sum, i) => sum + getItemAmount(i), 0) * 100) / 100;
+  // Highway tax is "included in rate" — already inside the lease-rate subtotal,
+  // shown for informational breakdown only, so it must stay excluded here or
+  // it gets double-counted on top of the subtotal that already contains it.
+  return Math.round(paymentBreakdownItems.filter(i => i.checked && !i.informational).reduce((sum, i) => sum + getItemAmount(i), 0) * 100) / 100;
 }
 
 function getPaidTotal() {
