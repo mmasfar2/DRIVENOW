@@ -47,22 +47,35 @@
   <div id="vd-panel-details">
     <div class="panel">
       <div class="panel-title">Vehicle Details</div>
-      <div class="info-row"><div class="info-row__label">Stock Number</div><div class="info-row__val" id="vd-stock"></div></div>
-      <div class="info-row"><div class="info-row__label">License Plate</div><div class="info-row__val" id="vd-plate"></div></div>
-      <div class="info-row"><div class="info-row__label">VIN</div><div class="info-row__val" id="vd-vin"></div></div>
-      <div class="info-row"><div class="info-row__label">Make</div><div class="info-row__val" id="vd-make"></div></div>
-      <div class="info-row"><div class="info-row__label">Model</div><div class="info-row__val" id="vd-model"></div></div>
-      <div class="info-row"><div class="info-row__label">Year</div><div class="info-row__val" id="vd-year"></div></div>
-      <div class="info-row"><div class="info-row__label">Color</div><div class="info-row__val" id="vd-color"></div></div>
-      <div class="info-row"><div class="info-row__label">Class</div><div class="info-row__val" id="vd-class"></div></div>
-      <div class="info-row"><div class="info-row__label">Mileage</div><div class="info-row__val" id="vd-mileage"></div></div>
-      <div class="info-row"><div class="info-row__label">Purchase Date</div><div class="info-row__val" id="vd-purchase-date"></div></div>
-      <div class="info-row"><div class="info-row__label">Purchase Price</div><div class="info-row__val" id="vd-purchase-price"></div></div>
-      <div class="info-row"><div class="info-row__label">Status</div><div class="info-row__val" id="vd-status"></div></div>
-      <div class="info-row"><div class="info-row__label">Weekly Rate</div><div class="info-row__val" id="vd-rate"></div></div>
-      <div class="info-row"><div class="info-row__label">Fuel Type</div><div class="info-row__val" id="vd-fuel"></div></div>
-      <div class="info-row"><div class="info-row__label">Transmission</div><div class="info-row__val" id="vd-trans"></div></div>
-      <div class="info-row"><div class="info-row__label">Notes</div><div class="info-row__val" id="vd-notes"></div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+        <div class="field"><label>Stock Number</label><input id="vd-f-stock"></div>
+        <div class="field"><label>License Plate</label><input id="vd-f-plate"></div>
+        <div class="field"><label>VIN</label><input id="vd-f-vin"></div>
+        <div class="field"><label>Make</label><input id="vd-f-make"></div>
+        <div class="field"><label>Model</label><input id="vd-f-model"></div>
+        <div class="field"><label>Year</label><input id="vd-f-year" type="number"></div>
+        <div class="field"><label>Color</label><input id="vd-f-color"></div>
+        <div class="field"><label>Class</label><input id="vd-f-class"></div>
+        <div class="field"><label>Mileage</label><input id="vd-f-mileage" type="number"></div>
+        <div class="field"><label>Purchase Date</label><input id="vd-f-purchase-date" type="date"></div>
+        <div class="field"><label>Purchase Price ($)</label><input id="vd-f-purchase-price" type="number" step="0.01"></div>
+        <div class="field"><label>Status</label>
+          <select id="vd-f-status">
+            <option value="available">Available</option>
+            <option value="reserved">Reserved</option>
+            <option value="rented">Rented</option>
+            <option value="maintenance">Maintenance</option>
+            <option value="sold">Sold</option>
+          </select>
+        </div>
+        <div class="field"><label>Daily Rate ($)</label><input id="vd-f-rate" type="number" step="0.01"></div>
+        <div class="field"><label>Fuel Type</label><input id="vd-f-fuel"></div>
+        <div class="field"><label>Transmission</label><input id="vd-f-trans"></div>
+      </div>
+      <div class="field"><label>Notes</label><textarea id="vd-f-notes" rows="3"></textarea></div>
+      <div style="display:flex;justify-content:flex-end;">
+        <button class="btn" id="vd-details-save">Save Changes</button>
+      </div>
     </div>
   </div>
 
@@ -174,22 +187,22 @@ function render() {
   badge.textContent = vehicle.status;
   badge.className = 'badge';
 
-  document.getElementById('vd-stock').textContent = vehicle.stock_number || '—';
-  document.getElementById('vd-plate').textContent = vehicle.license_plate || '—';
-  document.getElementById('vd-vin').textContent = vehicle.vin || '—';
-  document.getElementById('vd-make').textContent = vehicle.make || '—';
-  document.getElementById('vd-model').textContent = vehicle.model || '—';
-  document.getElementById('vd-year').textContent = vehicle.year || '—';
-  document.getElementById('vd-color').textContent = vehicle.color || '—';
-  document.getElementById('vd-class').textContent = vehicle.vehicle_class || '—';
-  document.getElementById('vd-mileage').textContent = vehicle.mileage != null ? `${Number(vehicle.mileage).toLocaleString()} mi` : '—';
-  document.getElementById('vd-purchase-date').textContent = vehicle.purchase_date || '—';
-  document.getElementById('vd-purchase-price').textContent = vehicle.purchase_price != null ? fmtMoney(vehicle.purchase_price) : '—';
-  document.getElementById('vd-status').textContent = vehicle.status || '—';
-  document.getElementById('vd-rate').textContent = vehicle.weekly_rate != null ? `${fmtMoney(vehicle.weekly_rate)}/wk` : '—';
-  document.getElementById('vd-fuel').textContent = vehicle.fuel_type || '—';
-  document.getElementById('vd-trans').textContent = vehicle.transmission || '—';
-  document.getElementById('vd-notes').textContent = vehicle.notes || '—';
+  document.getElementById('vd-f-stock').value = vehicle.stock_number || '';
+  document.getElementById('vd-f-plate').value = vehicle.license_plate || '';
+  document.getElementById('vd-f-vin').value = vehicle.vin || '';
+  document.getElementById('vd-f-make').value = vehicle.make || '';
+  document.getElementById('vd-f-model').value = vehicle.model || '';
+  document.getElementById('vd-f-year').value = vehicle.year || '';
+  document.getElementById('vd-f-color').value = vehicle.color || '';
+  document.getElementById('vd-f-class').value = vehicle.vehicle_class || '';
+  document.getElementById('vd-f-mileage').value = vehicle.mileage ?? '';
+  document.getElementById('vd-f-purchase-date').value = vehicle.purchase_date ? vehicle.purchase_date.slice(0, 10) : '';
+  document.getElementById('vd-f-purchase-price').value = vehicle.purchase_price ?? '';
+  document.getElementById('vd-f-status').value = vehicle.status || 'available';
+  document.getElementById('vd-f-rate').value = vehicle.weekly_rate != null ? Math.round((vehicle.weekly_rate / 7) * 100) / 100 : '';
+  document.getElementById('vd-f-fuel').value = vehicle.fuel_type || '';
+  document.getElementById('vd-f-trans').value = vehicle.transmission || '';
+  document.getElementById('vd-f-notes').value = vehicle.notes || '';
 
   document.getElementById('vd-last-serviced').textContent = vehicle.lastServiced || '—';
   document.getElementById('vd-next-service-input').value = vehicle.next_service_at ? vehicle.next_service_at.slice(0, 10) : '';
@@ -252,6 +265,32 @@ document.querySelectorAll('.rd-tab').forEach(tab => {
       document.getElementById(`vd-panel-${name}`).style.display = name === tab.dataset.tab ? '' : 'none';
     });
   });
+});
+
+document.getElementById('vd-details-save').addEventListener('click', async () => {
+  const rateInput = document.getElementById('vd-f-rate').value;
+  await api(`/api/vehicles/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      stock_number: document.getElementById('vd-f-stock').value,
+      license_plate: document.getElementById('vd-f-plate').value,
+      vin: document.getElementById('vd-f-vin').value,
+      make: document.getElementById('vd-f-make').value,
+      model: document.getElementById('vd-f-model').value,
+      year: document.getElementById('vd-f-year').value,
+      color: document.getElementById('vd-f-color').value,
+      vehicle_class: document.getElementById('vd-f-class').value,
+      mileage: document.getElementById('vd-f-mileage').value,
+      purchase_date: document.getElementById('vd-f-purchase-date').value,
+      purchase_price: document.getElementById('vd-f-purchase-price').value,
+      status: document.getElementById('vd-f-status').value,
+      weekly_rate: rateInput ? Math.round(Number(rateInput) * 7 * 100) / 100 : '',
+      fuel_type: document.getElementById('vd-f-fuel').value,
+      transmission: document.getElementById('vd-f-trans').value,
+      notes: document.getElementById('vd-f-notes').value,
+    }),
+  });
+  await load();
 });
 
 document.getElementById('vd-next-service-save').addEventListener('click', async () => {

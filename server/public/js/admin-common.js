@@ -107,35 +107,63 @@ function initSidebarToggles() {
 }
 
 function ensureUndoButton() {
-  let btn = document.getElementById('global-undo-btn');
-  if (!btn) {
-    btn = document.createElement('button');
+  let wrap = document.getElementById('global-undo-wrap');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'global-undo-wrap';
+    wrap.style.position = 'fixed';
+    wrap.style.top = '16px';
+    wrap.style.right = '24px';
+    wrap.style.zIndex = '9999';
+    wrap.style.display = 'none';
+    wrap.style.alignItems = 'center';
+    wrap.style.gap = '4px';
+
+    const btn = document.createElement('button');
     btn.id = 'global-undo-btn';
     btn.className = 'btn btn-sm btn-outline';
-    btn.style.position = 'fixed';
-    btn.style.top = '16px';
-    btn.style.right = '24px';
-    btn.style.zIndex = '9999';
-    btn.style.display = 'none';
     btn.onclick = undoLastAction;
-    document.body.appendChild(btn);
+    wrap.appendChild(btn);
+
+    const close = document.createElement('button');
+    close.id = 'global-undo-close';
+    close.type = 'button';
+    close.textContent = '×';
+    close.title = 'Dismiss';
+    close.style.cssText = 'border:1.5px solid var(--gray-border);background:#fff;font-size:16px;line-height:1;cursor:pointer;color:#888;padding:0 8px;border-radius:4px;align-self:stretch;';
+    close.onclick = (e) => {
+      e.stopPropagation();
+      // Remembers which specific undo-able action was dismissed (by label) so it
+      // stays hidden across page navigations, but reappears if a *new* action
+      // becomes undoable rather than being gone for the rest of the session.
+      sessionStorage.setItem('dismissedUndoLabel', wrap.dataset.currentLabel || '');
+      wrap.style.display = 'none';
+    };
+    wrap.appendChild(close);
+
+    document.body.appendChild(wrap);
   }
   refreshUndoButton();
 }
 
 async function refreshUndoButton() {
+  const wrap = document.getElementById('global-undo-wrap');
   const btn = document.getElementById('global-undo-btn');
-  if (!btn) return;
+  if (!wrap || !btn) return;
   try {
     const result = await api('/api/undo');
     if (result) {
-      btn.textContent = `Undo: ${result.label}`;
-      btn.style.display = '';
+      const label = `Undo: ${result.label}`;
+      wrap.dataset.currentLabel = label;
+      btn.textContent = label;
+      const dismissed = sessionStorage.getItem('dismissedUndoLabel') === label;
+      wrap.style.display = dismissed ? 'none' : 'flex';
     } else {
-      btn.style.display = 'none';
+      wrap.style.display = 'none';
+      wrap.dataset.currentLabel = '';
     }
   } catch {
-    btn.style.display = 'none';
+    wrap.style.display = 'none';
   }
 }
 
