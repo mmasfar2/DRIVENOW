@@ -246,7 +246,7 @@ function renderClaimStep() {
       <div class="field"><label>Insurance Policy</label>
         <select id="cf-insurance">
           <option value="">—</option>
-          ${insuranceRecords.map(ir => `<option value="${ir.id}" ${String(claimForm.insurance_record_id) === String(ir.id) ? 'selected' : ''}>${ir.first_name} ${ir.last_name} — ${ir.carrier || 'No carrier'} (${ir.type === 'our_policy' ? 'Our Policy' : 'Private'})</option>`).join('')}
+          ${insuranceRecords.map(ir => `<option value="${ir.id}" ${String(claimForm.insurance_record_id) === String(ir.id) ? 'selected' : ''}>${ir.first_name} ${ir.last_name} — ${ir.carrier || 'No carrier'} (${ir.type === 'our_policy' ? 'Our Policies' : 'Private'})</option>`).join('')}
         </select>
       </div>
       <div class="field-row">

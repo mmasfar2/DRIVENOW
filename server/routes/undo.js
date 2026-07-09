@@ -66,8 +66,8 @@ router.post('/', requireAuth, (req, res) => {
   } else if (row.entity_type === 'insurance_delete') {
     const { record } = payload;
     db.prepare(`
-      INSERT INTO insurance_records (id, customer_id, type, carrier, protection_type, policy_number, document_path, last_verified_at, next_payment_date, notes, created_at, updated_at)
-      VALUES (@id, @customer_id, @type, @carrier, @protection_type, @policy_number, @document_path, @last_verified_at, @next_payment_date, @notes, @created_at, @updated_at)
+      INSERT INTO insurance_records (id, customer_id, type, carrier, protection_type, policy_number, document_path, last_verified_at, next_payment_date, notes, status, created_at, updated_at)
+      VALUES (@id, @customer_id, @type, @carrier, @protection_type, @policy_number, @document_path, @last_verified_at, @next_payment_date, @notes, @status, @created_at, @updated_at)
     `).run(record);
   } else if (row.entity_type === 'waitlist_delete') {
     const { entry } = payload;

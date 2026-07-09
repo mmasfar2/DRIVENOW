@@ -167,7 +167,7 @@ function renderActionPanel() {
           ${vehicles.filter(v => v.status === 'available' || v.id === app.assigned_vehicle_id).map(v => `<option value="${v.id}" data-rate="${v.weekly_rate}"${v.id === app.assigned_vehicle_id ? ' selected' : ''}>${v.year} ${v.make} ${v.model} — $${v.weekly_rate}/wk${v.status !== 'available' ? ' (currently assigned to this lead)' : ''}</option>`).join('')}
         </select>
       </div>
-      <div class="field"><label>Weekly Rental Rate ($)</label><input type="number" id="quote-weekly" step="0.01"></div>
+      <div class="field"><label>Daily Rental Rate ($)</label><input type="number" id="quote-weekly" step="0.01"></div>
       <div class="field"><label>Total Due at Pickup ($)</label><input type="number" id="quote-total" step="0.01"></div>
       <button class="btn" onclick="submitQuote()">Present Quote → Send Agreement</button>`;
   } else if (app.stage === 6) {
@@ -235,7 +235,7 @@ async function submitInsuranceQuote() {
 async function submitQuote() {
   await api(`/api/applications/${id}/quote`, { method: 'POST', body: JSON.stringify({
     assigned_vehicle_id: document.getElementById('quote-vehicle').value || null,
-    weekly_rate: document.getElementById('quote-weekly').value,
+    weekly_rate: document.getElementById('quote-weekly').value ? Math.round(Number(document.getElementById('quote-weekly').value) * 7 * 100) / 100 : '',
     total_due_at_pickup: document.getElementById('quote-total').value,
   })});
   load();

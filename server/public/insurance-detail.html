@@ -41,6 +41,13 @@
         <div class="field"><label>Protection Type</label><input id="ind-f-protection-type"></div>
       </div>
       <div class="field"><label>Policy Number</label><input id="ind-f-policy-number"></div>
+      <div class="field"><label>Status</label>
+        <select id="ind-f-status">
+          <option value="Active">Active</option>
+          <option value="Pending Cancellation">Pending Cancellation</option>
+          <option value="Inactive">Inactive</option>
+        </select>
+      </div>
       <div class="field-row">
         <div class="field"><label>Last Date Verified</label><input type="date" id="ind-f-last-verified"></div>
         <div class="field"><label>Next Payment Date</label><input type="date" id="ind-f-next-payment"></div>
@@ -69,7 +76,7 @@
 <script src="js/admin-common.js"></script>
 <script>
 const id = new URLSearchParams(window.location.search).get('id');
-const TYPE_LABELS = { our_policy: 'Our Policy', private: 'Private' };
+const TYPE_LABELS = { our_policy: 'Our Policies', private: 'Private' };
 let record;
 
 async function load() {
@@ -91,6 +98,7 @@ function render() {
   document.getElementById('ind-f-carrier').value = record.carrier || '';
   document.getElementById('ind-f-protection-type').value = record.protection_type || '';
   document.getElementById('ind-f-policy-number').value = record.policy_number || '';
+  document.getElementById('ind-f-status').value = record.status || 'Active';
   document.getElementById('ind-f-last-verified').value = record.last_verified_at ? record.last_verified_at.slice(0, 10) : '';
   document.getElementById('ind-f-next-payment').value = record.next_payment_date ? record.next_payment_date.slice(0, 10) : '';
   document.getElementById('ind-f-notes').value = record.notes || '';
@@ -105,6 +113,7 @@ document.getElementById('ind-save-btn').addEventListener('click', async () => {
       carrier: document.getElementById('ind-f-carrier').value,
       protection_type: document.getElementById('ind-f-protection-type').value,
       policy_number: document.getElementById('ind-f-policy-number').value,
+      status: document.getElementById('ind-f-status').value,
       last_verified_at: document.getElementById('ind-f-last-verified').value,
       next_payment_date: document.getElementById('ind-f-next-payment').value,
       notes: document.getElementById('ind-f-notes').value,

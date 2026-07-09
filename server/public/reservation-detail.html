@@ -327,7 +327,7 @@ async function load() {
   render();
 }
 
-const INS_TYPE_LABELS = { our_policy: 'Our Policy', private: 'Private' };
+const INS_TYPE_LABELS = { our_policy: 'Our Policies', private: 'Private' };
 function renderInsurance() {
   const box = document.getElementById('rd-insurance-list');
   box.innerHTML = insuranceRecords.length
@@ -650,7 +650,11 @@ function initBreakdown() {
   const days = (booking.pickup_scheduled_at && booking.rental_end_at)
     ? Math.round((new Date(booking.rental_end_at) - new Date(booking.pickup_scheduled_at)) / 86400000)
     : 0;
-  const dailyRate = Math.round(((booking.weekly_rate || 0) / 7) * 100) / 100;
+  // Kept unrounded on purpose — billing.js's computeCharge (the canonical
+  // Invoice Total everywhere else) multiplies by the exact rate and rounds
+  // once at the end. Rounding the per-day rate first, then multiplying,
+  // gave a different answer (off by a few cents) than the real invoice total.
+  const dailyRate = (booking.weekly_rate || 0) / 7;
   paymentBreakdownItems = [
     { key: 'daily', type: 'rate', days, rate: dailyRate, checked: true },
     { key: 'highway', type: 'amount', label: 'Highway Tax (8%, included in rate)', amount: 0, checked: true, informational: true },
@@ -666,7 +670,7 @@ function getItemAmount(item) {
   return item.type === 'rate' ? Math.round(item.days * item.rate * 100) / 100 : Number(item.amount || 0) * (item.sign || 1);
 }
 function getItemLabel(item) {
-  return item.type === 'rate' ? `Lease Rate (${item.days}d x ${item.rate}/d)` : item.label;
+  return item.type === 'rate' ? `Lease Rate (${item.days}d x ${fmtExact(item.rate)}/d)` : item.label;
 }
 function recalcTaxes() {
   const daily = paymentBreakdownItems.find(i => i.key === 'daily');

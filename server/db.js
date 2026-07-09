@@ -443,6 +443,11 @@ if (!claimCols.includes('mark_vehicle_inactive')) {
   db.exec('ALTER TABLE claims ADD COLUMN mark_vehicle_inactive INTEGER NOT NULL DEFAULT 0');
 }
 
+const insuranceCols = db.prepare("PRAGMA table_info(insurance_records)").all().map(c => c.name);
+if (!insuranceCols.includes('status')) {
+  db.exec("ALTER TABLE insurance_records ADD COLUMN status TEXT NOT NULL DEFAULT 'Active'");
+}
+
 db.exec(`
 CREATE TABLE IF NOT EXISTS downtime_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

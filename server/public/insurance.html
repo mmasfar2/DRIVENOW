@@ -23,7 +23,7 @@
     </div>
     <table style="margin-top:14px;">
       <thead>
-        <tr><th>Customer</th><th>Carrier</th><th>Protection Type</th><th>Last Verified</th><th>Next Payment Date</th></tr>
+        <tr><th>Customer</th><th>Carrier</th><th>Protection Type</th><th>Status</th><th>Last Verified</th><th>Next Payment Date</th><th>Additional Notes</th></tr>
       </thead>
       <tbody id="ins-table-body"></tbody>
     </table>
@@ -45,6 +45,13 @@
       <div class="field"><label>Carrier</label><input id="ai-carrier" placeholder="e.g. Progressive, GEICO…"></div>
       <div class="field"><label>Protection Type</label><input id="ai-protection-type" placeholder="e.g. Full Coverage, Liability Only…"></div>
       <div class="field"><label>Policy Number</label><input id="ai-policy-number"></div>
+      <div class="field"><label>Status</label>
+        <select id="ai-status">
+          <option value="Active">Active</option>
+          <option value="Pending Cancellation">Pending Cancellation</option>
+          <option value="Inactive">Inactive</option>
+        </select>
+      </div>
       <div class="field-row">
         <div class="field"><label>Last Date Verified</label><input type="date" id="ai-last-verified"></div>
         <div class="field"><label>Next Payment Date</label><input type="date" id="ai-next-payment"></div>
@@ -56,7 +63,8 @@
 
 <script src="js/admin-common.js"></script>
 <script>
-const TYPE_LABELS = { our_policy: 'Our Policy', private: 'Private' };
+const TYPE_LABELS = { our_policy: 'Our Policies', private: 'Private' };
+const STATUS_BADGE = { Active: 'badge-available', 'Pending Cancellation': 'badge-reserved', Inactive: 'badge-rejected' };
 const TYPE_SUBS = {
   our_policy: 'Insurance policies DriveNow carries on behalf of customers.',
   private: "Customers' own personal insurance policies on file.",
@@ -86,10 +94,12 @@ function render() {
       <td><a href="customer-detail.html?email=${encodeURIComponent(r.email)}" class="ins-cust-link" data-id="${r.id}">${r.first_name} ${r.last_name}</a></td>
       <td>${r.carrier || '—'}</td>
       <td>${r.protection_type || '—'}</td>
+      <td><span class="badge ${STATUS_BADGE[r.status] || 'badge-available'}">${r.status || 'Active'}</span></td>
       <td>${fmtDateOnly(r.last_verified_at)}</td>
       <td>${fmtDateOnly(r.next_payment_date)}</td>
+      <td>${r.notes || '—'}</td>
     </tr>
-  `).join('') : `<tr><td colspan="5" style="text-align:center;color:#888;padding:32px;">No ${TYPE_LABELS[section].toLowerCase()} insurance records yet.</td></tr>`;
+  `).join('') : `<tr><td colspan="7" style="text-align:center;color:#888;padding:32px;">No ${TYPE_LABELS[section].toLowerCase()} insurance records yet.</td></tr>`;
 
   document.querySelectorAll('.ins-row').forEach(tr => {
     tr.addEventListener('click', (e) => {
@@ -117,6 +127,7 @@ document.getElementById('ins-add-btn').addEventListener('click', () => {
   document.getElementById('ai-carrier').value = '';
   document.getElementById('ai-protection-type').value = '';
   document.getElementById('ai-policy-number').value = '';
+  document.getElementById('ai-status').value = 'Active';
   document.getElementById('ai-last-verified').value = '';
   document.getElementById('ai-next-payment').value = '';
   document.getElementById('add-insurance-overlay').style.display = 'flex';
@@ -138,6 +149,7 @@ document.getElementById('ai-submit').addEventListener('click', async () => {
       carrier: document.getElementById('ai-carrier').value,
       protection_type: document.getElementById('ai-protection-type').value,
       policy_number: document.getElementById('ai-policy-number').value,
+      status: document.getElementById('ai-status').value,
       last_verified_at: document.getElementById('ai-last-verified').value,
       next_payment_date: document.getElementById('ai-next-payment').value,
     }),

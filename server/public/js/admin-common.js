@@ -34,7 +34,7 @@ const SIDEBAR_LINKS = [
   {
     key: 'insurance', label: 'Insurance',
     children: [
-      { key: 'insurance-our-policies', label: 'Our Policy', href: 'insurance.html?section=our_policies' },
+      { key: 'insurance-our-policies', label: 'Our Policies', href: 'insurance.html?section=our_policies' },
       { key: 'insurance-private', label: 'Private', href: 'insurance.html?section=private' },
     ],
   },

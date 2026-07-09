@@ -114,7 +114,7 @@ function render() {
   document.getElementById('cld-f-ref').value = claim.external_reference_id || '';
   document.getElementById('cld-f-source').value = claim.event_source || '';
   document.getElementById('cld-f-insurance').innerHTML = '<option value="">—</option>' +
-    insuranceRecords.map(ir => `<option value="${ir.id}" ${String(claim.insurance_record_id) === String(ir.id) ? 'selected' : ''}>${ir.first_name} ${ir.last_name} — ${ir.carrier || 'No carrier'} (${ir.type === 'our_policy' ? 'Our Policy' : 'Private'})</option>`).join('');
+    insuranceRecords.map(ir => `<option value="${ir.id}" ${String(claim.insurance_record_id) === String(ir.id) ? 'selected' : ''}>${ir.first_name} ${ir.last_name} — ${ir.carrier || 'No carrier'} (${ir.type === 'our_policy' ? 'Our Policies' : 'Private'})</option>`).join('');
   document.getElementById('cld-f-assigned').innerHTML = '<option value="">—</option>' +
     users.map(u => `<option value="${u.id}" ${String(claim.assigned_to) === String(u.id) ? 'selected' : ''}>${u.name}</option>`).join('');
   document.getElementById('cld-f-next-task').value = claim.next_task || '';

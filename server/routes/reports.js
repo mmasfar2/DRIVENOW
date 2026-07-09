@@ -14,6 +14,10 @@ function round2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
 function dayDiff(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
 function clip(d, lo, hi) { return d < lo ? lo : d > hi ? hi : d; }
 
+// Also accrues revenue day-by-day at each booking's own daily rate (weekly_rate/7)
+// across the days it actually overlaps the range — not when a payment happened to
+// land. A booking invoiced and paid in full on day 1 of a 7-day rental still shows
+// as 1/7th of its revenue on each of those 7 days, the way a rental actually earns.
 function computeVehicleDays(from, to) {
   const rangeStart = new Date(from);
   const rangeEnd = new Date(to);
@@ -21,10 +25,11 @@ function computeVehicleDays(from, to) {
   const vehicles = db.prepare('SELECT id, year, make, model, license_plate FROM vehicles ORDER BY year DESC').all();
   return vehicles.map(v => {
     const apps = db.prepare(`
-      SELECT pickup_scheduled_at, rental_end_at, updated_at, status FROM applications
+      SELECT pickup_scheduled_at, rental_end_at, updated_at, status, weekly_rate FROM applications
       WHERE assigned_vehicle_id = ? AND status IN ('active', 'completed') AND pickup_scheduled_at IS NOT NULL
     `).all(v.id);
     let rentedDays = 0;
+    let accruedRevenue = 0;
     for (const a of apps) {
       const start = new Date(a.pickup_scheduled_at.slice(0, 10));
       const endRaw = a.rental_end_at ? a.rental_end_at.slice(0, 10)
@@ -32,10 +37,14 @@ function computeVehicleDays(from, to) {
       const end = new Date(endRaw);
       const s = clip(start, rangeStart, rangeEnd);
       const e = clip(end, rangeStart, rangeEnd);
-      if (e >= s) rentedDays += dayDiff(s, e) + 1;
+      if (e >= s) {
+        const overlapDays = dayDiff(s, e) + 1;
+        rentedDays += overlapDays;
+        accruedRevenue += overlapDays * ((a.weekly_rate || 0) / 7);
+      }
     }
     rentedDays = Math.min(rentedDays, rangeDays);
-    return { v, rentedDays, rangeDays };
+    return { v, rentedDays, rangeDays, accruedRevenue: round2(accruedRevenue) };
   });
 }
 
@@ -244,7 +253,7 @@ const REPORTS = {
 
   revpav: {
     category: 'utilization', label: 'Revenue per Available Vehicle (RevPAV)',
-    description: 'Revenue collected per vehicle, divided by days in range — the standard fleet-efficiency yardstick.',
+    description: 'Revenue earned per day the vehicle was actually rented (days x daily rate), divided by days in range — not when a payment happened to post. A week paid in full on day one still spreads across the week it covers.',
     hasDateRange: true,
     columns: [
       { key: 'vehicle', label: 'Vehicle' },
@@ -253,17 +262,10 @@ const REPORTS = {
       { key: 'revpav', label: 'RevPAV ($/day)', type: 'money' },
     ],
     run(from, to) {
-      const rangeDays = Math.max(1, dayDiff(new Date(from), new Date(to)) + 1);
-      return db.prepare(`
-        SELECT v.id, v.year, v.make, v.model, COALESCE(SUM(p.amount), 0) as revenue
-        FROM vehicles v
-        LEFT JOIN applications a ON a.assigned_vehicle_id = v.id
-        LEFT JOIN payments p ON p.application_id = a.id AND substr(p.paid_at, 1, 10) BETWEEN ? AND ?
-        GROUP BY v.id ORDER BY revenue DESC
-      `).all(from, to).map(r => ({
-        vehicle: `${r.year} ${r.make} ${r.model}`, revenue: round2(r.revenue),
-        range_days: rangeDays, revpav: round2(r.revenue / rangeDays),
-      }));
+      return computeVehicleDays(from, to).map(({ v, rangeDays, accruedRevenue }) => ({
+        vehicle: `${v.year} ${v.make} ${v.model}`, revenue: accruedRevenue,
+        range_days: rangeDays, revpav: round2(accruedRevenue / rangeDays),
+      })).sort((a, b) => b.revenue - a.revenue);
     },
   },
 
