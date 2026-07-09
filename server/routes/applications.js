@@ -658,22 +658,29 @@ router.get('/bookings/all', requireAuth, (req, res) => {
   // Bucket mirrors the same Reservation/Check Out/Check In stage shown on the
   // reservation detail page, so a booking always lands in the same place
   // here as its stage control shows there — no separate/parallel status logic.
+  // The one exception: a booking that's checked out and due back today moves
+  // into Pending Check In, a subset of On Lease flagging what needs handling now.
+  const todayStr = new Date().toISOString().slice(0, 10);
   const bookings = rows.map(r => {
     const charge = computeCharge(r);
     const owed = computeOwed(r, r.paid_total);
     let bucket;
     if (r.status === 'completed') bucket = 'completed';
-    else if (r.vehicle_status === 'rented') bucket = 'on_rental';
+    else if (r.vehicle_status === 'rented') {
+      const returnDate = r.rental_end_at ? r.rental_end_at.slice(0, 10) : null;
+      bucket = returnDate === todayStr ? 'pending_check_in' : 'on_rental';
+    }
     else bucket = 'potential_arrival';
     return { ...r, owed, bucket };
   });
 
   const totalBookings = bookings.length;
   // Field name kept as `upcoming` for the existing stat tile — it now counts
-  // Potential Arrivals (reservations not yet checked out) instead of the
-  // retired separate "Pending Check In" bucket.
+  // Potential Arrivals (reservations not yet checked out).
   const upcoming = bookings.filter(b => b.bucket === 'potential_arrival').length;
-  const onRental = bookings.filter(b => b.bucket === 'on_rental').length;
+  // "On Lease" as a stat counts every checked-out vehicle, whether or not
+  // it's also due back today (pending_check_in is a subset of on-lease).
+  const onRental = bookings.filter(b => b.bucket === 'on_rental' || b.bucket === 'pending_check_in').length;
   // Individual bookings can show a credit (negative owed), but the aggregate
   // "outstanding balance" stat should only total up what's actually still
   // owed — a credit on one booking shouldn't net against another's debt.
