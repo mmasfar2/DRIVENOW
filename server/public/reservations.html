@@ -1024,11 +1024,7 @@ function initNewReservationModal() {
       return 'pickable';
     }
 
-    const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    const yearOptions = [];
-    for (let y = today.getFullYear(); y <= today.getFullYear() + 5; y++) yearOptions.push(y);
-
-    function monthGrid(monthDate, jumpable) {
+    function monthGrid(monthDate) {
       const year = monthDate.getFullYear();
       const month = monthDate.getMonth();
       const firstDow = new Date(year, month, 1).getDay();
@@ -1053,15 +1049,9 @@ function initNewReservationModal() {
           </div>
         `);
       }
-      const head = jumpable ? `
-        <div class="resv-cal__month-head resv-cal__month-head--jump">
-          <select id="cal-month-jump">${MONTH_NAMES.map((m, i) => `<option value="${i}" ${i === month ? 'selected' : ''}>${m}</option>`).join('')}</select>
-          <select id="cal-year-jump">${yearOptions.map(y => `<option value="${y}" ${y === year ? 'selected' : ''}>${y}</option>`).join('')}</select>
-        </div>
-      ` : `<div class="resv-cal__month-head"><span>${monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span></div>`;
       return `
         <div class="resv-cal__month">
-          ${head}
+          <div class="resv-cal__month-head"><span>${monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span></div>
           <div class="resv-cal__dow">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div>${d}</div>`).join('')}</div>
           <div class="resv-cal__days">${cells.join('')}</div>
         </div>
@@ -1069,7 +1059,6 @@ function initNewReservationModal() {
     }
 
     const nextMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1);
-    const isAtCurrentMonth = calMonth.getFullYear() === today.getFullYear() && calMonth.getMonth() === today.getMonth();
     const days = form.pickup_scheduled_at && form.rental_end_at
       ? Math.round((new Date(form.rental_end_at) - new Date(form.pickup_scheduled_at)) / 86400000)
       : null;
@@ -1087,8 +1076,8 @@ function initNewReservationModal() {
           </div>
         </div>
         <div class="resv-cal__grid">
-          <button class="resv-cal__nav" id="cal-prev" ${isAtCurrentMonth ? 'disabled' : ''}>&#8249;</button>
-          ${monthGrid(calMonth, true)}
+          <button class="resv-cal__nav" id="cal-prev">&#8249;</button>
+          ${monthGrid(calMonth)}
           ${monthGrid(nextMonth)}
           <button class="resv-cal__nav" id="cal-next">&#8250;</button>
         </div>
@@ -1124,17 +1113,6 @@ function initNewReservationModal() {
       calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1);
       renderStep();
     });
-    function jumpToSelectedMonth() {
-      const jumpMonth = Number(document.getElementById('cal-month-jump').value);
-      const jumpYear = Number(document.getElementById('cal-year-jump').value);
-      let target = new Date(jumpYear, jumpMonth, 1);
-      const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-      if (target < currentMonthStart) target = currentMonthStart;
-      calMonth = target;
-      renderStep();
-    }
-    document.getElementById('cal-month-jump').addEventListener('change', jumpToSelectedMonth);
-    document.getElementById('cal-year-jump').addEventListener('change', jumpToSelectedMonth);
     document.getElementById('cal-pickup-time').addEventListener('change', (e) => { form.pickup_time = e.target.value; renderStep(); });
     document.getElementById('cal-return-time').addEventListener('change', (e) => { form.return_time = e.target.value; renderStep(); });
     document.getElementById('cal-apply').addEventListener('click', () => { renderStep(); });
