@@ -624,7 +624,31 @@ router.delete('/:id', requireAuth, (req, res) => {
   const messages = db.prepare('SELECT * FROM messages_outbox WHERE application_id = ?').all(id);
   const notes = db.prepare('SELECT * FROM booking_notes WHERE application_id = ?').all(id);
 
-  logUndo('application_delete', `Removed reservation for ${application.first_name} ${application.last_name}`, { application, payments, deposits, activity, messages, notes });
+  // If this was the customer's only actual booking (an application that had a
+  // vehicle assigned — not just a lead/inquiry that never went anywhere),
+  // their customer profile and insurance records get cleaned up with it.
+  // Leads are untouched either way, since Leads reads straight from the
+  // applications table and never touches customers/insurance_records.
+  let customer = null;
+  let insuranceRecords = [];
+  if (application.email) {
+    customer = db.prepare('SELECT * FROM customers WHERE lower(email) = lower(?)').get(application.email);
+    if (customer) {
+      const otherBookings = db.prepare(`
+        SELECT COUNT(*) as c FROM applications
+        WHERE lower(email) = lower(?) AND id != ? AND assigned_vehicle_id IS NOT NULL
+      `).get(application.email, id).c;
+      if (otherBookings === 0) {
+        insuranceRecords = db.prepare('SELECT * FROM insurance_records WHERE customer_id = ?').all(customer.id);
+      } else {
+        customer = null; // has other bookings — leave their profile and insurance alone
+      }
+    }
+  }
+
+  logUndo('application_delete', `Removed reservation for ${application.first_name} ${application.last_name}`, {
+    application, payments, deposits, activity, messages, notes, customer, insuranceRecords,
+  });
 
   if (application.assigned_vehicle_id) {
     db.prepare("UPDATE vehicles SET status = 'available' WHERE id = ? AND status IN ('reserved', 'rented')").run(application.assigned_vehicle_id);
@@ -635,6 +659,12 @@ router.delete('/:id', requireAuth, (req, res) => {
   db.prepare('DELETE FROM messages_outbox WHERE application_id = ?').run(id);
   db.prepare('DELETE FROM booking_notes WHERE application_id = ?').run(id);
   db.prepare('DELETE FROM applications WHERE id = ?').run(id);
+
+  if (customer) {
+    db.prepare('DELETE FROM insurance_records WHERE customer_id = ?').run(customer.id);
+    db.prepare('DELETE FROM customers WHERE id = ?').run(customer.id);
+  }
+
   res.json({ ok: true });
 });
 

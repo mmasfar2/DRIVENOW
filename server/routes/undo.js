@@ -37,7 +37,7 @@ router.post('/', requireAuth, (req, res) => {
     db.prepare('INSERT INTO vehicle_photos (id, vehicle_id, photo_path, created_at) VALUES (?, ?, ?, ?)').run(p.id, p.vehicle_id, p.photo_path, p.created_at);
     db.prepare('UPDATE vehicles SET photo_path = ? WHERE id = ?').run(p.photo_path, p.vehicle_id);
   } else if (row.entity_type === 'application_delete') {
-    const { application, payments, deposits, activity, messages, notes } = payload;
+    const { application, payments, deposits, activity, messages, notes, customer, insuranceRecords } = payload;
     const cols = Object.keys(application);
     db.prepare(`
       INSERT INTO applications (${cols.join(', ')}) VALUES (${cols.map(c => `@${c}`).join(', ')})
@@ -55,6 +55,19 @@ router.post('/', requireAuth, (req, res) => {
     messages.forEach(m => insMessage.run(m.id, m.application_id, m.channel, m.to_value, m.body, m.status, m.created_at));
     const insNote = db.prepare('INSERT INTO booking_notes (id, application_id, note, created_at) VALUES (?, ?, ?, ?)');
     notes.forEach(n => insNote.run(n.id, n.application_id, n.note, n.created_at));
+    // Restore the customer profile and insurance records too, if this delete
+    // cascaded to remove them (their only booking was the one just restored).
+    if (customer) {
+      const custCols = Object.keys(customer);
+      db.prepare(`INSERT INTO customers (${custCols.join(', ')}) VALUES (${custCols.map(c => `@${c}`).join(', ')})`).run(customer);
+    }
+    if (insuranceRecords && insuranceRecords.length) {
+      const insIns = db.prepare(`
+        INSERT INTO insurance_records (id, customer_id, type, carrier, protection_type, policy_number, document_path, last_verified_at, next_payment_date, notes, status, created_at, updated_at)
+        VALUES (@id, @customer_id, @type, @carrier, @protection_type, @policy_number, @document_path, @last_verified_at, @next_payment_date, @notes, @status, @created_at, @updated_at)
+      `);
+      insuranceRecords.forEach(r => insIns.run(r));
+    }
   } else if (row.entity_type === 'payment_delete') {
     const { payment } = payload;
     db.prepare('INSERT INTO payments (id, application_id, amount, paid_at, method, processing_fee, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')

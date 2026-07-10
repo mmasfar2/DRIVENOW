@@ -17,6 +17,10 @@
   <div class="page-sub" id="ins-sub"></div>
 
   <div class="panel" style="padding:0;overflow-x:auto;">
+    <div class="rd-tabs" style="padding:0 22px;margin-bottom:0;">
+      <div class="rd-tab active" data-mode="all">All Renters</div>
+      <div class="rd-tab" data-mode="renting">Currently Renting</div>
+    </div>
     <div style="padding:18px 22px 0;display:flex;gap:14px;align-items:center;flex-wrap:wrap;justify-content:space-between;">
       <input id="ins-search" placeholder="Search by customer name or email…" style="flex:1;min-width:220px;padding:10px 14px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;">
       <button class="btn" id="ins-add-btn">Add Insurance Record</button>
@@ -72,6 +76,7 @@ const TYPE_SUBS = {
 let section = new URLSearchParams(window.location.search).get('section') === 'private' ? 'private' : 'our_policy';
 let records = [];
 let customers = [];
+let filterMode = 'all';
 
 function fmtDateOnly(d) {
   if (!d) return '—';
@@ -84,6 +89,7 @@ function render() {
 
   const search = document.getElementById('ins-search').value.trim().toLowerCase();
   const filtered = records.filter(r => {
+    if (filterMode === 'renting' && !r.currently_renting) return false;
     if (!search) return true;
     const haystack = `${r.first_name} ${r.last_name} ${r.email} ${r.carrier || ''}`.toLowerCase();
     return haystack.includes(search);
@@ -99,7 +105,7 @@ function render() {
       <td>${fmtDateOnly(r.next_payment_date)}</td>
       <td>${r.notes || '—'}</td>
     </tr>
-  `).join('') : `<tr><td colspan="7" style="text-align:center;color:#888;padding:32px;">No ${TYPE_LABELS[section].toLowerCase()} insurance records yet.</td></tr>`;
+  `).join('') : `<tr><td colspan="7" style="text-align:center;color:#888;padding:32px;">No ${filterMode === 'renting' ? 'currently renting ' : ''}${TYPE_LABELS[section].toLowerCase()} insurance records${filterMode === 'renting' ? '' : ' yet'}.</td></tr>`;
 
   document.querySelectorAll('.ins-row').forEach(tr => {
     tr.addEventListener('click', (e) => {
@@ -120,6 +126,15 @@ async function load() {
 }
 
 document.getElementById('ins-search').addEventListener('input', render);
+
+document.querySelectorAll('.rd-tab[data-mode]').forEach(tab => {
+  tab.addEventListener('click', () => {
+    filterMode = tab.dataset.mode;
+    document.querySelectorAll('.rd-tab[data-mode]').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    render();
+  });
+});
 
 document.getElementById('ins-add-btn').addEventListener('click', () => {
   document.getElementById('ai-modal-title').textContent = `Add ${TYPE_LABELS[section]} Insurance Record`;
