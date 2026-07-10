@@ -17,12 +17,14 @@
   <div class="page-sub" id="ins-sub"></div>
 
   <div class="panel" style="padding:0;overflow-x:auto;">
-    <div class="rd-tabs" style="padding:0 22px;margin-bottom:0;">
-      <div class="rd-tab active" data-mode="all">All Renters</div>
-      <div class="rd-tab" data-mode="renting">Currently Renting</div>
-    </div>
     <div style="padding:18px 22px 0;display:flex;gap:14px;align-items:center;flex-wrap:wrap;justify-content:space-between;">
-      <input id="ins-search" placeholder="Search by customer name or email…" style="flex:1;min-width:220px;padding:10px 14px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;">
+      <div style="display:flex;gap:14px;align-items:center;flex:1;min-width:220px;">
+        <select id="ins-mode" style="font-family:inherit;font-weight:700;font-size:0.95rem;border:1.5px solid var(--gray-border);border-radius:4px;padding:9px 10px;background:#fff;">
+          <option value="renting">Currently Renting</option>
+          <option value="all">All Renters</option>
+        </select>
+        <input id="ins-search" placeholder="Search by customer name or email…" style="flex:1;min-width:220px;padding:10px 14px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;">
+      </div>
       <button class="btn" id="ins-add-btn">Add Insurance Record</button>
     </div>
     <table style="margin-top:14px;">
@@ -76,7 +78,7 @@ const TYPE_SUBS = {
 let section = new URLSearchParams(window.location.search).get('section') === 'private' ? 'private' : 'our_policy';
 let records = [];
 let customers = [];
-let filterMode = 'all';
+let filterMode = 'renting';
 
 function fmtDateOnly(d) {
   if (!d) return '—';
@@ -127,13 +129,9 @@ async function load() {
 
 document.getElementById('ins-search').addEventListener('input', render);
 
-document.querySelectorAll('.rd-tab[data-mode]').forEach(tab => {
-  tab.addEventListener('click', () => {
-    filterMode = tab.dataset.mode;
-    document.querySelectorAll('.rd-tab[data-mode]').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    render();
-  });
+document.getElementById('ins-mode').addEventListener('change', (e) => {
+  filterMode = e.target.value;
+  render();
 });
 
 document.getElementById('ins-add-btn').addEventListener('click', () => {
