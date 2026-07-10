@@ -721,8 +721,8 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
     insurance_carrier, insurance_policy_number, insurance_coverage_type,
   } = req.body;
 
-  if (!first_name || !last_name || !phone || !email) {
-    return res.status(400).json({ error: 'First name, last name, phone, and email are required' });
+  if (!first_name || !last_name || !phone) {
+    return res.status(400).json({ error: 'First name, last name, and phone are required' });
   }
   if (!assigned_vehicle_id || !weekly_rate || !pickup_scheduled_at || !rental_end_at) {
     return res.status(400).json({ error: 'Vehicle, weekly rate, and dates are required' });
@@ -746,7 +746,7 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
        dob, license_number, address, city, state, zip_code, license_path, insurance_path, insurance_private_path)
     VALUES (?, ?, ?, ?, 1, 6, 'active', ?, ?, ?, ?, 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    first_name, last_name, phone, email, assigned_vehicle_id, weekly_rate, total_due_at_pickup || null, total_due_at_pickup || null,
+    first_name, last_name, phone, email || '', assigned_vehicle_id, weekly_rate, total_due_at_pickup || null, total_due_at_pickup || null,
     pickup_scheduled_at, rental_end_at, bookingSource,
     dob || null, license_number || null, address || null, city || null, state || null, zip_code || null,
     licensePath, insurancePolicyPath, insurancePrivatePath

@@ -1312,7 +1312,12 @@ function initNewReservationModal() {
     document.getElementById('f-vsearch').addEventListener('input', (e) => {
       vehicleSearch = e.target.value;
       renderStep();
-      document.getElementById('f-vsearch').focus();
+      // Re-rendering recreates the input, and a plain .focus() resets the
+      // cursor to position 0 — without this, each new keystroke gets
+      // inserted at the start instead of the end (typing "so" produced "os").
+      const input = document.getElementById('f-vsearch');
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
     });
     body.querySelectorAll('.resv-class-card__head').forEach(el => {
       el.addEventListener('click', () => {
@@ -1389,7 +1394,12 @@ function initNewReservationModal() {
         customerSearchTimer = setTimeout(async () => {
           customerResults = customerSearchTerm.trim() ? await api(`/api/applications/customers/search?q=${encodeURIComponent(customerSearchTerm.trim())}`) : [];
           renderStep();
-          document.getElementById('f-csearch').focus();
+          // Same cursor-reset issue as the vehicle search box: re-rendering
+          // recreates the input, so refocusing without this puts the cursor
+          // back at position 0 instead of the end.
+          const input = document.getElementById('f-csearch');
+          input.focus();
+          input.setSelectionRange(input.value.length, input.value.length);
         }, 250);
       });
       document.querySelectorAll('.resv-customer-result').forEach(el => {
