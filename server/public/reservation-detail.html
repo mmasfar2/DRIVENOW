@@ -677,10 +677,12 @@ function recalcTaxes() {
   const highway = paymentBreakdownItems.find(i => i.key === 'highway');
   const sales = paymentBreakdownItems.find(i => i.key === 'sales');
   const subtotal = getItemAmount(daily);
-  // Highway tax is described as "included in rate" — it's already inside the
-  // lease-rate subtotal, so it must stay excluded from the summed total
-  // below (it's shown for informational breakdown only, not added again).
-  highway.amount = Math.round((subtotal - subtotal / (1 + HIGHWAY_TAX_RATE)) * 100) / 100;
+  // Highway tax is informational (shown for breakdown only) — it stays
+  // excluded from the summed invoice total below either way, but the
+  // displayed amount itself is a straight 8% of the lease-rate subtotal,
+  // matching how Sales Tax is calculated (not backed out of a tax-inclusive
+  // total).
+  highway.amount = Math.round(subtotal * HIGHWAY_TAX_RATE * 100) / 100;
   sales.amount = Math.round(subtotal * SALES_TAX_RATE * 100) / 100;
 }
 function getInvoiceTotal() {
