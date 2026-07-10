@@ -1002,7 +1002,6 @@ function initNewReservationModal() {
 
   function renderDatesStep() {
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const minPickup = todayStr(0);
     const minReturn = form.pickup_scheduled_at
       ? new Date(new Date(form.pickup_scheduled_at).getTime() + 7 * 86400000).toISOString().slice(0, 10)
       : null;
@@ -1012,7 +1011,6 @@ function initNewReservationModal() {
     }
 
     function dayState(dateStr) {
-      if (dateStr < minPickup) return 'disabled';
       if (!form.pickup_scheduled_at) {
         return 'pickable';
       }
