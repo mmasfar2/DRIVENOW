@@ -67,7 +67,10 @@ router.get('/:id', requireAuth, (req, res) => {
 
   const totalRevenue = Math.round(bookings.reduce((sum, b) => sum + b.revenue, 0) * 100) / 100;
   const totalExpense = Math.round(maintenance.reduce((sum, m) => sum + (Number(m.cost) || 0), 0) * 100) / 100;
-  const totalProfit = Math.round((totalRevenue - totalExpense) * 100) / 100;
+  // Profit = revenue minus everything spent on the vehicle — both what it cost
+  // to acquire (purchase price) and what's been spent on it since (maintenance).
+  // Can go negative if the vehicle hasn't earned back what was put into it yet.
+  const totalProfit = Math.round((totalRevenue - (Number(vehicle.purchase_price) || 0) - totalExpense) * 100) / 100;
   const lastServicedRow = maintenance.find(m => m.performed_at);
   const lastServiced = lastServicedRow ? lastServicedRow.performed_at : null;
 
