@@ -18,7 +18,7 @@
 
   <div class="panel" style="display:flex;justify-content:space-between;align-items:center;">
     <div>
-      <div class="panel-title" style="margin-bottom:2px;">Vehicles</div>
+      <div class="panel-title" style="margin-bottom:2px;" id="fleet-panel-title">Vehicles</div>
       <div style="font-size:0.82rem;color:#888;">Click a vehicle to view or edit its full details.</div>
     </div>
     <button class="btn" onclick="openVehicleModal()">+ Add Vehicle</button>
@@ -27,7 +27,7 @@
   <div class="panel" style="padding:0;overflow-x:auto;">
     <table>
       <thead>
-        <tr><th>Photo</th><th>Vehicle</th><th>Plate Number</th><th>Weekly Rate</th><th>Status</th><th></th></tr>
+        <tr><th>Photo</th><th>S#</th><th>Vehicle</th><th>Plate Number</th><th>Weekly Rate</th><th>Status</th><th></th></tr>
       </thead>
       <tbody id="fleet-table-body"></tbody>
     </table>
@@ -104,19 +104,31 @@ async function load() {
 }
 
 function render() {
+  document.getElementById('fleet-panel-title').textContent = `Vehicles (${vehicles.length})`;
   document.getElementById('fleet-table-body').innerHTML = vehicles.length ? vehicles.map(v => `
     <tr style="cursor:pointer;" onclick="window.location.href='vehicle-detail.html?id=${v.id}'">
       <td>
         <img src="${(v.photos || [])[0] ? '/uploads/' + v.photos[0].photo_path : ''}" alt=""
           style="width:56px;height:40px;object-fit:cover;border-radius:4px;background:#eee;${(v.photos || [])[0] ? '' : 'visibility:hidden;'}">
       </td>
+      <td style="font-size:0.75rem;color:#888;">${v.stock_number || '—'}</td>
       <td><strong>${v.year} ${v.make} ${v.model}</strong>${v.color ? `<br><span style="color:#888;font-size:0.8rem;">${v.color}</span>` : ''}</td>
       <td>${v.license_plate || '—'}</td>
       <td>$${v.weekly_rate}/wk</td>
       <td><span style="text-transform:capitalize;">${v.status}</span></td>
       <td onclick="event.stopPropagation();"><button class="btn btn-sm btn-outline" onclick="removeVehicleFromRow(${v.id})">Remove</button></td>
     </tr>
-  `).join('') : '<tr><td colspan="6" style="text-align:center;color:#888;padding:32px;">No vehicles yet.</td></tr>';
+  `).join('') : '<tr><td colspan="7" style="text-align:center;color:#888;padding:32px;">No vehicles yet.</td></tr>';
+}
+
+// Stock numbers are a plain sequential count (1, 2, 3...) — next one is just
+// the highest numeric stock number on file, plus one.
+function nextStockNumber() {
+  const highest = vehicles.reduce((max, v) => {
+    const n = parseInt(v.stock_number, 10);
+    return Number.isFinite(n) && n > max ? n : max;
+  }, 0);
+  return String(highest + 1);
 }
 
 function renderPhotoThumbs(v) {
@@ -138,7 +150,7 @@ function openVehicleModal(id) {
   document.getElementById('vehicle-modal-title').textContent = v ? 'Edit Vehicle' : 'Add Vehicle';
   document.getElementById('v-remove-btn').style.display = v ? '' : 'none';
 
-  document.getElementById('v-stock').value = v?.stock_number || '';
+  document.getElementById('v-stock').value = v ? (v.stock_number || '') : nextStockNumber();
   document.getElementById('v-plate').value = v?.license_plate || '';
   document.getElementById('v-vin').value = v?.vin || '';
   document.getElementById('v-make').value = v?.make || '';
