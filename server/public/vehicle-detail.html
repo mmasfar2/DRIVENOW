@@ -56,9 +56,10 @@
         <div class="field"><label>Year</label><input id="vd-f-year" type="number"></div>
         <div class="field"><label>Color</label><input id="vd-f-color"></div>
         <div class="field"><label>Class</label><input id="vd-f-class"></div>
-        <div class="field"><label>Mileage</label><input id="vd-f-mileage" type="number"></div>
         <div class="field"><label>Purchase Date</label><input id="vd-f-purchase-date" type="date"></div>
         <div class="field"><label>Purchase Price ($)</label><input id="vd-f-purchase-price" type="number" step="0.01"></div>
+        <div class="field"><label>Odometer Upon Purchase</label><input id="vd-f-purchase-mileage" type="number"></div>
+        <div class="field"><label>Current Odometer</label><input id="vd-f-mileage" type="number"></div>
         <div class="field"><label>Status</label>
           <select id="vd-f-status">
             <option value="available">Available</option>
@@ -195,9 +196,10 @@ function render() {
   document.getElementById('vd-f-year').value = vehicle.year || '';
   document.getElementById('vd-f-color').value = vehicle.color || '';
   document.getElementById('vd-f-class').value = vehicle.vehicle_class || '';
-  document.getElementById('vd-f-mileage').value = vehicle.mileage ?? '';
   document.getElementById('vd-f-purchase-date').value = vehicle.purchase_date ? vehicle.purchase_date.slice(0, 10) : '';
   document.getElementById('vd-f-purchase-price').value = vehicle.purchase_price ?? '';
+  document.getElementById('vd-f-purchase-mileage').value = vehicle.purchase_mileage ?? '';
+  document.getElementById('vd-f-mileage').value = vehicle.mileage ?? '';
   document.getElementById('vd-f-status').value = vehicle.status || 'available';
   document.getElementById('vd-f-rate').value = vehicle.weekly_rate != null ? Math.round((vehicle.weekly_rate / 7) * 100) / 100 : '';
   document.getElementById('vd-f-fuel').value = vehicle.fuel_type || '';
@@ -281,6 +283,7 @@ document.getElementById('vd-details-save').addEventListener('click', async () =>
       color: document.getElementById('vd-f-color').value,
       vehicle_class: document.getElementById('vd-f-class').value,
       mileage: document.getElementById('vd-f-mileage').value,
+      purchase_mileage: document.getElementById('vd-f-purchase-mileage').value,
       purchase_date: document.getElementById('vd-f-purchase-date').value,
       purchase_price: document.getElementById('vd-f-purchase-price').value,
       status: document.getElementById('vd-f-status').value,
