@@ -134,15 +134,19 @@
   <div id="vd-panel-financials" style="display:none;">
     <div class="vd-stat-row">
       <div class="vd-stat-card">
+        <div class="vd-stat-card__label">Purchase Price</div>
+        <div class="vd-stat-card__value" id="vd-purchase-price">$0</div>
+      </div>
+      <div class="vd-stat-card">
+        <div class="vd-stat-card__label">Total Expenses</div>
+        <div class="vd-stat-card__value" id="vd-total-expense">$0</div>
+      </div>
+      <div class="vd-stat-card">
         <div class="vd-stat-card__label">Total Revenue</div>
         <div class="vd-stat-card__value" id="vd-total-revenue">$0</div>
       </div>
       <div class="vd-stat-card">
-        <div class="vd-stat-card__label">Total Expense Recorded</div>
-        <div class="vd-stat-card__value" id="vd-total-expense">$0</div>
-      </div>
-      <div class="vd-stat-card">
-        <div class="vd-stat-card__label">Total Profit</div>
+        <div class="vd-stat-card__label">Profit</div>
         <div class="vd-stat-card__value" id="vd-total-profit">$0</div>
       </div>
     </div>
@@ -212,9 +216,12 @@ function render() {
 
   renderMaintenanceTable();
 
-  document.getElementById('vd-total-revenue').textContent = fmtMoney(vehicle.totalRevenue);
+  document.getElementById('vd-purchase-price').textContent = fmtMoney(vehicle.purchase_price);
   document.getElementById('vd-total-expense').textContent = fmtMoney(vehicle.totalExpense);
-  document.getElementById('vd-total-profit').textContent = fmtMoney(vehicle.totalProfit);
+  document.getElementById('vd-total-revenue').textContent = fmtMoney(vehicle.totalRevenue);
+  const profitEl = document.getElementById('vd-total-profit');
+  profitEl.textContent = fmtMoney(vehicle.totalProfit);
+  profitEl.style.color = vehicle.totalProfit < 0 ? '#c62828' : '';
   renderBookingsTable();
 
   renderInspectionPhotos();
