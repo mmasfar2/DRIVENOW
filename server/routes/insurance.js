@@ -21,17 +21,27 @@ const upload = multer({
 // coverage). This is the single place insurance documents/details live —
 // other pages (customer profile, reservation detail) read from here so
 // they can't show stale or conflicting insurance info. ──
+// "Currently renting" = this customer has a booking whose vehicle is
+// actually out with them right now (picked up, not just reserved).
+const CURRENTLY_RENTING_SUBQUERY = `
+  EXISTS (
+    SELECT 1 FROM applications a
+    JOIN vehicles v ON v.id = a.assigned_vehicle_id
+    WHERE lower(a.email) = lower(c.email) AND v.status = 'rented'
+  ) as currently_renting
+`;
+
 router.get('/', requireAuth, (req, res) => {
   const { type } = req.query;
   const rows = type
     ? db.prepare(`
-        SELECT ir.*, c.first_name, c.last_name, c.email
+        SELECT ir.*, c.first_name, c.last_name, c.email, ${CURRENTLY_RENTING_SUBQUERY}
         FROM insurance_records ir JOIN customers c ON c.id = ir.customer_id
         WHERE ir.type = ?
         ORDER BY c.last_name, c.first_name
       `).all(type)
     : db.prepare(`
-        SELECT ir.*, c.first_name, c.last_name, c.email
+        SELECT ir.*, c.first_name, c.last_name, c.email, ${CURRENTLY_RENTING_SUBQUERY}
         FROM insurance_records ir JOIN customers c ON c.id = ir.customer_id
         ORDER BY c.last_name, c.first_name
       `).all();
