@@ -1003,7 +1003,6 @@ function initNewReservationModal() {
   function renderDatesStep() {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const minPickup = todayStr(0);
-    const maxPickup = todayStr(3);
     const minReturn = form.pickup_scheduled_at
       ? new Date(new Date(form.pickup_scheduled_at).getTime() + 7 * 86400000).toISOString().slice(0, 10)
       : null;
@@ -1015,7 +1014,7 @@ function initNewReservationModal() {
     function dayState(dateStr) {
       if (dateStr < minPickup) return 'disabled';
       if (!form.pickup_scheduled_at) {
-        return dateStr > maxPickup ? 'disabled' : 'pickable';
+        return 'pickable';
       }
       if (!form.rental_end_at) {
         if (dateStr === form.pickup_scheduled_at) return 'pickable';
@@ -1102,7 +1101,7 @@ function initNewReservationModal() {
           <button class="resv-cal__apply-btn" id="cal-apply">Apply</button>
         </div>
       </div>
-      <div style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;">Pickup must be within 3 days of today. Minimum rental length is one week.</div>
+      <div style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;">Minimum rental length is one week.</div>
     `;
 
     document.getElementById('cal-prev').addEventListener('click', () => {
