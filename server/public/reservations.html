@@ -967,8 +967,8 @@ function initNewReservationModal() {
 
   function getSteps() {
     return form.source === 'online'
-      ? ['dates', 'vehicle', 'customer', 'review']
-      : ['dates', 'customer', 'vehicle', 'insurance', 'review'];
+      ? ['customer', 'vehicle', 'dates', 'review']
+      : ['customer', 'vehicle', 'dates', 'insurance', 'review'];
   }
   function currentKey() { return getSteps()[step - 1]; }
 
@@ -1060,6 +1060,17 @@ function initNewReservationModal() {
       ? Math.round((new Date(form.rental_end_at) - new Date(form.pickup_scheduled_at)) / 86400000)
       : null;
 
+    // Live invoice preview once a vehicle (picked in the prior step) and both
+    // dates are set — same math as the Payment Log breakdown on an existing
+    // booking, just computed from the in-progress form instead of a saved one.
+    const weeklyRate = form.weekly_rate || 0;
+    const dailyRate = weeklyRate / 7;
+    const subtotal = days ? Math.round(dailyRate * days * 100) / 100 : 0;
+    const previewHighwayTax = Math.round(subtotal * HIGHWAY_TAX_RATE * 100) / 100;
+    const previewSalesTax = Math.round(subtotal * SALES_TAX_RATE * 100) / 100;
+    const previewTotal = Math.round((subtotal + previewSalesTax) * 100) / 100;
+    const showInvoicePreview = days && weeklyRate;
+
     body.innerHTML = `
       <div class="resv-cal">
         <div class="resv-cal__summary">
@@ -1100,6 +1111,26 @@ function initNewReservationModal() {
         </div>
       </div>
       <div style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;">Minimum rental length is one week.</div>
+      ${showInvoicePreview ? `
+        <div class="panel" style="margin-top:16px;padding:16px;">
+          <div class="payment-breakdown-header">
+            <div>Invoice Preview</div>
+            <div>Invoice Total: ${fmtMoney(previewTotal)}</div>
+          </div>
+          <div class="payment-breakdown-row">
+            <div class="payment-breakdown-row__label">Lease Rate (${days}d x ${fmtExact(dailyRate)}/d)</div>
+            <input class="pb-amount" value="${subtotal.toFixed(2)}" disabled>
+          </div>
+          <div class="payment-breakdown-row">
+            <div class="payment-breakdown-row__label">Highway Tax (8%, included in rate)</div>
+            <input class="pb-amount" value="${previewHighwayTax.toFixed(2)}" disabled>
+          </div>
+          <div class="payment-breakdown-row">
+            <div class="payment-breakdown-row__label">Sales Tax (7.25%)</div>
+            <input class="pb-amount" value="${previewSalesTax.toFixed(2)}" disabled>
+          </div>
+        </div>
+      ` : ''}
     `;
 
     document.getElementById('cal-prev').addEventListener('click', () => {
