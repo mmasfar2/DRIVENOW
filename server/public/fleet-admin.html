@@ -57,11 +57,14 @@
       <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
         <div class="field"><label>Color</label><input id="v-color" placeholder="Silver"></div>
         <div class="field"><label>Class</label><input id="v-class" placeholder="Sedan"></div>
-        <div class="field"><label>Mileage</label><input id="v-mileage" type="number" placeholder="42000"></div>
+        <div class="field"><label>Current Odometer</label><input id="v-mileage" type="number" placeholder="42000"></div>
       </div>
       <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
+        <div class="field"><label>Odometer Upon Purchase</label><input id="v-purchase-mileage" type="number" placeholder="35000"></div>
         <div class="field"><label>First Date</label><input id="v-first-date" type="date"></div>
         <div class="field"><label>Purchase Price ($)</label><input id="v-purchase-price" type="number" placeholder="14500"></div>
+      </div>
+      <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
         <div class="field">
           <label>Availability</label>
           <select id="v-status">
@@ -72,8 +75,6 @@
             <option value="sold">Sold</option>
           </select>
         </div>
-      </div>
-      <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
         <div class="field"><label>Daily Rate ($)</label><input id="v-rate" type="number" step="0.01" placeholder="54.29"></div>
         <div class="field"><label>Notes</label><input id="v-notes" placeholder="Optional notes"></div>
       </div>
@@ -146,6 +147,7 @@ function openVehicleModal(id) {
   document.getElementById('v-color').value = v?.color || '';
   document.getElementById('v-class').value = v?.vehicle_class || '';
   document.getElementById('v-mileage').value = v?.mileage ?? '';
+  document.getElementById('v-purchase-mileage').value = v?.purchase_mileage ?? '';
   document.getElementById('v-first-date').value = v?.purchase_date || '';
   document.getElementById('v-purchase-price').value = v?.purchase_price ?? '';
   document.getElementById('v-status').value = v?.status || 'available';
@@ -175,6 +177,7 @@ async function saveVehicle() {
     color: document.getElementById('v-color').value,
     vehicle_class: document.getElementById('v-class').value,
     mileage: document.getElementById('v-mileage').value,
+    purchase_mileage: document.getElementById('v-purchase-mileage').value,
     purchase_date: document.getElementById('v-first-date').value,
     purchase_price: document.getElementById('v-purchase-price').value,
     status: document.getElementById('v-status').value,

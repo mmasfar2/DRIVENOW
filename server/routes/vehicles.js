@@ -112,7 +112,7 @@ router.post('/', requireAuth, (req, res) => {
   const {
     make, model, year, weekly_rate, notes, status,
     stock_number, license_plate, vin, color, vehicle_class,
-    purchase_date, purchase_price, mileage,
+    purchase_date, purchase_price, mileage, purchase_mileage,
   } = req.body;
   if (!make || !model || !year || !weekly_rate) {
     return res.status(400).json({ error: 'Make, model, year, and weekly rate are required' });
@@ -121,12 +121,12 @@ router.post('/', requireAuth, (req, res) => {
     INSERT INTO vehicles (
       make, model, year, weekly_rate, notes, status,
       stock_number, license_plate, vin, color, vehicle_class,
-      purchase_date, purchase_price, mileage
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      purchase_date, purchase_price, mileage, purchase_mileage
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     make, model, year, weekly_rate, notes || null, status || 'available',
     stock_number || null, license_plate || null, vin || null, color || null, vehicle_class || null,
-    purchase_date || null, purchase_price || null, mileage || null
+    purchase_date || null, purchase_price || null, mileage || null, purchase_mileage || null
   );
   res.status(201).json({ id: result.lastInsertRowid });
 });
@@ -134,7 +134,7 @@ router.post('/', requireAuth, (req, res) => {
 router.patch('/:id', requireAuth, (req, res) => {
   const allowed = [
     'make', 'model', 'year', 'weekly_rate', 'status', 'notes', 'vin', 'license_plate', 'color', 'fuel_type', 'transmission',
-    'stock_number', 'vehicle_class', 'purchase_date', 'purchase_price', 'mileage', 'next_service_at',
+    'stock_number', 'vehicle_class', 'purchase_date', 'purchase_price', 'mileage', 'purchase_mileage', 'next_service_at',
   ];
   const updates = [];
   const params = [];

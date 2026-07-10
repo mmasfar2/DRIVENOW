@@ -280,6 +280,9 @@ if (!vehicleCols.includes('mileage')) {
 if (!vehicleCols.includes('next_service_at')) {
   db.exec('ALTER TABLE vehicles ADD COLUMN next_service_at TEXT');
 }
+if (!vehicleCols.includes('purchase_mileage')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN purchase_mileage REAL');
+}
 
 const maintenanceCols = db.prepare("PRAGMA table_info(vehicle_maintenance)").all().map(c => c.name);
 if (!maintenanceCols.includes('category')) {
