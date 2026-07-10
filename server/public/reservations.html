@@ -308,6 +308,18 @@
 .resv-vehicle-card__right { text-align: right; margin-left: auto; }
 .resv-vehicle-card__price { font-weight: 700; }
 .resv-vehicle-card__price small { font-weight: 400; color: var(--text-muted); font-size: 0.72rem; }
+.resv-vprice-panel { border: 1.5px solid var(--black); border-top: none; border-radius: 0 0 6px 6px; padding: 14px; margin: -4px 0 10px; background: var(--gray-light); }
+.resv-vprice-summary { display: flex; justify-content: space-between; align-items: center; font-size: 0.88rem; font-weight: 700; margin-bottom: 12px; }
+.resv-vprice-actions { display: flex; gap: 8px; }
+.resv-vprice-actions .btn { flex: 1; }
+.resv-vprice-panel__head { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; margin-bottom: 12px; }
+.resv-vprice-panel__head a { color: var(--text-muted); text-decoration: none; }
+.resv-vprice-panel__head a:hover { text-decoration: underline; }
+.resv-vprice-input-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.resv-vprice-input { flex: 1; display: flex; align-items: center; gap: 4px; border: 1.5px solid var(--gray-border); border-radius: 4px; padding: 6px 10px; background: var(--white); font-weight: 700; }
+.resv-vprice-input input { border: none; outline: none; width: 100%; font-family: inherit; font-size: 0.92rem; font-weight: 700; }
+.resv-vprice-quick { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 12px; }
+.resv-vprice-quick button { padding: 6px 4px; font-size: 0.78rem; }
 .resv-type-select {
   width: 100%; padding: 12px 14px; border: 1.5px solid var(--gray-border); border-radius: 6px;
   font-family: inherit; font-size: 0.92rem; font-weight: 600; background: #fff; cursor: pointer; appearance: none;
@@ -950,6 +962,9 @@ function initNewReservationModal() {
   let vehicles = [];
   let vehiclesLoadError = false;
   let vehicleSearch = '';
+  let expandedVehicleId = null;
+  let vehiclePriceEdit = false;
+  let vehicleCustomDailyRate = null;
   let calMonth = null;
   const openClasses = new Set();
   let customerResults = [];
@@ -974,6 +989,19 @@ function initNewReservationModal() {
 
   function fmtExact(n) {
     return '$' + Number(n || 0).toFixed(2);
+  }
+
+  // Weekly estimate for the vehicle-selection step: daily rate x 7 as the
+  // base, then sales tax and highway tax each calculated on that base and
+  // added on top (all three summed) — deliberately different from the
+  // Invoice Preview on the Dates step, which excludes Highway Tax from the
+  // total since it's informational/included-in-rate there.
+  function computeWeeklyEstimate(dailyRate) {
+    const weeklyBase = Math.round(dailyRate * 7 * 100) / 100;
+    const salesTax = Math.round(weeklyBase * SALES_TAX_RATE * 100) / 100;
+    const highwayTax = Math.round(weeklyBase * HIGHWAY_TAX_RATE * 100) / 100;
+    const total = Math.round((weeklyBase + salesTax + highwayTax) * 100) / 100;
+    return { weeklyBase, salesTax, highwayTax, total };
   }
 
   function todayStr(offsetDays = 0) {
@@ -1276,6 +1304,46 @@ function initNewReservationModal() {
     document.getElementById(id).addEventListener('change', (e) => { onChange(e.target.files[0] || null); });
   }
 
+  function renderVehicleActionPanel(v) {
+    const baseDailyRate = Math.round((v.weekly_rate / 7) * 100) / 100;
+    const activeDailyRate = vehicleCustomDailyRate != null ? vehicleCustomDailyRate : baseDailyRate;
+    const est = computeWeeklyEstimate(activeDailyRate);
+
+    if (vehiclePriceEdit) {
+      return `
+        <div class="resv-vprice-panel">
+          <div class="resv-vprice-panel__head">
+            <a href="#" id="vprice-back">&larr; Back</a>
+            <a href="#" id="vprice-reset">Same as base rate</a>
+          </div>
+          <div class="resv-vprice-input-row">
+            <button class="btn btn-sm btn-outline" id="vprice-minus" type="button">&minus;</button>
+            <div class="resv-vprice-input">$<input type="text" inputmode="decimal" id="vprice-input" value="${activeDailyRate}"></div>
+            <button class="btn btn-sm btn-outline" id="vprice-plus" type="button">+</button>
+          </div>
+          <div class="resv-vprice-quick">
+            ${[-25, -10, -5, 5, 10, 25].map(d => `<button class="btn btn-sm btn-outline" data-delta="${d}" type="button">${d > 0 ? '+' : ''}${d}</button>`).join('')}
+          </div>
+          <button class="btn btn-block" id="vprice-set" type="button">Set ${fmtExact(activeDailyRate)}/day &middot; ${fmtExact(est.total)} est.</button>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="resv-vprice-panel">
+        <div class="resv-vprice-summary">
+          <span>${fmtExact(activeDailyRate)}/day base</span>
+          <span>${fmtExact(est.total)} est.</span>
+        </div>
+        <div class="resv-vprice-actions">
+          <button class="btn" id="vprice-confirm" type="button">&check; Confirm</button>
+          <button class="btn btn-outline btn-sm" id="vprice-change" type="button">Change price</button>
+          <button class="btn btn-outline btn-sm" id="vprice-cancel" type="button">Cancel</button>
+        </div>
+      </div>
+    `;
+  }
+
   function renderVehicleStep() {
     const search = vehicleSearch.trim().toLowerCase();
     const filtered = vehicles.filter(v =>
@@ -1329,6 +1397,7 @@ function initNewReservationModal() {
                     <span class="badge badge-${v.status === 'available' ? 'available' : v.status === 'reserved' ? 'reserved' : 'rented'}" style="margin-top:4px;display:inline-block;">${v.status}</span>
                   </div>
                 </div>
+                ${expandedVehicleId === v.id ? renderVehicleActionPanel(v) : ''}
               `).join('')}
             </div>
           </div>
@@ -1361,11 +1430,102 @@ function initNewReservationModal() {
       el.addEventListener('click', () => {
         const v = vehicles.find(x => x.id === Number(el.dataset.id));
         if (v.status !== 'available') return;
-        form.assigned_vehicle_id = v.id;
-        form.weekly_rate = v.weekly_rate;
+        if (expandedVehicleId === v.id) return;
+        expandedVehicleId = v.id;
+        vehiclePriceEdit = false;
+        vehicleCustomDailyRate = null;
         renderStep();
       });
     });
+
+    if (expandedVehicleId != null) {
+      const activeVehicle = vehicles.find(x => x.id === expandedVehicleId);
+      const baseDailyRate = activeVehicle ? Math.round((activeVehicle.weekly_rate / 7) * 100) / 100 : 0;
+
+      const confirmBtn = document.getElementById('vprice-confirm');
+      if (confirmBtn) confirmBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const dailyRate = vehicleCustomDailyRate != null ? vehicleCustomDailyRate : baseDailyRate;
+        form.assigned_vehicle_id = activeVehicle.id;
+        form.weekly_rate = Math.round(dailyRate * 7 * 100) / 100;
+        expandedVehicleId = null;
+        vehiclePriceEdit = false;
+        vehicleCustomDailyRate = null;
+        renderStep();
+      });
+      const changeBtn = document.getElementById('vprice-change');
+      if (changeBtn) changeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        vehiclePriceEdit = true;
+        renderStep();
+      });
+      const cancelBtn = document.getElementById('vprice-cancel');
+      if (cancelBtn) cancelBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        expandedVehicleId = null;
+        vehiclePriceEdit = false;
+        vehicleCustomDailyRate = null;
+        renderStep();
+      });
+      const backBtn = document.getElementById('vprice-back');
+      if (backBtn) backBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        vehiclePriceEdit = false;
+        renderStep();
+      });
+      const resetBtn = document.getElementById('vprice-reset');
+      if (resetBtn) resetBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        vehicleCustomDailyRate = null;
+        renderStep();
+      });
+      const setBtn = document.getElementById('vprice-set');
+      if (setBtn) setBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        form.assigned_vehicle_id = activeVehicle.id;
+        form.weekly_rate = Math.round((vehicleCustomDailyRate != null ? vehicleCustomDailyRate : baseDailyRate) * 7 * 100) / 100;
+        expandedVehicleId = null;
+        vehiclePriceEdit = false;
+        vehicleCustomDailyRate = null;
+        renderStep();
+      });
+      const minusBtn = document.getElementById('vprice-minus');
+      if (minusBtn) minusBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const current = vehicleCustomDailyRate != null ? vehicleCustomDailyRate : baseDailyRate;
+        vehicleCustomDailyRate = Math.round((current - 1) * 100) / 100;
+        renderStep();
+      });
+      const plusBtn = document.getElementById('vprice-plus');
+      if (plusBtn) plusBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const current = vehicleCustomDailyRate != null ? vehicleCustomDailyRate : baseDailyRate;
+        vehicleCustomDailyRate = Math.round((current + 1) * 100) / 100;
+        renderStep();
+      });
+      body.querySelectorAll('.resv-vprice-quick [data-delta]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const current = vehicleCustomDailyRate != null ? vehicleCustomDailyRate : baseDailyRate;
+          vehicleCustomDailyRate = Math.round((current + Number(btn.dataset.delta)) * 100) / 100;
+          renderStep();
+        });
+      });
+      const priceInput = document.getElementById('vprice-input');
+      if (priceInput) priceInput.addEventListener('input', (e) => {
+        e.stopPropagation();
+        vehicleCustomDailyRate = Number(e.target.value) || 0;
+        renderStep();
+        // Same cursor-reset fix as the other live-search boxes on this page —
+        // re-rendering recreates the input, so refocusing without this puts
+        // the cursor back at position 0 instead of the end.
+        const input = document.getElementById('vprice-input');
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      });
+    }
   }
 
   function renderSimpleCustomerForm() {
@@ -1559,6 +1719,9 @@ function initNewReservationModal() {
   async function openModal(source) {
     step = 1;
     vehicleSearch = '';
+    expandedVehicleId = null;
+    vehiclePriceEdit = false;
+    vehicleCustomDailyRate = null;
     openClasses.clear();
     customerResults = [];
     customerSearchTerm = '';
