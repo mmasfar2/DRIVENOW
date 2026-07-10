@@ -768,7 +768,7 @@ function recalcTaxes() {
   const highway = paymentBreakdownItems.find(i => i.key === 'highway');
   const sales = paymentBreakdownItems.find(i => i.key === 'sales');
   const subtotal = getItemAmount(daily);
-  highway.amount = Math.round((subtotal - subtotal / (1 + HIGHWAY_TAX_RATE)) * 100) / 100;
+  highway.amount = Math.round(subtotal * HIGHWAY_TAX_RATE * 100) / 100;
   sales.amount = Math.round(subtotal * SALES_TAX_RATE * 100) / 100;
 }
 
