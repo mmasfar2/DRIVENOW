@@ -1,5 +1,5 @@
 const express = require('express');
-const { db } = require('../db');
+const { db, getForfeitedDeposits } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { SALES_TAX_RATE, computeCharge, computeOwed } = require('../billing');
 
@@ -53,7 +53,7 @@ function computeVehicleDays(from, to) {
 const REPORTS = {
   revenue_by_vehicle: {
     category: 'revenue', label: 'Revenue by Vehicle',
-    description: 'Payments collected per vehicle in the selected range, less maintenance expense in the same range — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
+    description: 'Payments collected per vehicle in the selected range, plus any security deposit amounts forfeited against that vehicle in range, less maintenance expense — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
     hasDateRange: true,
     columns: [
       { key: 'vehicle', label: 'Vehicle' },
@@ -79,8 +79,13 @@ const REPORTS = {
         FROM vehicle_maintenance WHERE substr(performed_at, 1, 10) BETWEEN ? AND ?
         GROUP BY vehicle_id
       `).all(from, to).map(r => [r.vehicle_id, r.expense]));
+      const forfeitedByVehicle = new Map();
+      getForfeitedDeposits().forEach(d => {
+        if (!d.resolved_at || d.resolved_at.slice(0, 10) < from || d.resolved_at.slice(0, 10) > to) return;
+        forfeitedByVehicle.set(d.vehicle_id, (forfeitedByVehicle.get(d.vehicle_id) || 0) + Number(d.forfeited_amount));
+      });
       return revenueRows.map(r => {
-        const revenue = round2(r.revenue);
+        const revenue = round2(r.revenue + (forfeitedByVehicle.get(r.id) || 0));
         const expense = round2(expenseByVehicle.get(r.id) || 0);
         return {
           vehicle: `${r.year} ${r.make} ${r.model}`, license_plate: r.license_plate || '—',
@@ -92,7 +97,7 @@ const REPORTS = {
 
   revenue_by_time_period: {
     category: 'revenue', label: 'Revenue by Time Period',
-    description: 'Daily payments collected less maintenance expense logged that day — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
+    description: 'Daily payments collected, plus any security deposit amounts forfeited that day, less maintenance expense logged that day — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
     hasDateRange: true,
     columns: [
       { key: 'date', label: 'Date' },
@@ -113,9 +118,15 @@ const REPORTS = {
         FROM vehicle_maintenance WHERE substr(performed_at, 1, 10) BETWEEN ? AND ?
         GROUP BY date
       `).all(from, to).map(r => [r.date, r.expense]));
-      const days = new Set([...revenueByDay.keys(), ...expenseByDay.keys()]);
+      const forfeitedByDay = new Map();
+      getForfeitedDeposits().forEach(d => {
+        const date = d.resolved_at ? d.resolved_at.slice(0, 10) : null;
+        if (!date || date < from || date > to) return;
+        forfeitedByDay.set(date, (forfeitedByDay.get(date) || 0) + Number(d.forfeited_amount));
+      });
+      const days = new Set([...revenueByDay.keys(), ...expenseByDay.keys(), ...forfeitedByDay.keys()]);
       return [...days].sort().map(date => {
-        const revenue = round2(revenueByDay.get(date)?.revenue || 0);
+        const revenue = round2((revenueByDay.get(date)?.revenue || 0) + (forfeitedByDay.get(date) || 0));
         const expense = round2(expenseByDay.get(date) || 0);
         return {
           date, revenue, expense, profit: round2(revenue - expense),

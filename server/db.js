@@ -614,6 +614,20 @@ if (vehicleCount === 0) {
   seedVehicles.forEach(v => insert.run(...v));
 }
 
+// Forfeited deposit amounts count as revenue once resolved — a held deposit
+// stays a refundable liability, but the moment some (or all) of it is
+// forfeited, that portion is real revenue and needs to show up everywhere
+// revenue does (dashboard totals, Revenue reports, Vehicle Detail profit).
+// Every one of those reads from this single query so a forfeiture can't show
+// up in one place and not another.
+function getForfeitedDeposits() {
+  return db.prepare(`
+    SELECT d.id, d.application_id, a.assigned_vehicle_id as vehicle_id, d.resolved_at, d.forfeited_amount
+    FROM deposits d JOIN applications a ON a.id = d.application_id
+    WHERE d.status = 'resolved' AND d.forfeited_amount > 0
+  `).all();
+}
+
 function logActivity(applicationId, message) {
   db.prepare('INSERT INTO activity_log (application_id, message) VALUES (?, ?)').run(applicationId, message);
 }
@@ -623,4 +637,4 @@ function queueMessage(applicationId, channel, to, body) {
     .run(applicationId, channel, to, body);
 }
 
-module.exports = { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo };
+module.exports = { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo, getForfeitedDeposits };

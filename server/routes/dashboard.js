@@ -1,5 +1,5 @@
 const express = require('express');
-const { db } = require('../db');
+const { db, getForfeitedDeposits } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { computeOwed } = require('../billing');
 
@@ -30,10 +30,22 @@ router.get('/summary', requireAuth, (req, res) => {
   // which only ever gets set by one pipeline path (Stage 8 "Payment
   // Verification") and not by manual/walk-in bookings approved through
   // Reservations — those were previously invisible here.
-  const totalRevenue = db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM payments').get().total;
-  const paidThisWeek = db.prepare(`
+  //
+  // Forfeited security deposits count as revenue too, as of when they were
+  // resolved (held deposits stay a liability and are excluded) — see
+  // getForfeitedDeposits in db.js, the single source every revenue figure
+  // reads from so a forfeiture shows up consistently everywhere.
+  const forfeitedDeposits = getForfeitedDeposits();
+  const forfeitedTotal = forfeitedDeposits.reduce((sum, d) => sum + Number(d.forfeited_amount), 0);
+  const sevenDaysAgoStr = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  const forfeitedThisWeek = forfeitedDeposits
+    .filter(d => d.resolved_at >= sevenDaysAgoStr)
+    .reduce((sum, d) => sum + Number(d.forfeited_amount), 0);
+
+  const totalRevenue = Math.round((db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM payments').get().total + forfeitedTotal) * 100) / 100;
+  const paidThisWeek = Math.round((db.prepare(`
     SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE paid_at >= date('now', '-7 days')
-  `).get().total;
+  `).get().total + forfeitedThisWeek) * 100) / 100;
 
   // Pending/overdue invoices — net out payments already made (via billing.js's
   // computeOwed) instead of counting the full invoice_amount regardless of
@@ -70,9 +82,13 @@ router.get('/summary', requireAuth, (req, res) => {
   const utilizationRate = totalVehicles > 0 ? Math.round((rentedVehicles / totalVehicles) * 100) : 0;
 
   // Revenue earned resets at the start of every calendar month
-  const revenueThisMonth = db.prepare(`
+  const thisMonthStr = new Date().toISOString().slice(0, 7);
+  const forfeitedThisMonth = forfeitedDeposits
+    .filter(d => d.resolved_at && d.resolved_at.slice(0, 7) === thisMonthStr)
+    .reduce((sum, d) => sum + Number(d.forfeited_amount), 0);
+  const revenueThisMonth = Math.round((db.prepare(`
     SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE strftime('%Y-%m', paid_at) = strftime('%Y-%m', 'now')
-  `).get().total;
+  `).get().total + forfeitedThisMonth) * 100) / 100;
 
   const overdueIds = new Set(
     db.prepare(`
@@ -102,12 +118,25 @@ router.get('/summary', requireAuth, (req, res) => {
     WHERE strftime('%Y-%m', COALESCE(performed_at, created_at)) = strftime('%Y-%m', datetime('now', '-1 month'))
   `).get().total;
 
-  const monthlyRevenue = db.prepare(`
+  const monthlyPayments = db.prepare(`
     SELECT strftime('%Y-%m', paid_at) as month, COALESCE(SUM(amount), 0) as total
     FROM payments
     WHERE paid_at >= date('now', '-12 months')
     GROUP BY month ORDER BY month ASC
   `).all();
+  const twelveMonthsAgoStr = new Date(new Date().setMonth(new Date().getMonth() - 12)).toISOString().slice(0, 10);
+  const forfeitedByMonth = new Map();
+  forfeitedDeposits.forEach(d => {
+    if (!d.resolved_at || d.resolved_at < twelveMonthsAgoStr) return;
+    const month = d.resolved_at.slice(0, 7);
+    forfeitedByMonth.set(month, (forfeitedByMonth.get(month) || 0) + Number(d.forfeited_amount));
+  });
+  const monthSet = new Set([...monthlyPayments.map(r => r.month), ...forfeitedByMonth.keys()]);
+  const monthlyRevenue = [...monthSet].sort().map(month => {
+    const base = monthlyPayments.find(r => r.month === month);
+    const forfeited = forfeitedByMonth.get(month) || 0;
+    return { month, total: Math.round(((base ? base.total : 0) + forfeited) * 100) / 100 };
+  });
 
   const overdueList = overdueApps
     .sort((a, b) => (a.invoice_sent_at < b.invoice_sent_at ? -1 : 1))

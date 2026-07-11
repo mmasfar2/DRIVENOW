@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { db, logUndo } = require('../db');
+const { db, logUndo, getForfeitedDeposits } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
 
@@ -43,7 +43,14 @@ router.get('/:id', requireAuth, (req, res) => {
   // Revenue per booking is what was actually collected (payments table),
   // not an untaxed rate x days estimate — matches the definition used
   // everywhere else (Reservations, Metrics, Customer Profile), and excludes
-  // rejected applications that never became a real rental.
+  // rejected applications that never became a real rental. Any forfeited
+  // security deposit tied to the booking counts toward revenue too, as of
+  // when it was resolved — held deposits stay excluded as a liability.
+  const forfeitedByApp = new Map();
+  getForfeitedDeposits().forEach(d => {
+    if (d.vehicle_id !== Number(req.params.id)) return;
+    forfeitedByApp.set(d.application_id, (forfeitedByApp.get(d.application_id) || 0) + Number(d.forfeited_amount));
+  });
   const applications = db.prepare(`
     SELECT a.*, COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.application_id = a.id), 0) as paid_total
     FROM applications a
@@ -61,7 +68,7 @@ router.get('/:id', requireAuth, (req, res) => {
       pickup,
       dropoff,
       days,
-      revenue: Math.round(Number(a.paid_total) * 100) / 100,
+      revenue: Math.round((Number(a.paid_total) + (forfeitedByApp.get(a.id) || 0)) * 100) / 100,
     };
   });
 

@@ -226,7 +226,7 @@
 <div id="resolve-deposit-overlay" class="simple-modal-overlay" style="display:none;">
   <div class="simple-modal">
     <div class="simple-modal__header">
-      <div class="simple-modal__title">Resolve Security Deposit</div>
+      <div class="simple-modal__title" id="rs-modal-title">Resolve Security Deposit</div>
       <button class="simple-modal__close" id="resolve-deposit-close">&times;</button>
     </div>
     <div class="simple-modal__body">
@@ -234,7 +234,7 @@
       <div class="field"><label>Refund to Customer ($)</label><input type="number" id="rs-refund" step="0.01"></div>
       <div class="field"><label>Forfeited / Kept ($)</label><input type="number" id="rs-forfeit" step="0.01"></div>
       <div class="field"><label>Notes (e.g. reason for forfeiture)</label><textarea id="rs-notes" rows="2"></textarea></div>
-      <div style="font-size:0.8rem;color:#666;margin-bottom:14px;">Refund + forfeited must add up to the deposit amount. Any forfeited amount is recorded as revenue at this point.</div>
+      <div style="font-size:0.8rem;color:#666;margin-bottom:14px;">Refund + forfeited must add up to the deposit amount. Any forfeited amount is recorded as revenue as of today.</div>
       <button class="btn btn-block" id="rs-submit">Save Resolution</button>
     </div>
   </div>
@@ -293,6 +293,7 @@ const id = new URLSearchParams(window.location.search).get('id');
 const HIGHWAY_TAX_RATE = 0.08;
 const SALES_TAX_RATE = 0.0725;
 const DEFAULT_CARD_FEE_RATE = 3; // % — editable per payment in the Add Payment modal
+const PROCESSING_FEE_RATE = 0.0275; // 2.75% of the invoice — Invoice Adjustments' optional Processing Fee line
 let booking, paymentBreakdownItems = [];
 let finCalMonth = null, finNewPickup = '', finNewReturn = '';
 
@@ -501,7 +502,7 @@ function renderDepositLog() {
   const body = document.getElementById('rd-deposit-log-body');
   body.innerHTML = booking.deposits.length
     ? booking.deposits.map(d => `
-      <tr>
+      <tr class="deposit-row" data-id="${d.id}" style="cursor:pointer;" title="Double-click to adjust">
         <td>${fmtDate(d.collected_at)}</td>
         <td><span class="badge ${d.method === 'card' ? 'badge-reserved' : 'badge-available'}">${d.method === 'card' ? 'Card' : 'Cash'}</span></td>
         <td style="text-align:right;font-weight:600;">${fmtExact(d.amount)}</td>
@@ -514,7 +515,17 @@ function renderDepositLog() {
     : `<tr><td colspan="7" style="text-align:center;color:#888;padding:24px;">No security deposit collected yet.</td></tr>`;
 
   body.querySelectorAll('.resolve-deposit-btn').forEach(btn => {
-    btn.addEventListener('click', () => openResolveDepositModal(Number(btn.dataset.id)));
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openResolveDepositModal(Number(btn.dataset.id));
+    });
+  });
+  // Double-click a deposit row (held or already resolved) to open the same
+  // modal for making adjustments — the Resolve button above only appears
+  // while a deposit is still held, but a resolved split can still need a
+  // correction later.
+  body.querySelectorAll('.deposit-row').forEach(row => {
+    row.addEventListener('dblclick', () => openResolveDepositModal(Number(row.dataset.id)));
   });
 }
 
@@ -670,6 +681,10 @@ function initBreakdown() {
     { key: 'admin', type: 'dayrate', label: 'Admin Fee', days, rate: Number(booking.admin_fee_rate) || 0, checked: !!adminFeeAmount },
     { key: 'travel', type: 'amount', label: 'Travel Fee', amount: Number(booking.travel_fee) || 0, checked: !!booking.travel_fee },
     { key: 'insurancefee', type: 'dayrate', label: 'Insurance Fee', days, rate: Number(booking.insurance_fee_rate) || 0, checked: !!insuranceFeeAmount },
+    // Just a toggle, not a rate/total field like Admin/Insurance Fee — its
+    // default amount is 2.75% of the invoice as it stands today; check it
+    // to add that fee to the invoice.
+    { key: 'processingfee', type: 'amount', label: 'Processing Fee (2.75%)', amount: Math.round((Number(booking.charge) || 0) * PROCESSING_FEE_RATE * 100) / 100, checked: false },
     { key: 'misc', type: 'amount', label: 'Miscellaneous', amount: 0, checked: false },
     { key: 'tolls', type: 'amount', label: 'Tolls', amount: 0, checked: false },
     { key: 'discount', type: 'amount', label: 'Discount', amount: 0, checked: false, sign: -1 },
@@ -1000,10 +1015,15 @@ function openResolveDepositModal(depositId) {
   const deposit = booking.deposits.find(d => d.id === depositId);
   if (!deposit) return;
   resolvingDepositId = depositId;
+  const alreadyResolved = deposit.status !== 'held';
+  document.getElementById('rs-modal-title').textContent = alreadyResolved ? 'Adjust Security Deposit' : 'Resolve Security Deposit';
   document.getElementById('rs-deposit-amount').textContent = fmtExact(deposit.amount);
-  document.getElementById('rs-refund').value = deposit.amount;
-  document.getElementById('rs-forfeit').value = 0;
-  document.getElementById('rs-notes').value = '';
+  // Adjusting an already-resolved deposit starts from its current split
+  // rather than resetting to "assume full refund" — a fresh (held) deposit
+  // still defaults to a full refund, same as before.
+  document.getElementById('rs-refund').value = alreadyResolved ? deposit.refunded_amount : deposit.amount;
+  document.getElementById('rs-forfeit').value = alreadyResolved ? deposit.forfeited_amount : 0;
+  document.getElementById('rs-notes').value = alreadyResolved ? (deposit.notes || '') : '';
   document.getElementById('resolve-deposit-overlay').style.display = 'flex';
 }
 document.getElementById('resolve-deposit-close').addEventListener('click', () => {
