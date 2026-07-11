@@ -22,6 +22,7 @@ function computeVehicleDays(from, to) {
   const rangeStart = new Date(from);
   const rangeEnd = new Date(to);
   const rangeDays = Math.max(1, dayDiff(rangeStart, rangeEnd) + 1);
+  const todayStr = new Date().toISOString().slice(0, 10);
   const vehicles = db.prepare('SELECT id, year, make, model, license_plate FROM vehicles ORDER BY year DESC').all();
   return vehicles.map(v => {
     const apps = db.prepare(`
@@ -32,8 +33,16 @@ function computeVehicleDays(from, to) {
     let accruedRevenue = 0;
     for (const a of apps) {
       const start = new Date(a.pickup_scheduled_at.slice(0, 10));
-      const endRaw = a.rental_end_at ? a.rental_end_at.slice(0, 10)
-        : a.status === 'completed' ? a.updated_at.slice(0, 10) : to;
+      let endRaw;
+      if (a.status === 'completed') {
+        endRaw = a.rental_end_at ? a.rental_end_at.slice(0, 10) : a.updated_at.slice(0, 10);
+      } else {
+        // Still active (never checked in)? Keep counting it as on rent
+        // through today rather than stopping at a scheduled return date
+        // that was never actually confirmed to have happened.
+        const scheduled = a.rental_end_at ? a.rental_end_at.slice(0, 10) : todayStr;
+        endRaw = scheduled > todayStr ? scheduled : todayStr;
+      }
       const end = new Date(endRaw);
       const s = clip(start, rangeStart, rangeEnd);
       const e = clip(end, rangeStart, rangeEnd);

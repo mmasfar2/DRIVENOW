@@ -661,16 +661,22 @@ function getForfeitedDeposits() {
 // the dashboard/reports/Vehicle Detail reads from so they can't drift apart.
 function getAccruedRevenueDays() {
   const rows = db.prepare(`
-    SELECT id as application_id, assigned_vehicle_id as vehicle_id,
+    SELECT id as application_id, assigned_vehicle_id as vehicle_id, status,
            pickup_scheduled_at, rental_end_at, weekly_rate, admin_fee_rate, travel_fee, discount
     FROM applications
     WHERE status IN ('active', 'completed')
       AND pickup_scheduled_at IS NOT NULL AND rental_end_at IS NOT NULL AND weekly_rate IS NOT NULL
   `).all();
+  const todayStr = new Date().toISOString().slice(0, 10);
   const days = [];
   rows.forEach(a => {
     const start = new Date(a.pickup_scheduled_at.slice(0, 10));
-    const end = new Date(a.rental_end_at.slice(0, 10));
+    const scheduledEnd = a.rental_end_at.slice(0, 10);
+    // Still active (never checked in) past its scheduled return date? Keep
+    // accruing through today instead of stopping at a return that was never
+    // actually confirmed to have happened.
+    const endStr = a.status === 'active' && scheduledEnd < todayStr ? todayStr : scheduledEnd;
+    const end = new Date(endStr);
     if (!(end > start)) return;
     const dailyRate = a.weekly_rate / 7;
     const adminFeeRate = Number(a.admin_fee_rate) || 0;
