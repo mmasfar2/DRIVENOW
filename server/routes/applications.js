@@ -3,7 +3,7 @@ const multer = require('multer');
 const { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
-const { computeCharge, computeOwed, SALES_TAX_RATE } = require('../billing');
+const { computeCharge, computeOwed } = require('../billing');
 
 const router = express.Router();
 
@@ -504,17 +504,20 @@ router.patch('/:id', requireAuth, (req, res) => {
   params.push(req.params.id);
   db.prepare(`UPDATE applications SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...params);
 
-  // Changing the pickup or return date changes how much is owed — recompute the exact
-  // charge from the weekly rate rather than leaving the original quote's total stale.
+  // Changing the pickup or return date changes how much is owed — recompute
+  // the exact charge from billing.js's computeCharge (the same formula used
+  // everywhere else: Highway Tax, Sales Tax, Admin/Travel/Insurance/
+  // Processing Fee, all of it) rather than a separate hand-rolled Lease
+  // Rate + Sales Tax-only formula that silently went stale every time a new
+  // fee type was added elsewhere.
   if (req.body.rental_end_at !== undefined || req.body.pickup_scheduled_at !== undefined) {
     const id = req.params.id;
-    const app = db.prepare('SELECT pickup_scheduled_at, rental_end_at, weekly_rate FROM applications WHERE id = ?').get(id);
+    const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
     if (app && app.pickup_scheduled_at && app.rental_end_at && app.weekly_rate) {
-      const days = Math.round((new Date(app.rental_end_at) - new Date(app.pickup_scheduled_at)) / 86400000);
-      const dailyRateExact = app.weekly_rate / 7;
-      const subtotal = Math.round(dailyRateExact * days * 100) / 100;
-      const salesTax = Math.round(subtotal * SALES_TAX_RATE * 100) / 100;
-      const total = Math.round((subtotal + salesTax) * 100) / 100;
+      // Null out the previously-frozen total/invoice so computeCharge falls
+      // through to a fresh calculation from the new dates instead of just
+      // handing back the very value we're trying to replace.
+      const total = computeCharge({ ...app, total_due_at_pickup: null, invoice_amount: null });
       db.prepare('UPDATE applications SET total_due_at_pickup = ? WHERE id = ?').run(total, id);
       logActivity(id, `Reservation dates updated (${app.pickup_scheduled_at} → ${app.rental_end_at}) — balance recalculated to $${total}`);
     }

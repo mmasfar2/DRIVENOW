@@ -587,13 +587,26 @@ function renderFinCal() {
   // coincidence once an invoice/quote amount has overridden the raw rate x
   // days math. Only recompute a live estimate once the owner picks dates
   // that differ from what's saved, since there's no real total for those yet.
+  // Mirrors billing.js's computeCharge exactly (Highway Tax, Sales Tax,
+  // Admin/Travel/Insurance/Processing Fee) — this used to be a Lease Rate +
+  // Sales Tax-only shortcut that quietly went stale every time a new fee
+  // type was added on the server side.
   const savedPickup = booking.pickup_scheduled_at ? booking.pickup_scheduled_at.slice(0, 10) : '';
   const savedReturn = booking.rental_end_at ? booking.rental_end_at.slice(0, 10) : '';
   const datesChanged = finNewPickup !== savedPickup || finNewReturn !== savedReturn;
   const dailyRateExact = (booking.weekly_rate || 0) / 7;
   const estimate = !days ? null
     : !datesChanged ? Math.round(Number(booking.charge || 0) * 100) / 100
-    : Math.round(dailyRateExact * days * (1 + SALES_TAX_RATE) * 100) / 100;
+    : (() => {
+        const est_subtotal = Math.round(dailyRateExact * days * 100) / 100;
+        const est_highwayTax = Math.round(est_subtotal * HIGHWAY_TAX_RATE * 100) / 100;
+        const est_salesTax = Math.round(est_subtotal * SALES_TAX_RATE * 100) / 100;
+        const est_adminFee = Math.round((Number(booking.admin_fee_rate) || 0) * days * 100) / 100;
+        const est_travelFee = Math.round((Number(booking.travel_fee) || 0) * 100) / 100;
+        const est_insuranceFee = Math.round((Number(booking.insurance_fee_rate) || 0) * days * 100) / 100;
+        const est_processingFee = Math.round((Number(booking.processing_fee) || 0) * 100) / 100;
+        return Math.round((est_subtotal + est_highwayTax + est_salesTax + est_adminFee + est_travelFee + est_insuranceFee + est_processingFee) * 100) / 100;
+      })();
   const estimateLabel = datesChanged ? 'Est. Total' : 'Total';
 
   box.innerHTML = `
