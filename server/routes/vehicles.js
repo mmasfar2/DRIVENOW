@@ -1,9 +1,8 @@
 const express = require('express');
 const multer = require('multer');
-const { db, logUndo, getForfeitedDeposits } = require('../db');
+const { db, logUndo, getForfeitedDeposits, getAccruedRevenueDays } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
-const { computeRevenue } = require('../billing');
 
 const router = express.Router();
 
@@ -41,22 +40,26 @@ router.get('/:id', requireAuth, (req, res) => {
   const photos = db.prepare('SELECT * FROM vehicle_photos WHERE vehicle_id = ? ORDER BY created_at ASC').all(req.params.id);
   const maintenance = db.prepare('SELECT * FROM vehicle_maintenance WHERE vehicle_id = ? ORDER BY performed_at DESC').all(req.params.id);
 
-  // Revenue per booking is the revenue-eligible share of what was actually
-  // collected (payments table) — the car's daily rate, travel fee, and admin
-  // fee only; sales tax, highway tax, insurance fee, and processing fee are
-  // excluded (see billing.js's computeRevenue). Matches the definition used
-  // everywhere else (Dashboard, Reports, Metrics), and excludes rejected
-  // applications that never became a real rental. Any forfeited security
-  // deposit tied to the booking counts toward revenue too, as of when it
-  // was resolved — held deposits stay excluded as a liability.
+  // Revenue per booking is accrued day-by-day across its actual rental
+  // dates — the car's daily rate, travel fee, and admin fee only; sales tax,
+  // highway tax, insurance fee, and processing fee are excluded (see
+  // getAccruedRevenueDays in db.js). Matches the definition used everywhere
+  // else (Dashboard, Reports), and excludes rejected applications that
+  // never became a real rental. Any forfeited security deposit tied to the
+  // booking counts toward revenue too, as of the day it was checked in —
+  // held deposits stay excluded as a liability.
   const forfeitedByApp = new Map();
   getForfeitedDeposits().forEach(d => {
     if (d.vehicle_id !== Number(req.params.id)) return;
     forfeitedByApp.set(d.application_id, (forfeitedByApp.get(d.application_id) || 0) + Number(d.forfeited_amount));
   });
+  const accruedByApp = new Map();
+  getAccruedRevenueDays().forEach(d => {
+    if (d.vehicle_id !== Number(req.params.id)) return;
+    accruedByApp.set(d.application_id, (accruedByApp.get(d.application_id) || 0) + d.amount);
+  });
   const applications = db.prepare(`
-    SELECT a.*, COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.application_id = a.id), 0) as paid_total
-    FROM applications a
+    SELECT * FROM applications a
     WHERE a.assigned_vehicle_id = ? AND a.status != 'rejected'
   `).all(req.params.id);
   const bookings = applications.map(a => {
@@ -71,7 +74,7 @@ router.get('/:id', requireAuth, (req, res) => {
       pickup,
       dropoff,
       days,
-      revenue: Math.round((computeRevenue(a, a.paid_total) + (forfeitedByApp.get(a.id) || 0)) * 100) / 100,
+      revenue: Math.round(((accruedByApp.get(a.id) || 0) + (forfeitedByApp.get(a.id) || 0)) * 100) / 100,
     };
   });
 

@@ -48,36 +48,4 @@ function computeOwed(row, paidTotal) {
   return Math.round((charge - Number(paidTotal || 0)) * 100) / 100;
 }
 
-// "Revenue" is narrower than "charge" — only the portion that's actually the
-// company's earnings: the car's own daily rate, the travel fee, and the
-// admin fee. Sales tax and highway tax are pass-through taxes, and insurance
-// fee/processing fee are ancillary charges — none of those count as
-// revenue/profit even though they're part of what's invoiced and collected.
-// A discount comes straight off revenue too, since it's a reduction of the
-// rental rate the company actually earns. (Forfeited security deposits
-// count as revenue too, but aren't part of a booking's invoice at all —
-// see getForfeitedDeposits in db.js.)
-function computeRevenueEligible(row) {
-  if (!row.pickup_scheduled_at || !row.rental_end_at || !row.weekly_rate) return 0;
-  const days = Math.round((new Date(row.rental_end_at) - new Date(row.pickup_scheduled_at)) / 86400000);
-  if (days <= 0) return 0;
-  const subtotal = Math.round((row.weekly_rate / 7) * days * 100) / 100;
-  const adminFee = Math.round((Number(row.admin_fee_rate) || 0) * days * 100) / 100;
-  const travelFee = Math.round((Number(row.travel_fee) || 0) * 100) / 100;
-  const discount = Math.round((Number(row.discount) || 0) * 100) / 100;
-  return Math.max(0, Math.round((subtotal + adminFee + travelFee - discount) * 100) / 100);
-}
-
-// Revenue actually recognized from what's been paid so far — proportional to
-// how much of the full charge the revenue-eligible portion represents, so a
-// partial payment only counts its revenue-eligible share rather than being
-// treated as 100% rent or 100% tax. Once a booking is paid in full, this
-// equals computeRevenueEligible(row) exactly.
-function computeRevenue(row, paidTotal) {
-  const charge = computeCharge(row);
-  if (charge <= 0) return 0;
-  const fraction = computeRevenueEligible(row) / charge;
-  return Math.round(Number(paidTotal || 0) * fraction * 100) / 100;
-}
-
-module.exports = { SALES_TAX_RATE, HIGHWAY_TAX_RATE, computeCharge, computeOwed, computeRevenueEligible, computeRevenue };
+module.exports = { SALES_TAX_RATE, HIGHWAY_TAX_RATE, computeCharge, computeOwed };

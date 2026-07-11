@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, getForfeitedDeposits, getRevenuePayments } = require('../db');
+const { db, getForfeitedDeposits, getAccruedRevenueDays } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { SALES_TAX_RATE, computeCharge, computeOwed } = require('../billing');
 
@@ -53,7 +53,7 @@ function computeVehicleDays(from, to) {
 const REPORTS = {
   revenue_by_vehicle: {
     category: 'revenue', label: 'Revenue by Vehicle',
-    description: 'The car\'s daily rate, travel fee, and admin fee actually collected per vehicle in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue), plus any deposit amounts forfeited against that vehicle in range, less maintenance expense — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
+    description: 'The car\'s daily rate, travel fee, and admin fee, accrued day-by-day across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged. Plus any deposit amounts forfeited against that vehicle, counted as of the day the booking was checked in. Less maintenance expense — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
     hasDateRange: true,
     columns: [
       { key: 'vehicle', label: 'Vehicle' },
@@ -66,13 +66,12 @@ const REPORTS = {
     run(from, to) {
       const vehicles = db.prepare('SELECT id, year, make, model, license_plate FROM vehicles').all();
       const byVehicle = new Map();
-      getRevenuePayments().forEach(p => {
-        const d = p.paid_at ? p.paid_at.slice(0, 10) : null;
-        if (!d || d < from || d > to) return;
-        if (!byVehicle.has(p.vehicle_id)) byVehicle.set(p.vehicle_id, { revenue: 0, appIds: new Set() });
-        const entry = byVehicle.get(p.vehicle_id);
-        entry.revenue += p.revenue;
-        entry.appIds.add(p.application_id);
+      getAccruedRevenueDays().forEach(d => {
+        if (d.date < from || d.date > to) return;
+        if (!byVehicle.has(d.vehicle_id)) byVehicle.set(d.vehicle_id, { revenue: 0, appIds: new Set() });
+        const entry = byVehicle.get(d.vehicle_id);
+        entry.revenue += d.amount;
+        entry.appIds.add(d.application_id);
       });
       const expenseByVehicle = new Map(db.prepare(`
         SELECT vehicle_id, COALESCE(SUM(cost), 0) as expense
@@ -81,7 +80,7 @@ const REPORTS = {
       `).all(from, to).map(r => [r.vehicle_id, r.expense]));
       const forfeitedByVehicle = new Map();
       getForfeitedDeposits().forEach(d => {
-        if (!d.resolved_at || d.resolved_at.slice(0, 10) < from || d.resolved_at.slice(0, 10) > to) return;
+        if (!d.date || d.date < from || d.date > to) return;
         forfeitedByVehicle.set(d.vehicle_id, (forfeitedByVehicle.get(d.vehicle_id) || 0) + Number(d.forfeited_amount));
       });
       return vehicles.map(v => {
@@ -98,7 +97,7 @@ const REPORTS = {
 
   revenue_by_time_period: {
     category: 'revenue', label: 'Revenue by Time Period',
-    description: 'The car\'s daily rate, travel fee, and admin fee actually collected each day (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue), plus any security deposit amounts forfeited that day, less maintenance expense logged that day — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
+    description: 'The car\'s daily rate, travel fee, and admin fee, accrued on the actual calendar day of the rental it applies to (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not the day a payment against it happened to be logged. Plus any security deposit amounts forfeited, counted as of the day that booking was checked in. Less maintenance expense logged that day — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
     hasDateRange: true,
     columns: [
       { key: 'date', label: 'Date' },
@@ -109,14 +108,14 @@ const REPORTS = {
     ],
     run(from, to) {
       const revenueByDay = new Map();
-      getRevenuePayments().forEach(p => {
-        const date = p.paid_at ? p.paid_at.slice(0, 10) : null;
-        if (!date || date < from || date > to) return;
-        revenueByDay.set(date, (revenueByDay.get(date) || 0) + p.revenue);
+      getAccruedRevenueDays().forEach(d => {
+        if (d.date < from || d.date > to) return;
+        revenueByDay.set(d.date, (revenueByDay.get(d.date) || 0) + d.amount);
       });
       // Card processing fees (a card payment's own surcharge) are a
-      // separate, informational figure — not part of revenue-eligible
-      // amounts, just still shown here for the day it landed.
+      // separate, informational figure tied to when the payment actually
+      // happened — not part of revenue-eligible amounts, just still shown
+      // here for the day it landed.
       const cardFeesByDay = new Map(db.prepare(`
         SELECT substr(paid_at, 1, 10) as date, COALESCE(SUM(processing_fee), 0) as card_fees
         FROM payments WHERE substr(paid_at, 1, 10) BETWEEN ? AND ?
@@ -129,9 +128,8 @@ const REPORTS = {
       `).all(from, to).map(r => [r.date, r.expense]));
       const forfeitedByDay = new Map();
       getForfeitedDeposits().forEach(d => {
-        const date = d.resolved_at ? d.resolved_at.slice(0, 10) : null;
-        if (!date || date < from || date > to) return;
-        forfeitedByDay.set(date, (forfeitedByDay.get(date) || 0) + Number(d.forfeited_amount));
+        if (!d.date || d.date < from || d.date > to) return;
+        forfeitedByDay.set(d.date, (forfeitedByDay.get(d.date) || 0) + Number(d.forfeited_amount));
       });
       const days = new Set([...revenueByDay.keys(), ...expenseByDay.keys(), ...forfeitedByDay.keys()]);
       return [...days].sort().map(date => {
