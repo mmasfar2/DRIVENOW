@@ -658,17 +658,18 @@ function initBreakdown() {
   // Admin/insurance fees are daily rates x days; travel is a single flat fee.
   // All three are added after tax, matching billing.js's computeCharge —
   // they're real charges (not informational like Highway Tax), so they count
-  // toward the summed total below.
+  // toward the summed total below. Admin/Insurance use 'dayrate' (like Lease
+  // Rate) so their box holds the extended total while the per-day rate they
+  // were entered as shows in the label.
   const adminFeeAmount = Math.round((Number(booking.admin_fee_rate) || 0) * days * 100) / 100;
   const insuranceFeeAmount = Math.round((Number(booking.insurance_fee_rate) || 0) * days * 100) / 100;
   paymentBreakdownItems = [
     { key: 'daily', type: 'rate', days, rate: dailyRate, checked: true },
     { key: 'highway', type: 'amount', label: 'Highway Tax (8%, included in rate)', amount: 0, checked: true, informational: true },
     { key: 'sales', type: 'amount', label: 'Sales Tax (7.25%)', amount: 0, checked: true },
-    { key: 'admin', type: 'amount', label: 'Admin Fee', amount: adminFeeAmount, checked: !!adminFeeAmount },
+    { key: 'admin', type: 'dayrate', label: 'Admin Fee', days, rate: Number(booking.admin_fee_rate) || 0, checked: !!adminFeeAmount },
     { key: 'travel', type: 'amount', label: 'Travel Fee', amount: Number(booking.travel_fee) || 0, checked: !!booking.travel_fee },
-    { key: 'insurancefee', type: 'amount', label: 'Insurance Fee', amount: insuranceFeeAmount, checked: !!insuranceFeeAmount },
-    { key: 'securitydeposit', type: 'amount', label: 'Security Deposit', amount: Number(booking.security_deposit) || 0, checked: !!booking.security_deposit },
+    { key: 'insurancefee', type: 'dayrate', label: 'Insurance Fee', days, rate: Number(booking.insurance_fee_rate) || 0, checked: !!insuranceFeeAmount },
     { key: 'misc', type: 'amount', label: 'Miscellaneous', amount: 0, checked: false },
     { key: 'tolls', type: 'amount', label: 'Tolls', amount: 0, checked: false },
     { key: 'discount', type: 'amount', label: 'Discount', amount: 0, checked: false, sign: -1 },
@@ -677,10 +678,13 @@ function initBreakdown() {
 }
 
 function getItemAmount(item) {
-  return item.type === 'rate' ? Math.round(item.days * item.rate * 100) / 100 : Number(item.amount || 0) * (item.sign || 1);
+  if (item.type === 'rate' || item.type === 'dayrate') return Math.round(item.days * item.rate * 100) / 100;
+  return Number(item.amount || 0) * (item.sign || 1);
 }
 function getItemLabel(item) {
-  return item.type === 'rate' ? `Lease Rate (${item.days}d x ${fmtExact(item.rate)}/d)` : item.label;
+  if (item.type === 'rate') return `Lease Rate (${item.days}d x ${fmtExact(item.rate)}/d)`;
+  if (item.type === 'dayrate') return `${item.label} (${fmtExact(item.rate)}/d x ${item.days}d)`;
+  return item.label;
 }
 function recalcTaxes() {
   const daily = paymentBreakdownItems.find(i => i.key === 'daily');
@@ -742,9 +746,9 @@ function renderBreakdown() {
     });
   });
   box.querySelectorAll('.pb-amount').forEach(inp => {
+    const item = paymentBreakdownItems[Number(inp.dataset.i)];
     inp.addEventListener('input', () => {
       breakdownDirty = true;
-      const item = paymentBreakdownItems[Number(inp.dataset.i)];
       const value = Number(inp.value) || 0;
       if (item.type === 'rate') {
         item.rate = item.days > 0 ? Math.round((value / item.days) * 100) / 100 : value;
@@ -754,11 +758,26 @@ function renderBreakdown() {
         const salesI = paymentBreakdownItems.findIndex(i => i.key === 'sales');
         document.getElementById(`pb-input-${highwayI}`).value = paymentBreakdownItems[highwayI].amount;
         document.getElementById(`pb-input-${salesI}`).value = paymentBreakdownItems[salesI].amount;
+      } else if (item.type === 'dayrate') {
+        // While typing, the box holds the raw per-day rate as-typed (left
+        // untouched, no reformatting mid-keystroke) — it snaps to the
+        // computed extended total on blur, below.
+        item.rate = value;
+        document.getElementById(`pb-label-${inp.dataset.i}`).textContent = getItemLabel(item);
       } else {
         item.amount = value;
       }
       updateInvoiceTotals();
     });
+    if (item.type === 'dayrate') {
+      inp.addEventListener('focus', () => {
+        inp.value = item.rate || '';
+        inp.setSelectionRange(inp.value.length, inp.value.length);
+      });
+      inp.addEventListener('blur', () => {
+        inp.value = getItemAmount(item) || '';
+      });
+    }
   });
 }
 
