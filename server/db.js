@@ -2,7 +2,6 @@ const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const { DATA_DIR } = require('./paths');
-const { computeCharge, computeRevenueEligible } = require('./billing');
 
 const db = new Database(path.join(DATA_DIR, 'data.db'));
 db.pragma('journal_mode = WAL');
@@ -633,39 +632,62 @@ if (vehicleCount === 0) {
 // stays a refundable liability, but the moment some (or all) of it is
 // forfeited, that portion is real revenue and needs to show up everywhere
 // revenue does (dashboard totals, Revenue reports, Vehicle Detail profit).
-// Every one of those reads from this single query so a forfeiture can't show
-// up in one place and not another.
+// Attributed to the day the booking was actually checked in (its return) —
+// same "revenue as of when it was earned" basis as getAccruedRevenueDays
+// below — rather than whenever the deposit paperwork happened to be
+// finalized administratively, which could be days or weeks later. Every
+// revenue figure reads from this single query so a forfeiture can't show up
+// in one place and not another.
 function getForfeitedDeposits() {
   return db.prepare(`
-    SELECT d.id, d.application_id, a.assigned_vehicle_id as vehicle_id, d.resolved_at, d.forfeited_amount
+    SELECT d.id, d.application_id, a.assigned_vehicle_id as vehicle_id, d.forfeited_amount,
+           a.rental_end_at, a.status, a.updated_at
     FROM deposits d JOIN applications a ON a.id = d.application_id
     WHERE d.status = 'resolved' AND d.forfeited_amount > 0
-  `).all();
+  `).all().map(d => ({
+    id: d.id, application_id: d.application_id, vehicle_id: d.vehicle_id,
+    forfeited_amount: d.forfeited_amount,
+    date: d.rental_end_at ? d.rental_end_at.slice(0, 10) : (d.status === 'completed' && d.updated_at ? d.updated_at.slice(0, 10) : null),
+  }));
 }
 
-// Every payment recorded is cash actually collected, but not all of it is
-// revenue — sales tax, highway tax, insurance fee, and processing fee are
-// pass-through/ancillary charges (see billing.js's computeRevenueEligible).
-// This attaches each payment's revenue-eligible share to it, at whatever
-// fraction of that booking's full charge is revenue-eligible, so a payment
-// toward a partially-taxed/fee-laden invoice only counts its rent+travel+
-// admin portion. Every revenue figure in the dashboard/reports/Vehicle
-// Detail reads from this single query so they can't drift apart.
-function getRevenuePayments() {
+// Revenue as it's actually earned by the rental itself — one row per
+// calendar day of every active/completed booking, at that booking's own
+// daily rate plus that day's admin fee, with the one-time travel fee (minus
+// any discount) folded into the pickup day — rather than whenever a payment
+// against it happened to be logged. A booking paid in full on day one (or
+// not yet paid at all) still shows its revenue spread across the exact days
+// it covers: $43 on May 12, $43 on May 13, and so on. Sales tax, highway
+// tax, insurance fee, and processing fee are excluded — pass-through/
+// ancillary, not earnings. This is the single query every revenue figure in
+// the dashboard/reports/Vehicle Detail reads from so they can't drift apart.
+function getAccruedRevenueDays() {
   const rows = db.prepare(`
-    SELECT p.id, p.application_id, p.amount, p.paid_at, a.assigned_vehicle_id as vehicle_id,
-           a.pickup_scheduled_at, a.rental_end_at, a.weekly_rate, a.admin_fee_rate, a.travel_fee,
-           a.insurance_fee_rate, a.processing_fee, a.invoice_amount, a.total_due_at_pickup
-    FROM payments p JOIN applications a ON a.id = p.application_id
+    SELECT id as application_id, assigned_vehicle_id as vehicle_id,
+           pickup_scheduled_at, rental_end_at, weekly_rate, admin_fee_rate, travel_fee, discount
+    FROM applications
+    WHERE status IN ('active', 'completed')
+      AND pickup_scheduled_at IS NOT NULL AND rental_end_at IS NOT NULL AND weekly_rate IS NOT NULL
   `).all();
-  return rows.map(r => {
-    const charge = computeCharge(r);
-    const fraction = charge > 0 ? computeRevenueEligible(r) / charge : 0;
-    return {
-      id: r.id, application_id: r.application_id, vehicle_id: r.vehicle_id, paid_at: r.paid_at,
-      revenue: Math.round(Number(r.amount) * fraction * 100) / 100,
-    };
+  const days = [];
+  rows.forEach(a => {
+    const start = new Date(a.pickup_scheduled_at.slice(0, 10));
+    const end = new Date(a.rental_end_at.slice(0, 10));
+    if (!(end > start)) return;
+    const dailyRate = a.weekly_rate / 7;
+    const adminFeeRate = Number(a.admin_fee_rate) || 0;
+    const travelFee = Math.round((Number(a.travel_fee) || 0) * 100) / 100;
+    const discount = Math.round((Number(a.discount) || 0) * 100) / 100;
+    const cursor = new Date(start);
+    let firstDay = true;
+    while (cursor < end) {
+      const amount = Math.round((dailyRate + adminFeeRate + (firstDay ? travelFee - discount : 0)) * 100) / 100;
+      days.push({ application_id: a.application_id, vehicle_id: a.vehicle_id, date: cursor.toISOString().slice(0, 10), amount });
+      firstDay = false;
+      cursor.setDate(cursor.getDate() + 1);
+    }
   });
+  return days;
 }
 
 function logActivity(applicationId, message) {
@@ -677,4 +699,4 @@ function queueMessage(applicationId, channel, to, body) {
     .run(applicationId, channel, to, body);
 }
 
-module.exports = { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo, getForfeitedDeposits, getRevenuePayments };
+module.exports = { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo, getForfeitedDeposits, getAccruedRevenueDays };
