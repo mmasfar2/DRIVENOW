@@ -518,7 +518,16 @@ router.patch('/:id', requireAuth, (req, res) => {
       // through to a fresh calculation from the new dates instead of just
       // handing back the very value we're trying to replace.
       const total = computeCharge({ ...app, total_due_at_pickup: null, invoice_amount: null });
-      db.prepare('UPDATE applications SET total_due_at_pickup = ? WHERE id = ?').run(total, id);
+      // manual-booking seeds invoice_amount = total_due_at_pickup at creation
+      // time, and computeCharge checks invoice_amount FIRST — so updating
+      // only total_due_at_pickup (as this used to) never actually took
+      // effect on any booking created through the wizard; invoice_amount
+      // kept winning and stayed stuck at its original value forever.
+      if (app.invoice_amount) {
+        db.prepare('UPDATE applications SET total_due_at_pickup = ?, invoice_amount = ? WHERE id = ?').run(total, total, id);
+      } else {
+        db.prepare('UPDATE applications SET total_due_at_pickup = ? WHERE id = ?').run(total, id);
+      }
       logActivity(id, `Reservation dates updated (${app.pickup_scheduled_at} → ${app.rental_end_at}) — balance recalculated to $${total}`);
     }
   }
