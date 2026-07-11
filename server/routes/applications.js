@@ -541,10 +541,19 @@ router.patch('/:id', requireAuth, (req, res) => {
   // a purely internal correction (e.g. applying a Discount checkbox). This
   // just persists whatever total the checked/edited rows currently add up
   // to, the same way a date change recomputes and persists a new total.
+  // Discount is saved as its own column (like travel_fee) so the checkbox
+  // reflects what was actually saved instead of resetting to unchecked/0 on
+  // the next reload — computeCharge subtracts it on any future recompute
+  // too (e.g. a later date change), so it isn't silently lost.
   if (hasInvoiceTotal) {
     const id = req.params.id;
     const total = Math.round(Number(req.body.invoice_total) * 100) / 100;
-    db.prepare('UPDATE applications SET total_due_at_pickup = ?, invoice_amount = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(total, total, id);
+    if (req.body.discount !== undefined) {
+      const discount = Math.round(Number(req.body.discount) * 100) / 100;
+      db.prepare('UPDATE applications SET total_due_at_pickup = ?, invoice_amount = ?, discount = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(total, total, discount, id);
+    } else {
+      db.prepare('UPDATE applications SET total_due_at_pickup = ?, invoice_amount = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(total, total, id);
+    }
     logActivity(id, `Invoice adjustments saved — total set to $${total}`);
   }
 
@@ -706,7 +715,7 @@ router.delete('/:id', requireAuth, (req, res) => {
 router.get('/bookings/all', requireAuth, (req, res) => {
   const rows = db.prepare(`
     SELECT a.id, a.email, a.weekly_rate, a.total_due_at_pickup,
-           a.admin_fee_rate, a.travel_fee, a.insurance_fee_rate, a.processing_fee,
+           a.admin_fee_rate, a.travel_fee, a.insurance_fee_rate, a.processing_fee, a.discount,
            a.payment_status, a.invoice_amount, a.invoice_sent_at, a.pickup_scheduled_at, a.rental_end_at, a.status, a.updated_at,
            v.id as vehicle_id, v.make, v.model, v.year, v.status as vehicle_status,
            COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.application_id = a.id), 0) as paid_total,

@@ -707,7 +707,7 @@ function initBreakdown() {
       checked: !!booking.processing_fee },
     { key: 'misc', type: 'amount', label: 'Miscellaneous', amount: 0, checked: false },
     { key: 'tolls', type: 'amount', label: 'Tolls', amount: 0, checked: false },
-    { key: 'discount', type: 'amount', label: 'Discount', amount: 0, checked: false, sign: -1 },
+    { key: 'discount', type: 'amount', label: 'Discount', amount: Number(booking.discount) || 0, checked: !!booking.discount, sign: -1 },
   ];
   recalcTaxes();
 }
@@ -715,6 +715,12 @@ function initBreakdown() {
 function getItemAmount(item) {
   if (item.type === 'rate' || item.type === 'dayrate') return Math.round(item.days * item.rate * 100) / 100;
   return Number(item.amount || 0) * (item.sign || 1);
+}
+// The box itself always shows the positive magnitude the owner typed (e.g.
+// "75" for a $75 discount) — getItemAmount's sign flip is only for summing
+// into the invoice total, not for what the input displays.
+function getItemDisplayAmount(item) {
+  return Math.abs(getItemAmount(item));
 }
 function getItemLabel(item) {
   if (item.type === 'rate') return `Lease Rate (${item.days}d x ${fmtExact(item.rate)}/d)`;
@@ -767,7 +773,7 @@ function renderBreakdown() {
       <div class="payment-breakdown-row">
         <input type="checkbox" class="pb-checkbox" data-i="${i}" ${item.checked ? 'checked' : ''}>
         <div class="payment-breakdown-row__label" id="pb-label-${i}">${getItemLabel(item)}</div>
-        <input type="text" inputmode="decimal" class="pb-amount" id="pb-input-${i}" data-i="${i}" value="${getItemAmount(item)}">
+        <input type="text" inputmode="decimal" class="pb-amount" id="pb-input-${i}" data-i="${i}" value="${getItemDisplayAmount(item)}">
       </div>
     `).join('')}
   `;
@@ -809,7 +815,7 @@ function renderBreakdown() {
         inp.setSelectionRange(inp.value.length, inp.value.length);
       });
       inp.addEventListener('blur', () => {
-        inp.value = getItemAmount(item) || '';
+        inp.value = getItemDisplayAmount(item) || '';
       });
     }
   });
@@ -828,11 +834,16 @@ document.querySelectorAll('.rd-tab').forEach(tab => {
 // Checking a box or editing an amount in Invoice Adjustments only lives in
 // this page's memory until it's actually persisted — Send Invoice does that,
 // but it also texts the customer and advances their pipeline stage, which
-// isn't what you want for a purely internal correction (e.g. applying a
-// discount). This just saves the current total.
+// isn't what you want for a purely internal correction. This saves the
+// current total, plus the Discount amount specifically as its own stored
+// field so the checkbox reflects what was saved (checked, with its amount)
+// on the next reload instead of resetting to unchecked/0 — same pattern as
+// Admin/Travel/Insurance Fee already use.
 document.getElementById('rd-save-adjustments-btn').addEventListener('click', async () => {
   const total = getInvoiceTotal();
-  await api(`/api/applications/${id}`, { method: 'PATCH', body: JSON.stringify({ invoice_total: total }) });
+  const discountItem = paymentBreakdownItems.find(i => i.key === 'discount');
+  const discount = discountItem && discountItem.checked ? Number(discountItem.amount) || 0 : 0;
+  await api(`/api/applications/${id}`, { method: 'PATCH', body: JSON.stringify({ invoice_total: total, discount }) });
   await load();
 });
 
