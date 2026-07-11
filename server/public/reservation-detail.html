@@ -668,6 +668,7 @@ function initBreakdown() {
     { key: 'admin', type: 'amount', label: 'Admin Fee', amount: adminFeeAmount, checked: !!adminFeeAmount },
     { key: 'travel', type: 'amount', label: 'Travel Fee', amount: Number(booking.travel_fee) || 0, checked: !!booking.travel_fee },
     { key: 'insurancefee', type: 'amount', label: 'Insurance Fee', amount: insuranceFeeAmount, checked: !!insuranceFeeAmount },
+    { key: 'securitydeposit', type: 'amount', label: 'Security Deposit', amount: Number(booking.security_deposit) || 0, checked: !!booking.security_deposit },
     { key: 'misc', type: 'amount', label: 'Miscellaneous', amount: 0, checked: false },
     { key: 'tolls', type: 'amount', label: 'Tolls', amount: 0, checked: false },
     { key: 'discount', type: 'amount', label: 'Discount', amount: 0, checked: false, sign: -1 },
