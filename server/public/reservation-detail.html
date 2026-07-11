@@ -655,10 +655,19 @@ function initBreakdown() {
   // once at the end. Rounding the per-day rate first, then multiplying,
   // gave a different answer (off by a few cents) than the real invoice total.
   const dailyRate = (booking.weekly_rate || 0) / 7;
+  // Admin/insurance fees are daily rates x days; travel is a single flat fee.
+  // All three are added after tax, matching billing.js's computeCharge —
+  // they're real charges (not informational like Highway Tax), so they count
+  // toward the summed total below.
+  const adminFeeAmount = Math.round((Number(booking.admin_fee_rate) || 0) * days * 100) / 100;
+  const insuranceFeeAmount = Math.round((Number(booking.insurance_fee_rate) || 0) * days * 100) / 100;
   paymentBreakdownItems = [
     { key: 'daily', type: 'rate', days, rate: dailyRate, checked: true },
     { key: 'highway', type: 'amount', label: 'Highway Tax (8%, included in rate)', amount: 0, checked: true, informational: true },
     { key: 'sales', type: 'amount', label: 'Sales Tax (7.25%)', amount: 0, checked: true },
+    { key: 'admin', type: 'amount', label: 'Admin Fee', amount: adminFeeAmount, checked: !!adminFeeAmount },
+    { key: 'travel', type: 'amount', label: 'Travel Fee', amount: Number(booking.travel_fee) || 0, checked: !!booking.travel_fee },
+    { key: 'insurancefee', type: 'amount', label: 'Insurance Fee', amount: insuranceFeeAmount, checked: !!insuranceFeeAmount },
     { key: 'misc', type: 'amount', label: 'Miscellaneous', amount: 0, checked: false },
     { key: 'tolls', type: 'amount', label: 'Tolls', amount: 0, checked: false },
     { key: 'discount', type: 'amount', label: 'Discount', amount: 0, checked: false, sign: -1 },

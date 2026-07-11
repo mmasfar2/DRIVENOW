@@ -19,7 +19,14 @@ function computeCharge(row) {
       const dailyRate = row.weekly_rate / 7;
       const subtotal = Math.round(dailyRate * days * 100) / 100;
       const salesTax = Math.round(subtotal * SALES_TAX_RATE * 100) / 100;
-      return Math.round((subtotal + salesTax) * 100) / 100;
+      // Admin, travel, and insurance fees are added on top of the taxed
+      // rental total — they're not part of the lease rate and aren't
+      // themselves taxed. Admin and insurance are daily rates x days;
+      // travel is a single flat fee.
+      const adminFee = Math.round((Number(row.admin_fee_rate) || 0) * days * 100) / 100;
+      const travelFee = Math.round((Number(row.travel_fee) || 0) * 100) / 100;
+      const insuranceFee = Math.round((Number(row.insurance_fee_rate) || 0) * days * 100) / 100;
+      return Math.round((subtotal + salesTax + adminFee + travelFee + insuranceFee) * 100) / 100;
     }
   }
   return 0;
