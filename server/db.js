@@ -242,6 +242,15 @@ if (!existingCols.includes('notes')) {
 if (!existingCols.includes('zip_code')) {
   db.exec('ALTER TABLE applications ADD COLUMN zip_code TEXT');
 }
+if (!existingCols.includes('admin_fee_rate')) {
+  db.exec('ALTER TABLE applications ADD COLUMN admin_fee_rate REAL'); // daily rate
+}
+if (!existingCols.includes('travel_fee')) {
+  db.exec('ALTER TABLE applications ADD COLUMN travel_fee REAL'); // flat, one-time
+}
+if (!existingCols.includes('insurance_fee_rate')) {
+  db.exec('ALTER TABLE applications ADD COLUMN insurance_fee_rate REAL'); // daily rate
+}
 
 const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);
 if (!vehicleCols.includes('photo_path')) {
