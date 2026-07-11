@@ -3,6 +3,7 @@ const multer = require('multer');
 const { db, logUndo, getForfeitedDeposits } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
+const { computeRevenue } = require('../billing');
 
 const router = express.Router();
 
@@ -40,12 +41,14 @@ router.get('/:id', requireAuth, (req, res) => {
   const photos = db.prepare('SELECT * FROM vehicle_photos WHERE vehicle_id = ? ORDER BY created_at ASC').all(req.params.id);
   const maintenance = db.prepare('SELECT * FROM vehicle_maintenance WHERE vehicle_id = ? ORDER BY performed_at DESC').all(req.params.id);
 
-  // Revenue per booking is what was actually collected (payments table),
-  // not an untaxed rate x days estimate — matches the definition used
-  // everywhere else (Reservations, Metrics, Customer Profile), and excludes
-  // rejected applications that never became a real rental. Any forfeited
-  // security deposit tied to the booking counts toward revenue too, as of
-  // when it was resolved — held deposits stay excluded as a liability.
+  // Revenue per booking is the revenue-eligible share of what was actually
+  // collected (payments table) — the car's daily rate, travel fee, and admin
+  // fee only; sales tax, highway tax, insurance fee, and processing fee are
+  // excluded (see billing.js's computeRevenue). Matches the definition used
+  // everywhere else (Dashboard, Reports, Metrics), and excludes rejected
+  // applications that never became a real rental. Any forfeited security
+  // deposit tied to the booking counts toward revenue too, as of when it
+  // was resolved — held deposits stay excluded as a liability.
   const forfeitedByApp = new Map();
   getForfeitedDeposits().forEach(d => {
     if (d.vehicle_id !== Number(req.params.id)) return;
@@ -68,7 +71,7 @@ router.get('/:id', requireAuth, (req, res) => {
       pickup,
       dropoff,
       days,
-      revenue: Math.round((Number(a.paid_total) + (forfeitedByApp.get(a.id) || 0)) * 100) / 100,
+      revenue: Math.round((computeRevenue(a, a.paid_total) + (forfeitedByApp.get(a.id) || 0)) * 100) / 100,
     };
   });
 

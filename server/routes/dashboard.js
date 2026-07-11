@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, getForfeitedDeposits } = require('../db');
+const { db, getForfeitedDeposits, getRevenuePayments } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { computeOwed } = require('../billing');
 
@@ -31,10 +31,16 @@ router.get('/summary', requireAuth, (req, res) => {
   // Verification") and not by manual/walk-in bookings approved through
   // Reservations — those were previously invisible here.
   //
-  // Forfeited security deposits count as revenue too, as of when they were
-  // resolved (held deposits stay a liability and are excluded) — see
-  // getForfeitedDeposits in db.js, the single source every revenue figure
-  // reads from so a forfeiture shows up consistently everywhere.
+  // Not every dollar collected is revenue, though — sales tax, highway tax,
+  // insurance fee, and processing fee are pass-through/ancillary and are
+  // excluded (see getRevenuePayments in db.js, which weights each payment
+  // by its booking's revenue-eligible fraction — car rate, travel fee, and
+  // admin fee only). Forfeited security deposits count as revenue too, as
+  // of when they were resolved (held deposits stay a liability, excluded).
+  // Every revenue figure below reads from these same two queries so a
+  // forfeiture or a fee can't show up as revenue in one place and not
+  // another.
+  const revenuePayments = getRevenuePayments();
   const forfeitedDeposits = getForfeitedDeposits();
   const forfeitedTotal = forfeitedDeposits.reduce((sum, d) => sum + Number(d.forfeited_amount), 0);
   const sevenDaysAgoStr = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
@@ -42,10 +48,10 @@ router.get('/summary', requireAuth, (req, res) => {
     .filter(d => d.resolved_at >= sevenDaysAgoStr)
     .reduce((sum, d) => sum + Number(d.forfeited_amount), 0);
 
-  const totalRevenue = Math.round((db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM payments').get().total + forfeitedTotal) * 100) / 100;
-  const paidThisWeek = Math.round((db.prepare(`
-    SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE paid_at >= date('now', '-7 days')
-  `).get().total + forfeitedThisWeek) * 100) / 100;
+  const totalRevenue = Math.round((revenuePayments.reduce((sum, p) => sum + p.revenue, 0) + forfeitedTotal) * 100) / 100;
+  const paidThisWeek = Math.round((
+    revenuePayments.filter(p => p.paid_at >= sevenDaysAgoStr).reduce((sum, p) => sum + p.revenue, 0) + forfeitedThisWeek
+  ) * 100) / 100;
 
   // Pending/overdue invoices — net out payments already made (via billing.js's
   // computeOwed) instead of counting the full invoice_amount regardless of
@@ -86,9 +92,9 @@ router.get('/summary', requireAuth, (req, res) => {
   const forfeitedThisMonth = forfeitedDeposits
     .filter(d => d.resolved_at && d.resolved_at.slice(0, 7) === thisMonthStr)
     .reduce((sum, d) => sum + Number(d.forfeited_amount), 0);
-  const revenueThisMonth = Math.round((db.prepare(`
-    SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE strftime('%Y-%m', paid_at) = strftime('%Y-%m', 'now')
-  `).get().total + forfeitedThisMonth) * 100) / 100;
+  const revenueThisMonth = Math.round((
+    revenuePayments.filter(p => p.paid_at && p.paid_at.slice(0, 7) === thisMonthStr).reduce((sum, p) => sum + p.revenue, 0) + forfeitedThisMonth
+  ) * 100) / 100;
 
   const overdueIds = new Set(
     db.prepare(`
@@ -118,24 +124,24 @@ router.get('/summary', requireAuth, (req, res) => {
     WHERE strftime('%Y-%m', COALESCE(performed_at, created_at)) = strftime('%Y-%m', datetime('now', '-1 month'))
   `).get().total;
 
-  const monthlyPayments = db.prepare(`
-    SELECT strftime('%Y-%m', paid_at) as month, COALESCE(SUM(amount), 0) as total
-    FROM payments
-    WHERE paid_at >= date('now', '-12 months')
-    GROUP BY month ORDER BY month ASC
-  `).all();
   const twelveMonthsAgoStr = new Date(new Date().setMonth(new Date().getMonth() - 12)).toISOString().slice(0, 10);
+  const monthlyPaymentsMap = new Map();
+  revenuePayments.forEach(p => {
+    if (!p.paid_at || p.paid_at < twelveMonthsAgoStr) return;
+    const month = p.paid_at.slice(0, 7);
+    monthlyPaymentsMap.set(month, (monthlyPaymentsMap.get(month) || 0) + p.revenue);
+  });
   const forfeitedByMonth = new Map();
   forfeitedDeposits.forEach(d => {
     if (!d.resolved_at || d.resolved_at < twelveMonthsAgoStr) return;
     const month = d.resolved_at.slice(0, 7);
     forfeitedByMonth.set(month, (forfeitedByMonth.get(month) || 0) + Number(d.forfeited_amount));
   });
-  const monthSet = new Set([...monthlyPayments.map(r => r.month), ...forfeitedByMonth.keys()]);
+  const monthSet = new Set([...monthlyPaymentsMap.keys(), ...forfeitedByMonth.keys()]);
   const monthlyRevenue = [...monthSet].sort().map(month => {
-    const base = monthlyPayments.find(r => r.month === month);
+    const base = monthlyPaymentsMap.get(month) || 0;
     const forfeited = forfeitedByMonth.get(month) || 0;
-    return { month, total: Math.round(((base ? base.total : 0) + forfeited) * 100) / 100 };
+    return { month, total: Math.round((base + forfeited) * 100) / 100 };
   });
 
   const overdueList = overdueApps

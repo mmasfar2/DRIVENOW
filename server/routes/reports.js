@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, getForfeitedDeposits } = require('../db');
+const { db, getForfeitedDeposits, getRevenuePayments } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { SALES_TAX_RATE, computeCharge, computeOwed } = require('../billing');
 
@@ -53,7 +53,7 @@ function computeVehicleDays(from, to) {
 const REPORTS = {
   revenue_by_vehicle: {
     category: 'revenue', label: 'Revenue by Vehicle',
-    description: 'Payments collected per vehicle in the selected range, plus any security deposit amounts forfeited against that vehicle in range, less maintenance expense — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
+    description: 'The car\'s daily rate, travel fee, and admin fee actually collected per vehicle in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue), plus any deposit amounts forfeited against that vehicle in range, less maintenance expense — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
     hasDateRange: true,
     columns: [
       { key: 'vehicle', label: 'Vehicle' },
@@ -64,16 +64,16 @@ const REPORTS = {
       { key: 'profit', label: 'Profit', type: 'money' },
     ],
     run(from, to) {
-      const revenueRows = db.prepare(`
-        SELECT v.id, v.year, v.make, v.model, v.license_plate,
-               COUNT(DISTINCT p.application_id) as bookings,
-               COALESCE(SUM(p.amount), 0) as revenue
-        FROM vehicles v
-        LEFT JOIN applications a ON a.assigned_vehicle_id = v.id
-        LEFT JOIN payments p ON p.application_id = a.id AND substr(p.paid_at, 1, 10) BETWEEN ? AND ?
-        GROUP BY v.id
-        ORDER BY revenue DESC
-      `).all(from, to);
+      const vehicles = db.prepare('SELECT id, year, make, model, license_plate FROM vehicles').all();
+      const byVehicle = new Map();
+      getRevenuePayments().forEach(p => {
+        const d = p.paid_at ? p.paid_at.slice(0, 10) : null;
+        if (!d || d < from || d > to) return;
+        if (!byVehicle.has(p.vehicle_id)) byVehicle.set(p.vehicle_id, { revenue: 0, appIds: new Set() });
+        const entry = byVehicle.get(p.vehicle_id);
+        entry.revenue += p.revenue;
+        entry.appIds.add(p.application_id);
+      });
       const expenseByVehicle = new Map(db.prepare(`
         SELECT vehicle_id, COALESCE(SUM(cost), 0) as expense
         FROM vehicle_maintenance WHERE substr(performed_at, 1, 10) BETWEEN ? AND ?
@@ -84,20 +84,21 @@ const REPORTS = {
         if (!d.resolved_at || d.resolved_at.slice(0, 10) < from || d.resolved_at.slice(0, 10) > to) return;
         forfeitedByVehicle.set(d.vehicle_id, (forfeitedByVehicle.get(d.vehicle_id) || 0) + Number(d.forfeited_amount));
       });
-      return revenueRows.map(r => {
-        const revenue = round2(r.revenue + (forfeitedByVehicle.get(r.id) || 0));
-        const expense = round2(expenseByVehicle.get(r.id) || 0);
+      return vehicles.map(v => {
+        const entry = byVehicle.get(v.id);
+        const revenue = round2((entry ? entry.revenue : 0) + (forfeitedByVehicle.get(v.id) || 0));
+        const expense = round2(expenseByVehicle.get(v.id) || 0);
         return {
-          vehicle: `${r.year} ${r.make} ${r.model}`, license_plate: r.license_plate || '—',
-          bookings: r.bookings, revenue, expense, profit: round2(revenue - expense),
+          vehicle: `${v.year} ${v.make} ${v.model}`, license_plate: v.license_plate || '—',
+          bookings: entry ? entry.appIds.size : 0, revenue, expense, profit: round2(revenue - expense),
         };
-      });
+      }).sort((a, b) => b.revenue - a.revenue);
     },
   },
 
   revenue_by_time_period: {
     category: 'revenue', label: 'Revenue by Time Period',
-    description: 'Daily payments collected, plus any security deposit amounts forfeited that day, less maintenance expense logged that day — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
+    description: 'The car\'s daily rate, travel fee, and admin fee actually collected each day (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue), plus any security deposit amounts forfeited that day, less maintenance expense logged that day — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
     hasDateRange: true,
     columns: [
       { key: 'date', label: 'Date' },
@@ -107,12 +108,20 @@ const REPORTS = {
       { key: 'card_fees', label: 'Card Processing Fees', type: 'money' },
     ],
     run(from, to) {
-      const revenueByDay = new Map(db.prepare(`
-        SELECT substr(paid_at, 1, 10) as date, COALESCE(SUM(amount), 0) as revenue,
-               COALESCE(SUM(processing_fee), 0) as card_fees
+      const revenueByDay = new Map();
+      getRevenuePayments().forEach(p => {
+        const date = p.paid_at ? p.paid_at.slice(0, 10) : null;
+        if (!date || date < from || date > to) return;
+        revenueByDay.set(date, (revenueByDay.get(date) || 0) + p.revenue);
+      });
+      // Card processing fees (a card payment's own surcharge) are a
+      // separate, informational figure — not part of revenue-eligible
+      // amounts, just still shown here for the day it landed.
+      const cardFeesByDay = new Map(db.prepare(`
+        SELECT substr(paid_at, 1, 10) as date, COALESCE(SUM(processing_fee), 0) as card_fees
         FROM payments WHERE substr(paid_at, 1, 10) BETWEEN ? AND ?
         GROUP BY date
-      `).all(from, to).map(r => [r.date, r]));
+      `).all(from, to).map(r => [r.date, r.card_fees]));
       const expenseByDay = new Map(db.prepare(`
         SELECT substr(performed_at, 1, 10) as date, COALESCE(SUM(cost), 0) as expense
         FROM vehicle_maintenance WHERE substr(performed_at, 1, 10) BETWEEN ? AND ?
@@ -126,11 +135,11 @@ const REPORTS = {
       });
       const days = new Set([...revenueByDay.keys(), ...expenseByDay.keys(), ...forfeitedByDay.keys()]);
       return [...days].sort().map(date => {
-        const revenue = round2((revenueByDay.get(date)?.revenue || 0) + (forfeitedByDay.get(date) || 0));
+        const revenue = round2((revenueByDay.get(date) || 0) + (forfeitedByDay.get(date) || 0));
         const expense = round2(expenseByDay.get(date) || 0);
         return {
           date, revenue, expense, profit: round2(revenue - expense),
-          card_fees: round2(revenueByDay.get(date)?.card_fees || 0),
+          card_fees: round2(cardFeesByDay.get(date) || 0),
         };
       });
     },
