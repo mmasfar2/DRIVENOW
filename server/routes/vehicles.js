@@ -46,8 +46,8 @@ router.get('/:id', requireAuth, (req, res) => {
   // getAccruedRevenueDays in db.js). Matches the definition used everywhere
   // else (Dashboard, Reports), and excludes rejected applications that
   // never became a real rental. Any forfeited security deposit tied to the
-  // booking counts toward revenue too, as of the day it was checked in —
-  // held deposits stay excluded as a liability.
+  // booking counts toward revenue too, as of the day it was actually
+  // forfeited — held deposits stay excluded as a liability.
   const forfeitedByApp = new Map();
   getForfeitedDeposits().forEach(d => {
     if (d.vehicle_id !== Number(req.params.id)) return;
