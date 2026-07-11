@@ -26,8 +26,7 @@ function computeCharge(row) {
       const adminFee = Math.round((Number(row.admin_fee_rate) || 0) * days * 100) / 100;
       const travelFee = Math.round((Number(row.travel_fee) || 0) * 100) / 100;
       const insuranceFee = Math.round((Number(row.insurance_fee_rate) || 0) * days * 100) / 100;
-      const securityDeposit = Math.round((Number(row.security_deposit) || 0) * 100) / 100;
-      return Math.round((subtotal + salesTax + adminFee + travelFee + insuranceFee + securityDeposit) * 100) / 100;
+      return Math.round((subtotal + salesTax + adminFee + travelFee + insuranceFee) * 100) / 100;
     }
   }
   return 0;
