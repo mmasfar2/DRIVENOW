@@ -748,14 +748,14 @@ async function openPaymentModal(bookingId) {
   // few cents off the real invoice total.
   const dailyRate = weeklyRate / 7;
   // Admin/insurance fees are daily rates x days; travel is a single flat fee.
-  // Real charges (not informational like Highway Tax), so they count toward
-  // the summed invoice total — matches billing.js's computeCharge.
+  // Real charges, so they count toward the summed invoice total — matches
+  // billing.js's computeCharge (Highway Tax included).
   const adminFeeAmount = Math.round((Number(paymentBooking.admin_fee_rate) || 0) * days * 100) / 100;
   const insuranceFeeAmount = Math.round((Number(paymentBooking.insurance_fee_rate) || 0) * days * 100) / 100;
 
   paymentBreakdownItems = [
     { key: 'daily', type: 'rate', days, rate: dailyRate, checked: true },
-    { key: 'highway', type: 'amount', label: 'Highway Tax (8%, included in rate)', amount: 0, checked: true, informational: true },
+    { key: 'highway', type: 'amount', label: 'Highway Tax (8%)', amount: 0, checked: true },
     { key: 'sales', type: 'amount', label: 'Sales Tax (7.25%)', amount: 0, checked: true },
     { key: 'admin', type: 'amount', label: 'Admin Fee', amount: adminFeeAmount, checked: !!adminFeeAmount },
     { key: 'travel', type: 'amount', label: 'Travel Fee', amount: Number(paymentBooking.travel_fee) || 0, checked: !!paymentBooking.travel_fee },
@@ -795,9 +795,6 @@ function recalcTaxes() {
 }
 
 function getInvoiceTotal() {
-  // Highway tax is "included in rate" — already inside the lease-rate subtotal,
-  // shown for informational breakdown only, so it must stay excluded here or
-  // it gets double-counted on top of the subtotal that already contains it.
   return Math.round(paymentBreakdownItems.filter(i => i.checked && !i.informational).reduce((sum, i) => sum + getItemAmount(i), 0) * 100) / 100;
 }
 
@@ -1010,9 +1007,8 @@ function initNewReservationModal() {
 
   // Weekly estimate for the vehicle-selection step: daily rate x 7 as the
   // base, then sales tax and highway tax each calculated on that base and
-  // added on top (all three summed) — deliberately different from the
-  // Invoice Preview on the Dates step, which excludes Highway Tax from the
-  // total since it's informational/included-in-rate there.
+  // added on top (all three summed) — same treatment as the Invoice Preview
+  // on the Dates step, which also adds Highway Tax to the total.
   function computeWeeklyEstimate(dailyRate) {
     const weeklyBase = Math.round(dailyRate * 7 * 100) / 100;
     const salesTax = Math.round(weeklyBase * SALES_TAX_RATE * 100) / 100;
@@ -1164,7 +1160,7 @@ function initNewReservationModal() {
               <input class="pb-amount" value="${pricing.subtotal.toFixed(2)}" disabled>
             </div>
             <div class="invoice-preview-cell">
-              <div class="payment-breakdown-row__label">Highway Tax (8%, included in rate)</div>
+              <div class="payment-breakdown-row__label">Highway Tax (8%)</div>
               <input class="pb-amount" value="${pricing.highwayTax.toFixed(2)}" disabled>
             </div>
             <div class="invoice-preview-cell">
@@ -1742,7 +1738,7 @@ function initNewReservationModal() {
     const dailyRateExact = form.weekly_rate ? form.weekly_rate / 7 : 0;
     const dailyRate = Math.round(dailyRateExact * 100) / 100; // display only
     const subtotal = Math.round(dailyRateExact * days * 100) / 100;
-    const highwayTax = Math.round(subtotal * HIGHWAY_TAX_RATE * 100) / 100; // informational only, not added to total
+    const highwayTax = Math.round(subtotal * HIGHWAY_TAX_RATE * 100) / 100; // a real charge, added to the total below
     const salesTax = Math.round(subtotal * 0.0725 * 100) / 100;
     // Admin, travel, and insurance fees are added on top of the taxed rental
     // total — not taxed themselves. Admin/insurance are entered as a daily
@@ -1754,7 +1750,7 @@ function initNewReservationModal() {
     const insuranceFee = Math.round(insuranceFeeRate * days * 100) / 100;
     // Processing fee is a flat 2.75% of the invoice as it stands before the
     // fee itself (not compounding on its own amount), only when checked.
-    const preProcessingTotal = subtotal + salesTax + adminFee + travelFee + insuranceFee;
+    const preProcessingTotal = subtotal + highwayTax + salesTax + adminFee + travelFee + insuranceFee;
     const processingFee = form.processing_fee_checked ? Math.round(preProcessingTotal * PROCESSING_FEE_RATE * 100) / 100 : 0;
     const total = Math.round((preProcessingTotal + processingFee) * 100) / 100;
     // Security deposit is a refundable liability, not revenue — held
@@ -1779,7 +1775,7 @@ function initNewReservationModal() {
       return;
     }
 
-    const { days, dailyRate, subtotal, salesTax, adminFee, travelFee, insuranceFee, processingFee, securityDeposit, total } = computePricing();
+    const { days, dailyRate, subtotal, highwayTax, salesTax, adminFee, travelFee, insuranceFee, processingFee, securityDeposit, total } = computePricing();
     form.total_due_at_pickup = total;
     const steps = getSteps();
     const jump = (key) => { const i = steps.indexOf(key); if (i !== -1) { step = i + 1; renderStep(); } };
@@ -1811,6 +1807,7 @@ function initNewReservationModal() {
         <div class="resv-review-panel__body">
           <div class="resv-review-row"><span>Vehicle Rental (${days} day${days === 1 ? '' : 's'})</span><span>${fmtExact(subtotal)}</span></div>
           <div class="resv-review-row" style="font-size:0.78rem;color:#888;"><span>~${fmtExact(dailyRate)}/day average</span><span></span></div>
+          <div class="resv-review-row"><span>Highway Tax (8%)</span><span>${fmtExact(highwayTax)}</span></div>
           <div class="resv-review-row"><span>Sales Tax (7.25%)</span><span>${fmtExact(salesTax)}</span></div>
           ${adminFee ? `<div class="resv-review-row"><span>Admin Fee</span><span>${fmtExact(adminFee)}</span></div>` : ''}
           ${travelFee ? `<div class="resv-review-row"><span>Travel Fee</span><span>${fmtExact(travelFee)}</span></div>` : ''}

@@ -2,6 +2,7 @@ const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const { DATA_DIR } = require('./paths');
+const { computeCharge, computeRevenueEligible } = require('./billing');
 
 const db = new Database(path.join(DATA_DIR, 'data.db'));
 db.pragma('journal_mode = WAL');
@@ -636,6 +637,31 @@ function getForfeitedDeposits() {
   `).all();
 }
 
+// Every payment recorded is cash actually collected, but not all of it is
+// revenue — sales tax, highway tax, insurance fee, and processing fee are
+// pass-through/ancillary charges (see billing.js's computeRevenueEligible).
+// This attaches each payment's revenue-eligible share to it, at whatever
+// fraction of that booking's full charge is revenue-eligible, so a payment
+// toward a partially-taxed/fee-laden invoice only counts its rent+travel+
+// admin portion. Every revenue figure in the dashboard/reports/Vehicle
+// Detail reads from this single query so they can't drift apart.
+function getRevenuePayments() {
+  const rows = db.prepare(`
+    SELECT p.id, p.application_id, p.amount, p.paid_at, a.assigned_vehicle_id as vehicle_id,
+           a.pickup_scheduled_at, a.rental_end_at, a.weekly_rate, a.admin_fee_rate, a.travel_fee,
+           a.insurance_fee_rate, a.processing_fee, a.invoice_amount, a.total_due_at_pickup
+    FROM payments p JOIN applications a ON a.id = p.application_id
+  `).all();
+  return rows.map(r => {
+    const charge = computeCharge(r);
+    const fraction = charge > 0 ? computeRevenueEligible(r) / charge : 0;
+    return {
+      id: r.id, application_id: r.application_id, vehicle_id: r.vehicle_id, paid_at: r.paid_at,
+      revenue: Math.round(Number(r.amount) * fraction * 100) / 100,
+    };
+  });
+}
+
 function logActivity(applicationId, message) {
   db.prepare('INSERT INTO activity_log (application_id, message) VALUES (?, ?)').run(applicationId, message);
 }
@@ -645,4 +671,4 @@ function queueMessage(applicationId, channel, to, body) {
     .run(applicationId, channel, to, body);
 }
 
-module.exports = { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo, getForfeitedDeposits };
+module.exports = { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo, getForfeitedDeposits, getRevenuePayments };

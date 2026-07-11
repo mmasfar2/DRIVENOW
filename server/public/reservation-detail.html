@@ -382,17 +382,20 @@ function render() {
   const weeklyRate = booking.weekly_rate || 0;
   const dailyRateExact = weeklyRate / 7;
   const subtotal = Math.round(dailyRateExact * days * 100) / 100;
+  const highwayTax = Math.round(subtotal * HIGHWAY_TAX_RATE * 100) / 100;
   const salesTax = Math.round(subtotal * SALES_TAX_RATE * 100) / 100;
   // Total/Balance come straight from the server (booking.charge/booking.owed)
   // rather than being recomputed here, so this panel can never show a
   // different number than the Financials tab or the Reservations list — the
-  // Lease Rate/Sales Tax rows below are just an informational breakdown of
-  // the current rate x dates, which may differ from Total once an invoice
-  // has actually been sent and frozen.
+  // Lease Rate/Highway Tax/Sales Tax rows below are just an informational
+  // breakdown of the current rate x dates, which may differ from Total once
+  // an invoice has actually been sent and frozen (or Admin/Travel/Insurance/
+  // Processing Fee are set — those only show on the Financials tab).
   const bal = balanceDisplay(booking.owed);
 
   document.getElementById('rd-charges').innerHTML = `
     <div class="rd-charge-row"><span>Lease Rate (${days}d x ${fmtExact(Math.round(dailyRateExact * 100) / 100)}/d)</span><span>${fmtExact(subtotal)}</span></div>
+    <div class="rd-charge-row"><span>Highway Tax (8%)</span><span>${fmtExact(highwayTax)}</span></div>
     <div class="rd-charge-row"><span>Sales Tax (7.25%)</span><span>${fmtExact(salesTax)}</span></div>
     <div class="rd-charge-row--total"><span>Total</span><span>${fmtExact(booking.charge)}</span></div>
     <div class="rd-charge-row--collected"><span>Collected</span><span>${fmtExact(booking.paid_total)}</span></div>
@@ -668,15 +671,15 @@ function initBreakdown() {
   const dailyRate = (booking.weekly_rate || 0) / 7;
   // Admin/insurance fees are daily rates x days; travel is a single flat fee.
   // All three are added after tax, matching billing.js's computeCharge —
-  // they're real charges (not informational like Highway Tax), so they count
-  // toward the summed total below. Admin/Insurance use 'dayrate' (like Lease
-  // Rate) so their box holds the extended total while the per-day rate they
-  // were entered as shows in the label.
+  // real charges that count toward the summed total below (Highway Tax now
+  // does too). Admin/Insurance use 'dayrate' (like Lease Rate) so their box
+  // holds the extended total while the per-day rate they were entered as
+  // shows in the label.
   const adminFeeAmount = Math.round((Number(booking.admin_fee_rate) || 0) * days * 100) / 100;
   const insuranceFeeAmount = Math.round((Number(booking.insurance_fee_rate) || 0) * days * 100) / 100;
   paymentBreakdownItems = [
     { key: 'daily', type: 'rate', days, rate: dailyRate, checked: true },
-    { key: 'highway', type: 'amount', label: 'Highway Tax (8%, included in rate)', amount: 0, checked: true, informational: true },
+    { key: 'highway', type: 'amount', label: 'Highway Tax (8%)', amount: 0, checked: true },
     { key: 'sales', type: 'amount', label: 'Sales Tax (7.25%)', amount: 0, checked: true },
     { key: 'admin', type: 'dayrate', label: 'Admin Fee', days, rate: Number(booking.admin_fee_rate) || 0, checked: !!adminFeeAmount },
     { key: 'travel', type: 'amount', label: 'Travel Fee', amount: Number(booking.travel_fee) || 0, checked: !!booking.travel_fee },
@@ -709,9 +712,8 @@ function recalcTaxes() {
   const highway = paymentBreakdownItems.find(i => i.key === 'highway');
   const sales = paymentBreakdownItems.find(i => i.key === 'sales');
   const subtotal = getItemAmount(daily);
-  // Highway tax is informational (shown for breakdown only) — it stays
-  // excluded from the summed invoice total below either way, but the
-  // displayed amount itself is a straight 8% of the lease-rate subtotal,
+  // Highway tax is a real charge, counted in the summed invoice total below —
+  // the displayed amount is a straight 8% of the lease-rate subtotal,
   // matching how Sales Tax is calculated (not backed out of a tax-inclusive
   // total).
   highway.amount = Math.round(subtotal * HIGHWAY_TAX_RATE * 100) / 100;
