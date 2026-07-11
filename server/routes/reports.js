@@ -53,7 +53,7 @@ function computeVehicleDays(from, to) {
 const REPORTS = {
   revenue_by_vehicle: {
     category: 'revenue', label: 'Revenue by Vehicle',
-    description: 'The car\'s daily rate, travel fee, and admin fee, accrued day-by-day across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged. Plus any deposit amounts forfeited against that vehicle, counted as of the day the booking was checked in. Less maintenance expense — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
+    description: 'The car\'s daily rate, travel fee, and admin fee, accrued day-by-day across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged. Plus any deposit amounts forfeited against that vehicle, counted as of the day they were forfeited. Less maintenance expense — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
     hasDateRange: true,
     columns: [
       { key: 'vehicle', label: 'Vehicle' },
@@ -97,7 +97,7 @@ const REPORTS = {
 
   revenue_by_time_period: {
     category: 'revenue', label: 'Revenue by Time Period',
-    description: 'The car\'s daily rate, travel fee, and admin fee, accrued on the actual calendar day of the rental it applies to (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not the day a payment against it happened to be logged. Plus any security deposit amounts forfeited, counted as of the day that booking was checked in. Less maintenance expense logged that day — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
+    description: 'The car\'s daily rate, travel fee, and admin fee, accrued on the actual calendar day of the rental it applies to (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not the day a payment against it happened to be logged. Plus any security deposit amounts forfeited, counted as of the day they were forfeited. Less maintenance expense logged that day — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
     hasDateRange: true,
     columns: [
       { key: 'date', label: 'Date' },
