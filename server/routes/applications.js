@@ -417,7 +417,6 @@ router.post('/:id/deposits/:depositId/resolve', requireAuth, (req, res) => {
   const id = req.params.id;
   const deposit = db.prepare('SELECT * FROM deposits WHERE id = ? AND application_id = ?').get(req.params.depositId, id);
   if (!deposit) return res.status(404).json({ error: 'Not found' });
-  if (deposit.status !== 'held') return res.status(400).json({ error: 'Deposit already resolved' });
 
   const refund = Math.max(0, Number(refund_amount) || 0);
   const forfeit = Math.max(0, Number(forfeit_amount) || 0);
@@ -425,6 +424,12 @@ router.post('/:id/deposits/:depositId/resolve', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Refund + forfeited amount must equal the deposit amount' });
   }
 
+  // Callable again on an already-resolved deposit — lets the front desk
+  // correct/adjust a prior refund-vs-forfeit split (e.g. after double-clicking
+  // it) instead of being locked in after the first resolution. resolved_at
+  // moves to now each time, so revenue reports attribute the forfeited
+  // portion to whenever it was last actually decided.
+  const wasHeld = deposit.status === 'held';
   const resolvedAt = resolved_at || new Date().toISOString().slice(0, 10);
   db.prepare(`
     UPDATE deposits SET status = 'resolved', refunded_amount = ?, forfeited_amount = ?, resolved_at = ?, notes = ?
@@ -432,10 +437,11 @@ router.post('/:id/deposits/:depositId/resolve', requireAuth, (req, res) => {
   `).run(refund, forfeit, resolvedAt, notes || null, deposit.id);
 
   // Forfeited amounts are booked as their own revenue category (see
-  // /api/metrics/cashflow's depositForfeitures) rather than inserted into
-  // `payments`, since `payments` also drives the booking's rent balance —
-  // a forfeiture isn't rent and shouldn't shrink what the customer owes.
-  logActivity(id, `Security deposit resolved — refunded $${refund}${forfeit ? `, forfeited $${forfeit}` : ''}`);
+  // computeForfeitedDeposits in db.js, used by the dashboard, reports, and
+  // Vehicle Detail) rather than inserted into `payments`, since `payments`
+  // also drives the booking's rent balance — a forfeiture isn't rent and
+  // shouldn't shrink what the customer owes.
+  logActivity(id, `Security deposit ${wasHeld ? 'resolved' : 'adjusted'} — refunded $${refund}${forfeit ? `, forfeited $${forfeit}` : ''}`);
   res.json({ ok: true });
 });
 
