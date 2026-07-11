@@ -500,9 +500,12 @@ router.patch('/:id', requireAuth, (req, res) => {
       params.push(req.body[key]);
     }
   }
-  if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update' });
-  params.push(req.params.id);
-  db.prepare(`UPDATE applications SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...params);
+  const hasInvoiceTotal = req.body.invoice_total !== undefined;
+  if (updates.length === 0 && !hasInvoiceTotal) return res.status(400).json({ error: 'No valid fields to update' });
+  if (updates.length > 0) {
+    params.push(req.params.id);
+    db.prepare(`UPDATE applications SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...params);
+  }
 
   // Changing the pickup or return date changes how much is owed — recompute
   // the exact charge from billing.js's computeCharge (the same formula used
@@ -530,6 +533,19 @@ router.patch('/:id', requireAuth, (req, res) => {
       }
       logActivity(id, `Reservation dates updated (${app.pickup_scheduled_at} → ${app.rental_end_at}) — balance recalculated to $${total}`);
     }
+  }
+
+  // The Financials tab's Invoice Adjustments panel has its own "Save
+  // Adjustments" action, separate from "Send Invoice" — that one also texts
+  // the customer and advances their pipeline stage, which isn't wanted for
+  // a purely internal correction (e.g. applying a Discount checkbox). This
+  // just persists whatever total the checked/edited rows currently add up
+  // to, the same way a date change recomputes and persists a new total.
+  if (hasInvoiceTotal) {
+    const id = req.params.id;
+    const total = Math.round(Number(req.body.invoice_total) * 100) / 100;
+    db.prepare('UPDATE applications SET total_due_at_pickup = ?, invoice_amount = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(total, total, id);
+    logActivity(id, `Invoice adjustments saved — total set to $${total}`);
   }
 
   res.json({ ok: true });

@@ -108,6 +108,7 @@
       <div id="rd-fees-summary" style="font-size:0.82rem;color:#888;margin-top:8px;"></div>
       <div id="rd-rate-breakdown" class="payment-rate-breakdown"></div>
       <div class="payment-log-actions">
+        <button class="btn btn-outline" id="rd-save-adjustments-btn">Save Adjustments</button>
         <button class="btn btn-outline" id="rd-send-invoice-btn">Send Invoice</button>
         <button class="btn" id="rd-add-payment-btn">Add Payment</button>
       </div>
@@ -822,6 +823,17 @@ document.querySelectorAll('.rd-tab').forEach(tab => {
       document.getElementById(`rd-panel-${name}`).style.display = name === tab.dataset.tab ? '' : 'none';
     });
   });
+});
+
+// Checking a box or editing an amount in Invoice Adjustments only lives in
+// this page's memory until it's actually persisted — Send Invoice does that,
+// but it also texts the customer and advances their pipeline stage, which
+// isn't what you want for a purely internal correction (e.g. applying a
+// discount). This just saves the current total.
+document.getElementById('rd-save-adjustments-btn').addEventListener('click', async () => {
+  const total = getInvoiceTotal();
+  await api(`/api/applications/${id}`, { method: 'PATCH', body: JSON.stringify({ invoice_total: total }) });
+  await load();
 });
 
 document.getElementById('rd-send-invoice-btn').addEventListener('click', async () => {
