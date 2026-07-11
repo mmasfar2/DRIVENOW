@@ -252,7 +252,15 @@ if (!existingCols.includes('insurance_fee_rate')) {
   db.exec('ALTER TABLE applications ADD COLUMN insurance_fee_rate REAL'); // daily rate
 }
 if (!existingCols.includes('security_deposit')) {
-  db.exec('ALTER TABLE applications ADD COLUMN security_deposit REAL'); // flat, one-time
+  // Not a fee — an amount to collect and hold as a refundable liability at
+  // pickup. If set when a booking is created, a `deposits` row is seeded
+  // automatically (see POST /manual-booking) so it shows up in the
+  // reservation's Security Deposit panel ready to resolve, without the front
+  // desk having to separately click "Collect Deposit" after the fact.
+  db.exec('ALTER TABLE applications ADD COLUMN security_deposit REAL');
+}
+if (!existingCols.includes('processing_fee')) {
+  db.exec('ALTER TABLE applications ADD COLUMN processing_fee REAL'); // flat, one-time — 2.75% of the invoice when enabled
 }
 
 const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);

@@ -730,6 +730,7 @@ let paymentLog = [];
 let paymentBreakdownItems = [];
 const HIGHWAY_TAX_RATE = 0.08;
 const SALES_TAX_RATE = 0.0725;
+const PROCESSING_FEE_RATE = 0.0275;
 
 async function openPaymentModal(bookingId) {
   paymentBooking = bookings.find(b => b.id === bookingId);
@@ -759,6 +760,7 @@ async function openPaymentModal(bookingId) {
     { key: 'admin', type: 'amount', label: 'Admin Fee', amount: adminFeeAmount, checked: !!adminFeeAmount },
     { key: 'travel', type: 'amount', label: 'Travel Fee', amount: Number(paymentBooking.travel_fee) || 0, checked: !!paymentBooking.travel_fee },
     { key: 'insurancefee', type: 'amount', label: 'Insurance Fee', amount: insuranceFeeAmount, checked: !!insuranceFeeAmount },
+    { key: 'processingfee', type: 'amount', label: 'Processing Fee (2.75%)', amount: Number(paymentBooking.processing_fee) || 0, checked: !!paymentBooking.processing_fee },
   ];
   recalcTaxes();
 
@@ -989,6 +991,7 @@ function initNewReservationModal() {
     pickup_scheduled_at: '', rental_end_at: '', pickup_time: '10:00 AM', return_time: '10:00 AM',
     assigned_vehicle_id: null, weekly_rate: null, total_due_at_pickup: '',
     admin_fee_rate: '', travel_fee: '', insurance_fee_rate: '',
+    processing_fee_checked: false, security_deposit: '',
     customer_mode: 'existing', first_name: '', last_name: '', phone: '', email: '',
     dob: '', license_number: '', address: '',
     license_file: null, insurance_private_file: null, insurance_policy_file: null,
@@ -1180,6 +1183,23 @@ function initNewReservationModal() {
               <div class="payment-breakdown-row__label">Insurance Fee (${fmtExact(pricing.insuranceFeeRate)}/d x ${days}d)</div>
               <input class="pb-amount" id="fee-insurance-input" inputmode="decimal" value="${insuranceFeeFocused ? form.insurance_fee_rate : (pricing.insuranceFee ? pricing.insuranceFee.toFixed(2) : '')}" placeholder="0.00">
             </div>
+            <div class="invoice-preview-cell">
+              <div class="payment-breakdown-row__label">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                  <input type="checkbox" id="fee-processing-checkbox" ${form.processing_fee_checked ? 'checked' : ''}>
+                  Processing Fee (2.75%)
+                </label>
+              </div>
+              <input class="pb-amount" value="${pricing.processingFee.toFixed(2)}" disabled>
+            </div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top:16px;padding:16px;">
+          <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);margin-bottom:4px;">Security Deposit</div>
+          <div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:12px;">Refundable — collected and held separately, not part of the invoice total above.</div>
+          <div class="invoice-preview-cell" style="max-width:220px;">
+            <div class="payment-breakdown-row__label">Deposit Amount</div>
+            <input class="pb-amount" id="fee-security-input" inputmode="decimal" value="${form.security_deposit}" placeholder="0.00">
           </div>
         </div>
       ` : ''}
@@ -1202,6 +1222,7 @@ function initNewReservationModal() {
         { id: 'fee-admin-input', key: 'admin_fee_rate', focusKey: 'admin' },
         { id: 'fee-travel-input', key: 'travel_fee', focusKey: null },
         { id: 'fee-insurance-input', key: 'insurance_fee_rate', focusKey: 'insurance' },
+        { id: 'fee-security-input', key: 'security_deposit', focusKey: null },
       ];
       feeInputs.forEach(({ id, key, focusKey }) => {
         document.getElementById(id).addEventListener('input', (e) => {
@@ -1239,6 +1260,10 @@ function initNewReservationModal() {
           const totalEl = body.querySelector('.payment-breakdown-header div:last-child');
           if (totalEl) totalEl.textContent = `Invoice Total: ${fmtMoney(p.total)}`;
         });
+      });
+      document.getElementById('fee-processing-checkbox').addEventListener('change', (e) => {
+        form.processing_fee_checked = e.target.checked;
+        renderStep();
       });
     }
 
@@ -1727,8 +1752,15 @@ function initNewReservationModal() {
     const travelFee = Math.round((Number(form.travel_fee) || 0) * 100) / 100;
     const insuranceFeeRate = Number(form.insurance_fee_rate) || 0;
     const insuranceFee = Math.round(insuranceFeeRate * days * 100) / 100;
-    const total = Math.round((subtotal + salesTax + adminFee + travelFee + insuranceFee) * 100) / 100;
-    return { days, dailyRate, subtotal, highwayTax, salesTax, adminFeeRate, adminFee, travelFee, insuranceFeeRate, insuranceFee, total };
+    // Processing fee is a flat 2.75% of the invoice as it stands before the
+    // fee itself (not compounding on its own amount), only when checked.
+    const preProcessingTotal = subtotal + salesTax + adminFee + travelFee + insuranceFee;
+    const processingFee = form.processing_fee_checked ? Math.round(preProcessingTotal * PROCESSING_FEE_RATE * 100) / 100 : 0;
+    const total = Math.round((preProcessingTotal + processingFee) * 100) / 100;
+    // Security deposit is a refundable liability, not revenue — held
+    // separately from the invoice total, same as everywhere else in the app.
+    const securityDeposit = Math.round((Number(form.security_deposit) || 0) * 100) / 100;
+    return { days, dailyRate, subtotal, highwayTax, salesTax, adminFeeRate, adminFee, travelFee, insuranceFeeRate, insuranceFee, processingFee, securityDeposit, total };
   }
 
   function renderReviewStep() {
@@ -1747,7 +1779,7 @@ function initNewReservationModal() {
       return;
     }
 
-    const { days, dailyRate, subtotal, salesTax, adminFee, travelFee, insuranceFee, total } = computePricing();
+    const { days, dailyRate, subtotal, salesTax, adminFee, travelFee, insuranceFee, processingFee, securityDeposit, total } = computePricing();
     form.total_due_at_pickup = total;
     const steps = getSteps();
     const jump = (key) => { const i = steps.indexOf(key); if (i !== -1) { step = i + 1; renderStep(); } };
@@ -1783,9 +1815,18 @@ function initNewReservationModal() {
           ${adminFee ? `<div class="resv-review-row"><span>Admin Fee</span><span>${fmtExact(adminFee)}</span></div>` : ''}
           ${travelFee ? `<div class="resv-review-row"><span>Travel Fee</span><span>${fmtExact(travelFee)}</span></div>` : ''}
           ${insuranceFee ? `<div class="resv-review-row"><span>Insurance Fee</span><span>${fmtExact(insuranceFee)}</span></div>` : ''}
+          ${processingFee ? `<div class="resv-review-row"><span>Processing Fee (2.75%)</span><span>${fmtExact(processingFee)}</span></div>` : ''}
           <div class="resv-review-row--total"><span>Total</span><span>${fmtExact(total)}</span></div>
         </div>
       </div>
+      ${securityDeposit ? `
+        <div class="resv-review-panel">
+          <div class="resv-review-panel__head"><span>Security Deposit</span></div>
+          <div class="resv-review-panel__body">
+            <div class="resv-review-row"><span>Deposit (refundable, held separately)</span><span>${fmtExact(securityDeposit)}</span></div>
+          </div>
+        </div>
+      ` : ''}
     `;
     document.getElementById('rv-edit-dates').addEventListener('click', () => jump('dates'));
     document.getElementById('rv-edit-dates2').addEventListener('click', () => jump('dates'));
@@ -1812,6 +1853,7 @@ function initNewReservationModal() {
     Object.assign(form, {
       source, pickup_scheduled_at: '', rental_end_at: '', pickup_time: '10:00 AM', return_time: '10:00 AM', assigned_vehicle_id: null, weekly_rate: null,
       total_due_at_pickup: '', admin_fee_rate: '', travel_fee: '', insurance_fee_rate: '',
+      processing_fee_checked: false, security_deposit: '',
       customer_mode: 'existing', first_name: '', last_name: '', phone: '', email: '',
       dob: '', license_number: '', address: '', city: '', state: '', zip_code: '', license_file: null,
       insurance_type: null, insurance_private_file: null, insurance_policy_file: null,
@@ -1856,9 +1898,15 @@ function initNewReservationModal() {
 
     nextBtn.disabled = true;
     try {
+      // processing_fee is stored as a flat dollar amount (like travel_fee),
+      // computed once here from the checkbox rather than recomputed live —
+      // same reasoning as billing.js's computeCharge: it shouldn't compound
+      // on itself or drift if other fees change after the booking exists.
+      form.processing_fee = computePricing().processingFee || '';
+
       const fd = new FormData();
       ['source', 'pickup_scheduled_at', 'rental_end_at', 'assigned_vehicle_id', 'weekly_rate',
-       'total_due_at_pickup', 'admin_fee_rate', 'travel_fee', 'insurance_fee_rate',
+       'total_due_at_pickup', 'admin_fee_rate', 'travel_fee', 'insurance_fee_rate', 'processing_fee', 'security_deposit',
        'first_name', 'last_name', 'phone', 'email', 'dob', 'license_number', 'address',
        'city', 'state', 'zip_code', 'insurance_carrier', 'insurance_policy_number', 'insurance_coverage_type']
         .forEach(k => fd.append(k, form[k] ?? ''));
