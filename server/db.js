@@ -263,6 +263,12 @@ if (!existingCols.includes('security_deposit')) {
 if (!existingCols.includes('processing_fee')) {
   db.exec('ALTER TABLE applications ADD COLUMN processing_fee REAL'); // flat, one-time — 2.75% of the invoice when enabled
 }
+if (!existingCols.includes('discount')) {
+  // Stored (not session-only) so the Financials tab's Discount checkbox
+  // reflects what was actually saved instead of resetting to unchecked/0 on
+  // every reload — a positive dollar amount, subtracted from the charge.
+  db.exec('ALTER TABLE applications ADD COLUMN discount REAL');
+}
 
 const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);
 if (!vehicleCols.includes('photo_path')) {
