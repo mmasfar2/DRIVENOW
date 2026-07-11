@@ -678,7 +678,7 @@ router.delete('/:id', requireAuth, (req, res) => {
 router.get('/bookings/all', requireAuth, (req, res) => {
   const rows = db.prepare(`
     SELECT a.id, a.email, a.weekly_rate, a.total_due_at_pickup,
-           a.admin_fee_rate, a.travel_fee, a.insurance_fee_rate,
+           a.admin_fee_rate, a.travel_fee, a.insurance_fee_rate, a.processing_fee,
            a.payment_status, a.invoice_amount, a.invoice_sent_at, a.pickup_scheduled_at, a.rental_end_at, a.status, a.updated_at,
            v.id as vehicle_id, v.make, v.model, v.year, v.status as vehicle_status,
            COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.application_id = a.id), 0) as paid_total,
@@ -753,7 +753,7 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
   const {
     first_name, last_name, phone, email,
     assigned_vehicle_id, weekly_rate, total_due_at_pickup,
-    admin_fee_rate, travel_fee, insurance_fee_rate,
+    admin_fee_rate, travel_fee, insurance_fee_rate, processing_fee, security_deposit,
     pickup_scheduled_at, rental_end_at, source,
     dob, license_number, address, city, state, zip_code,
     insurance_carrier, insurance_policy_number, insurance_coverage_type,
@@ -781,13 +781,13 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
     INSERT INTO applications
       (first_name, last_name, phone, email, consent_background, stage, status,
        assigned_vehicle_id, weekly_rate, total_due_at_pickup, invoice_amount, payment_status, pickup_scheduled_at, rental_end_at, source,
-       admin_fee_rate, travel_fee, insurance_fee_rate,
+       admin_fee_rate, travel_fee, insurance_fee_rate, processing_fee,
        dob, license_number, address, city, state, zip_code, license_path, insurance_path, insurance_private_path)
-    VALUES (?, ?, ?, ?, 1, 6, 'active', ?, ?, ?, ?, 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, 1, 6, 'active', ?, ?, ?, ?, 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     first_name, last_name, phone, email || '', assigned_vehicle_id, weekly_rate, total_due_at_pickup || null, total_due_at_pickup || null,
     pickup_scheduled_at, rental_end_at, bookingSource,
-    admin_fee_rate || null, travel_fee || null, insurance_fee_rate || null,
+    admin_fee_rate || null, travel_fee || null, insurance_fee_rate || null, processing_fee || null,
     dob || null, license_number || null, address || null, city || null, state || null, zip_code || null,
     licensePath, insurancePolicyPath, insurancePrivatePath
   );
@@ -803,6 +803,15 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
   }
   if (insurancePolicyPath) upsertInsuranceRecord(customerId, 'our_policy', { document_path: insurancePolicyPath });
   logActivity(appId, `Manual reservation created for ${first_name} ${last_name} — ${vehicle.make} ${vehicle.model} at $${weekly_rate}/week`);
+
+  // A deposit amount entered in the wizard seeds a held deposit right away,
+  // so it's already sitting in the reservation's Security Deposit panel
+  // instead of requiring a separate "Collect Deposit" click afterward.
+  if (security_deposit && Number(security_deposit) > 0) {
+    db.prepare('INSERT INTO deposits (application_id, amount, method, collected_at) VALUES (?, ?, ?, ?)')
+      .run(appId, security_deposit, 'cash', pickup_scheduled_at.slice(0, 10));
+    logActivity(appId, `Security deposit of $${security_deposit} collected (cash)`);
+  }
 
   res.status(201).json({ id: appId, message: 'Reservation created' });
 });

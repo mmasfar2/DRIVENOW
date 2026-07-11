@@ -26,7 +26,11 @@ function computeCharge(row) {
       const adminFee = Math.round((Number(row.admin_fee_rate) || 0) * days * 100) / 100;
       const travelFee = Math.round((Number(row.travel_fee) || 0) * 100) / 100;
       const insuranceFee = Math.round((Number(row.insurance_fee_rate) || 0) * days * 100) / 100;
-      return Math.round((subtotal + salesTax + adminFee + travelFee + insuranceFee) * 100) / 100;
+      // Processing fee is a flat amount computed once (2.75% of the invoice
+      // at the time it was enabled) and stored like travel_fee — not
+      // recomputed here, so it doesn't compound if other fees change later.
+      const processingFee = Math.round((Number(row.processing_fee) || 0) * 100) / 100;
+      return Math.round((subtotal + salesTax + adminFee + travelFee + insuranceFee + processingFee) * 100) / 100;
     }
   }
   return 0;

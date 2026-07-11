@@ -681,10 +681,13 @@ function initBreakdown() {
     { key: 'admin', type: 'dayrate', label: 'Admin Fee', days, rate: Number(booking.admin_fee_rate) || 0, checked: !!adminFeeAmount },
     { key: 'travel', type: 'amount', label: 'Travel Fee', amount: Number(booking.travel_fee) || 0, checked: !!booking.travel_fee },
     { key: 'insurancefee', type: 'dayrate', label: 'Insurance Fee', days, rate: Number(booking.insurance_fee_rate) || 0, checked: !!insuranceFeeAmount },
-    // Just a toggle, not a rate/total field like Admin/Insurance Fee — its
-    // default amount is 2.75% of the invoice as it stands today; check it
-    // to add that fee to the invoice.
-    { key: 'processingfee', type: 'amount', label: 'Processing Fee (2.75%)', amount: Math.round((Number(booking.charge) || 0) * PROCESSING_FEE_RATE * 100) / 100, checked: false },
+    // Just a toggle, not a rate/total field like Admin/Insurance Fee. If it
+    // was already enabled when the booking was created, this starts checked
+    // with the amount that was actually stored (booking.processing_fee) —
+    // otherwise it defaults to 2.75% of the invoice as it stands today.
+    { key: 'processingfee', type: 'amount', label: 'Processing Fee (2.75%)',
+      amount: booking.processing_fee ? Number(booking.processing_fee) : Math.round((Number(booking.charge) || 0) * PROCESSING_FEE_RATE * 100) / 100,
+      checked: !!booking.processing_fee },
     { key: 'misc', type: 'amount', label: 'Miscellaneous', amount: 0, checked: false },
     { key: 'tolls', type: 'amount', label: 'Tolls', amount: 0, checked: false },
     { key: 'discount', type: 'amount', label: 'Discount', amount: 0, checked: false, sign: -1 },
