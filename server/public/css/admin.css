@@ -202,6 +202,13 @@ tr:hover td { background: var(--gray-light); }
 .payment-breakdown-row .pb-checkbox { width: 14px; height: 14px; flex-shrink: 0; }
 .payment-breakdown-row .pb-amount { width: 76px; padding: 4px 6px; border: 1.5px solid var(--gray-border); border-radius: 4px; font-family: inherit; font-size: 0.78rem; text-align: right; }
 
+/* New Reservation wizard's Dates-step Invoice Preview: line items laid out
+   as a horizontal grid of cards instead of one full-width row per item. */
+.invoice-preview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px 18px; margin-top: 4px; }
+.invoice-preview-cell { display: flex; flex-direction: column; gap: 6px; }
+.invoice-preview-cell .payment-breakdown-row__label { font-size: 0.72rem; color: var(--text-muted); }
+.invoice-preview-cell .pb-amount { width: 100%; box-sizing: border-box; text-align: left; }
+
 /* Date-range calendar widget (shared by reservations + reservation detail) */
 .resv-cal { border: 1.5px solid var(--gray-border); border-radius: 8px; overflow: hidden; }
 .resv-cal__summary { display: flex; }

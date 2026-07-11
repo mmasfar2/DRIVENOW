@@ -672,7 +672,7 @@ router.delete('/:id', requireAuth, (req, res) => {
 router.get('/bookings/all', requireAuth, (req, res) => {
   const rows = db.prepare(`
     SELECT a.id, a.email, a.weekly_rate, a.total_due_at_pickup,
-           a.admin_fee_rate, a.travel_fee, a.insurance_fee_rate,
+           a.admin_fee_rate, a.travel_fee, a.insurance_fee_rate, a.security_deposit,
            a.payment_status, a.invoice_amount, a.invoice_sent_at, a.pickup_scheduled_at, a.rental_end_at, a.status, a.updated_at,
            v.id as vehicle_id, v.make, v.model, v.year, v.status as vehicle_status,
            COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.application_id = a.id), 0) as paid_total,
@@ -747,7 +747,7 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
   const {
     first_name, last_name, phone, email,
     assigned_vehicle_id, weekly_rate, total_due_at_pickup,
-    admin_fee_rate, travel_fee, insurance_fee_rate,
+    admin_fee_rate, travel_fee, insurance_fee_rate, security_deposit,
     pickup_scheduled_at, rental_end_at, source,
     dob, license_number, address, city, state, zip_code,
     insurance_carrier, insurance_policy_number, insurance_coverage_type,
@@ -775,13 +775,13 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
     INSERT INTO applications
       (first_name, last_name, phone, email, consent_background, stage, status,
        assigned_vehicle_id, weekly_rate, total_due_at_pickup, invoice_amount, payment_status, pickup_scheduled_at, rental_end_at, source,
-       admin_fee_rate, travel_fee, insurance_fee_rate,
+       admin_fee_rate, travel_fee, insurance_fee_rate, security_deposit,
        dob, license_number, address, city, state, zip_code, license_path, insurance_path, insurance_private_path)
-    VALUES (?, ?, ?, ?, 1, 6, 'active', ?, ?, ?, ?, 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, 1, 6, 'active', ?, ?, ?, ?, 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     first_name, last_name, phone, email || '', assigned_vehicle_id, weekly_rate, total_due_at_pickup || null, total_due_at_pickup || null,
     pickup_scheduled_at, rental_end_at, bookingSource,
-    admin_fee_rate || null, travel_fee || null, insurance_fee_rate || null,
+    admin_fee_rate || null, travel_fee || null, insurance_fee_rate || null, security_deposit || null,
     dob || null, license_number || null, address || null, city || null, state || null, zip_code || null,
     licensePath, insurancePolicyPath, insurancePrivatePath
   );

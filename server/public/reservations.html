@@ -759,6 +759,7 @@ async function openPaymentModal(bookingId) {
     { key: 'admin', type: 'amount', label: 'Admin Fee', amount: adminFeeAmount, checked: !!adminFeeAmount },
     { key: 'travel', type: 'amount', label: 'Travel Fee', amount: Number(paymentBooking.travel_fee) || 0, checked: !!paymentBooking.travel_fee },
     { key: 'insurancefee', type: 'amount', label: 'Insurance Fee', amount: insuranceFeeAmount, checked: !!insuranceFeeAmount },
+    { key: 'securitydeposit', type: 'amount', label: 'Security Deposit', amount: Number(paymentBooking.security_deposit) || 0, checked: !!paymentBooking.security_deposit },
   ];
   recalcTaxes();
 
@@ -983,7 +984,8 @@ function initNewReservationModal() {
     source: '',
     pickup_scheduled_at: '', rental_end_at: '', pickup_time: '10:00 AM', return_time: '10:00 AM',
     assigned_vehicle_id: null, weekly_rate: null, total_due_at_pickup: '',
-    admin_fee_rate: '', travel_fee: '', insurance_fee_rate: '',
+    admin_fee_rate: '', travel_fee: '', insurance_fee_rate: '', security_deposit: '',
+    admin_fee_total: '', insurance_fee_total: '',
     customer_mode: 'existing', first_name: '', last_name: '', phone: '', email: '',
     dob: '', license_number: '', address: '',
     license_file: null, insurance_private_file: null, insurance_policy_file: null,
@@ -1150,29 +1152,35 @@ function initNewReservationModal() {
             <div>Invoice Preview</div>
             <div>Invoice Total: ${fmtMoney(pricing.total)}</div>
           </div>
-          <div class="payment-breakdown-row">
-            <div class="payment-breakdown-row__label">Lease Rate (${days}d x ${fmtExact(pricing.dailyRate)}/d)</div>
-            <input class="pb-amount" value="${pricing.subtotal.toFixed(2)}" disabled>
-          </div>
-          <div class="payment-breakdown-row">
-            <div class="payment-breakdown-row__label">Highway Tax (8%, included in rate)</div>
-            <input class="pb-amount" value="${pricing.highwayTax.toFixed(2)}" disabled>
-          </div>
-          <div class="payment-breakdown-row">
-            <div class="payment-breakdown-row__label">Sales Tax (7.25%)</div>
-            <input class="pb-amount" value="${pricing.salesTax.toFixed(2)}" disabled>
-          </div>
-          <div class="payment-breakdown-row">
-            <div class="payment-breakdown-row__label">Admin Fee (${days}d x ${fmtExact(pricing.adminFeeRate)}/d = ${fmtExact(pricing.adminFee)})</div>
-            <input class="pb-amount" id="fee-admin-input" inputmode="decimal" value="${form.admin_fee_rate}" placeholder="0.00/day">
-          </div>
-          <div class="payment-breakdown-row">
-            <div class="payment-breakdown-row__label">Travel Fee (flat, one-time)</div>
-            <input class="pb-amount" id="fee-travel-input" inputmode="decimal" value="${form.travel_fee}" placeholder="0.00">
-          </div>
-          <div class="payment-breakdown-row">
-            <div class="payment-breakdown-row__label">Insurance Fee (${days}d x ${fmtExact(pricing.insuranceFeeRate)}/d = ${fmtExact(pricing.insuranceFee)})</div>
-            <input class="pb-amount" id="fee-insurance-input" inputmode="decimal" value="${form.insurance_fee_rate}" placeholder="0.00/day">
+          <div class="invoice-preview-grid">
+            <div class="invoice-preview-cell">
+              <div class="payment-breakdown-row__label">Lease Rate (${days}d x ${fmtExact(pricing.dailyRate)}/d)</div>
+              <input class="pb-amount" value="${pricing.subtotal.toFixed(2)}" disabled>
+            </div>
+            <div class="invoice-preview-cell">
+              <div class="payment-breakdown-row__label">Highway Tax (8%, included in rate)</div>
+              <input class="pb-amount" value="${pricing.highwayTax.toFixed(2)}" disabled>
+            </div>
+            <div class="invoice-preview-cell">
+              <div class="payment-breakdown-row__label">Sales Tax (7.25%)</div>
+              <input class="pb-amount" value="${pricing.salesTax.toFixed(2)}" disabled>
+            </div>
+            <div class="invoice-preview-cell">
+              <div class="payment-breakdown-row__label">Admin Fee (${fmtExact(pricing.adminFeeRate)}/d x ${days}d)</div>
+              <input class="pb-amount" id="fee-admin-input" inputmode="decimal" value="${form.admin_fee_total}" placeholder="0.00">
+            </div>
+            <div class="invoice-preview-cell">
+              <div class="payment-breakdown-row__label">Travel Fee (flat, one-time)</div>
+              <input class="pb-amount" id="fee-travel-input" inputmode="decimal" value="${form.travel_fee}" placeholder="0.00">
+            </div>
+            <div class="invoice-preview-cell">
+              <div class="payment-breakdown-row__label">Insurance Fee (${fmtExact(pricing.insuranceFeeRate)}/d x ${days}d)</div>
+              <input class="pb-amount" id="fee-insurance-input" inputmode="decimal" value="${form.insurance_fee_total}" placeholder="0.00">
+            </div>
+            <div class="invoice-preview-cell">
+              <div class="payment-breakdown-row__label">Security Deposit (refundable, flat)</div>
+              <input class="pb-amount" id="fee-security-input" inputmode="decimal" value="${form.security_deposit}" placeholder="0.00">
+            </div>
           </div>
         </div>
       ` : ''}
@@ -1192,9 +1200,10 @@ function initNewReservationModal() {
 
     if (showInvoicePreview) {
       const feeInputs = [
-        { id: 'fee-admin-input', key: 'admin_fee_rate' },
+        { id: 'fee-admin-input', key: 'admin_fee_total' },
         { id: 'fee-travel-input', key: 'travel_fee' },
-        { id: 'fee-insurance-input', key: 'insurance_fee_rate' },
+        { id: 'fee-insurance-input', key: 'insurance_fee_total' },
+        { id: 'fee-security-input', key: 'security_deposit' },
       ];
       feeInputs.forEach(({ id, key }) => {
         document.getElementById(id).addEventListener('input', (e) => {
@@ -1273,7 +1282,7 @@ function initNewReservationModal() {
         { id: 'our_policies', label: 'Our Policies', sub: 'Insurance provided by DriveNow' },
         { id: 'third_party', label: 'Third Party Insurance', sub: 'Not available yet', disabled: true },
       ];
-      const COVERAGE_TYPES = ['Liability', 'Comprehensive & Collision'];
+      const COVERAGE_TYPES = ['Liability', 'Comprehensive & Collision', 'Full Coverage'];
       body.innerHTML = `
         <div class="resv-insurance-options">
           ${options.map(o => {
@@ -1688,15 +1697,18 @@ function initNewReservationModal() {
     const highwayTax = Math.round(subtotal * HIGHWAY_TAX_RATE * 100) / 100; // informational only, not added to total
     const salesTax = Math.round(subtotal * 0.0725 * 100) / 100;
     // Admin, travel, and insurance fees are added on top of the taxed rental
-    // total — not taxed themselves. Admin/insurance are daily rates x days;
-    // travel is a single flat fee.
-    const adminFeeRate = Number(form.admin_fee_rate) || 0;
-    const adminFee = Math.round(adminFeeRate * days * 100) / 100;
+    // total — not taxed themselves. Travel and the security deposit are flat;
+    // Admin/insurance are entered as an extended total (what the box holds)
+    // and the per-day rate is derived from that for display only, so typing
+    // a total never has to round-trip through a rate and re-round.
+    const adminFee = Math.round((Number(form.admin_fee_total) || 0) * 100) / 100;
+    const adminFeeRate = days > 0 ? Math.round((adminFee / days) * 100) / 100 : 0;
     const travelFee = Math.round((Number(form.travel_fee) || 0) * 100) / 100;
-    const insuranceFeeRate = Number(form.insurance_fee_rate) || 0;
-    const insuranceFee = Math.round(insuranceFeeRate * days * 100) / 100;
-    const total = Math.round((subtotal + salesTax + adminFee + travelFee + insuranceFee) * 100) / 100;
-    return { days, dailyRate, subtotal, highwayTax, salesTax, adminFeeRate, adminFee, travelFee, insuranceFeeRate, insuranceFee, total };
+    const insuranceFee = Math.round((Number(form.insurance_fee_total) || 0) * 100) / 100;
+    const insuranceFeeRate = days > 0 ? Math.round((insuranceFee / days) * 100) / 100 : 0;
+    const securityDeposit = Math.round((Number(form.security_deposit) || 0) * 100) / 100;
+    const total = Math.round((subtotal + salesTax + adminFee + travelFee + insuranceFee + securityDeposit) * 100) / 100;
+    return { days, dailyRate, subtotal, highwayTax, salesTax, adminFeeRate, adminFee, travelFee, insuranceFeeRate, insuranceFee, securityDeposit, total };
   }
 
   function renderReviewStep() {
@@ -1715,7 +1727,7 @@ function initNewReservationModal() {
       return;
     }
 
-    const { days, dailyRate, subtotal, salesTax, adminFee, travelFee, insuranceFee, total } = computePricing();
+    const { days, dailyRate, subtotal, salesTax, adminFee, travelFee, insuranceFee, securityDeposit, total } = computePricing();
     form.total_due_at_pickup = total;
     const steps = getSteps();
     const jump = (key) => { const i = steps.indexOf(key); if (i !== -1) { step = i + 1; renderStep(); } };
@@ -1751,6 +1763,7 @@ function initNewReservationModal() {
           ${adminFee ? `<div class="resv-review-row"><span>Admin Fee</span><span>${fmtExact(adminFee)}</span></div>` : ''}
           ${travelFee ? `<div class="resv-review-row"><span>Travel Fee</span><span>${fmtExact(travelFee)}</span></div>` : ''}
           ${insuranceFee ? `<div class="resv-review-row"><span>Insurance Fee</span><span>${fmtExact(insuranceFee)}</span></div>` : ''}
+          ${securityDeposit ? `<div class="resv-review-row"><span>Security Deposit</span><span>${fmtExact(securityDeposit)}</span></div>` : ''}
           <div class="resv-review-row--total"><span>Total</span><span>${fmtExact(total)}</span></div>
         </div>
       </div>
@@ -1777,7 +1790,8 @@ function initNewReservationModal() {
     calMonth = null;
     Object.assign(form, {
       source, pickup_scheduled_at: '', rental_end_at: '', pickup_time: '10:00 AM', return_time: '10:00 AM', assigned_vehicle_id: null, weekly_rate: null,
-      total_due_at_pickup: '', admin_fee_rate: '', travel_fee: '', insurance_fee_rate: '',
+      total_due_at_pickup: '', admin_fee_rate: '', travel_fee: '', insurance_fee_rate: '', security_deposit: '',
+      admin_fee_total: '', insurance_fee_total: '',
       customer_mode: 'existing', first_name: '', last_name: '', phone: '', email: '',
       dob: '', license_number: '', address: '', city: '', state: '', zip_code: '', license_file: null,
       insurance_type: null, insurance_private_file: null, insurance_policy_file: null,
@@ -1822,9 +1836,16 @@ function initNewReservationModal() {
 
     nextBtn.disabled = true;
     try {
+      // Admin/insurance fees are typed into the wizard as an extended total,
+      // but stored (and billed) as a per-day rate — derive the rate here,
+      // right before submit, from the total the user actually saw on screen.
+      const finalPricing = computePricing();
+      form.admin_fee_rate = finalPricing.days > 0 ? String((Number(form.admin_fee_total) || 0) / finalPricing.days) : '';
+      form.insurance_fee_rate = finalPricing.days > 0 ? String((Number(form.insurance_fee_total) || 0) / finalPricing.days) : '';
+
       const fd = new FormData();
       ['source', 'pickup_scheduled_at', 'rental_end_at', 'assigned_vehicle_id', 'weekly_rate',
-       'total_due_at_pickup', 'admin_fee_rate', 'travel_fee', 'insurance_fee_rate',
+       'total_due_at_pickup', 'admin_fee_rate', 'travel_fee', 'insurance_fee_rate', 'security_deposit',
        'first_name', 'last_name', 'phone', 'email', 'dob', 'license_number', 'address',
        'city', 'state', 'zip_code', 'insurance_carrier', 'insurance_policy_number', 'insurance_coverage_type']
         .forEach(k => fd.append(k, form[k] ?? ''));

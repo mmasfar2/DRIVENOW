@@ -251,6 +251,9 @@ if (!existingCols.includes('travel_fee')) {
 if (!existingCols.includes('insurance_fee_rate')) {
   db.exec('ALTER TABLE applications ADD COLUMN insurance_fee_rate REAL'); // daily rate
 }
+if (!existingCols.includes('security_deposit')) {
+  db.exec('ALTER TABLE applications ADD COLUMN security_deposit REAL'); // flat, one-time
+}
 
 const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);
 if (!vehicleCols.includes('photo_path')) {
