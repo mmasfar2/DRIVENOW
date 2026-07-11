@@ -31,18 +31,30 @@ const CURRENTLY_RENTING_SUBQUERY = `
   ) as currently_renting
 `;
 
+// A customer profile can exist purely from a lead submission (before any
+// vehicle is ever assigned) — the Insurance list is about actual renters, so
+// it only shows customers who've had at least one real booking (an
+// application that had a vehicle assigned), current or past.
+const HAD_REAL_BOOKING_CLAUSE = `
+  EXISTS (
+    SELECT 1 FROM applications a
+    WHERE lower(a.email) = lower(c.email) AND a.assigned_vehicle_id IS NOT NULL
+  )
+`;
+
 router.get('/', requireAuth, (req, res) => {
   const { type } = req.query;
   const rows = type
     ? db.prepare(`
         SELECT ir.*, c.first_name, c.last_name, c.email, ${CURRENTLY_RENTING_SUBQUERY}
         FROM insurance_records ir JOIN customers c ON c.id = ir.customer_id
-        WHERE ir.type = ?
+        WHERE ir.type = ? AND ${HAD_REAL_BOOKING_CLAUSE}
         ORDER BY c.last_name, c.first_name
       `).all(type)
     : db.prepare(`
         SELECT ir.*, c.first_name, c.last_name, c.email, ${CURRENTLY_RENTING_SUBQUERY}
         FROM insurance_records ir JOIN customers c ON c.id = ir.customer_id
+        WHERE ${HAD_REAL_BOOKING_CLAUSE}
         ORDER BY c.last_name, c.first_name
       `).all();
   res.json(rows);
