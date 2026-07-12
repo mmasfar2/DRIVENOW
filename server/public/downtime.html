@@ -237,7 +237,7 @@ function resetForm() {
   document.getElementById('df-service-type').innerHTML = '<option value="">Select service type</option>' +
     SERVICE_TYPE_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join('');
   document.getElementById('df-status').innerHTML = Object.entries(STATUS_LABELS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
-  document.getElementById('df-date-reported').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('df-date-reported').value = todayStr();
   document.getElementById('df-clearance-eta').value = '';
   document.getElementById('df-vendor').value = '';
   document.getElementById('df-est-cost').value = '';

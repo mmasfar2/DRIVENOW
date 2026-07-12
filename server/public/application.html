@@ -270,7 +270,7 @@ document.getElementById('pl-send-invoice-btn').addEventListener('click', async (
 });
 
 document.getElementById('pl-add-payment-btn').addEventListener('click', () => {
-  document.getElementById('ap-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('ap-date').value = todayStr();
   document.getElementById('ap-amount').value = '';
   document.getElementById('add-payment-overlay').style.display = 'flex';
 });

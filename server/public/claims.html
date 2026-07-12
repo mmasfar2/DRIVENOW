@@ -196,7 +196,7 @@ function resetClaimForm() {
   claimForm = {
     vehicle_id: null, status: 'initial_claim', detailed_status: '', incident_type: '',
     external_reference_id: '', event_source: '', damage_notes: '', insurance_record_id: '', assigned_to: '',
-    damage_reported_at: new Date().toISOString().slice(0, 10), deductible_amount: '', max_out_of_pocket: '',
+    damage_reported_at: todayStr(), deductible_amount: '', max_out_of_pocket: '',
     vehicle_location: '', mark_vehicle_inactive: false,
   };
 }

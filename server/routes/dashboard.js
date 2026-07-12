@@ -2,6 +2,7 @@ const express = require('express');
 const { db, getForfeitedDeposits, getAccruedRevenueDays } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { computeOwed } = require('../billing');
+const { todayStr, daysAgoStr, monthsAgoStr } = require('../timezone');
 
 const router = express.Router();
 
@@ -45,7 +46,7 @@ router.get('/summary', requireAuth, (req, res) => {
   const accruedDays = getAccruedRevenueDays();
   const forfeitedDeposits = getForfeitedDeposits();
   const forfeitedTotal = forfeitedDeposits.reduce((sum, d) => sum + Number(d.forfeited_amount), 0);
-  const sevenDaysAgoStr = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  const sevenDaysAgoStr = daysAgoStr(7);
   const forfeitedThisWeek = forfeitedDeposits
     .filter(d => d.date >= sevenDaysAgoStr)
     .reduce((sum, d) => sum + Number(d.forfeited_amount), 0);
@@ -90,7 +91,7 @@ router.get('/summary', requireAuth, (req, res) => {
   const utilizationRate = totalVehicles > 0 ? Math.round((rentedVehicles / totalVehicles) * 100) : 0;
 
   // Revenue earned resets at the start of every calendar month
-  const thisMonthStr = new Date().toISOString().slice(0, 7);
+  const thisMonthStr = todayStr().slice(0, 7);
   const forfeitedThisMonth = forfeitedDeposits
     .filter(d => d.date && d.date.slice(0, 7) === thisMonthStr)
     .reduce((sum, d) => sum + Number(d.forfeited_amount), 0);
@@ -126,7 +127,7 @@ router.get('/summary', requireAuth, (req, res) => {
     WHERE strftime('%Y-%m', COALESCE(performed_at, created_at)) = strftime('%Y-%m', datetime('now', '-1 month'))
   `).get().total;
 
-  const twelveMonthsAgoStr = new Date(new Date().setMonth(new Date().getMonth() - 12)).toISOString().slice(0, 10);
+  const twelveMonthsAgoStr = monthsAgoStr(12);
   const monthlyAccruedMap = new Map();
   accruedDays.forEach(d => {
     if (!d.date || d.date < twelveMonthsAgoStr) return;

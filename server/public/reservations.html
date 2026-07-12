@@ -894,7 +894,7 @@ document.getElementById('ap-amount').addEventListener('input', updateApFeePrevie
 document.getElementById('ap-fee-rate').addEventListener('input', updateApFeePreview);
 
 document.getElementById('pl-add-payment-btn').addEventListener('click', () => {
-  document.getElementById('ap-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('ap-date').value = todayStr();
   document.getElementById('ap-amount').value = '';
   document.getElementById('ap-method').value = 'cash';
   document.getElementById('ap-fee-rate').value = DEFAULT_CARD_FEE_RATE;
@@ -1015,12 +1015,6 @@ function initNewReservationModal() {
     const highwayTax = Math.round(weeklyBase * HIGHWAY_TAX_RATE * 100) / 100;
     const total = Math.round((weeklyBase + salesTax + highwayTax) * 100) / 100;
     return { weeklyBase, salesTax, highwayTax, total };
-  }
-
-  function todayStr(offsetDays = 0) {
-    const d = new Date();
-    d.setDate(d.getDate() + offsetDays);
-    return d.toISOString().slice(0, 10);
   }
 
   function timeOptions() {

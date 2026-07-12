@@ -2,6 +2,7 @@ const express = require('express');
 const { db, getForfeitedDeposits, getAccruedRevenueDays } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { SALES_TAX_RATE, computeCharge, computeOwed } = require('../billing');
+const { todayStr: businessTodayStr } = require('../timezone');
 
 const router = express.Router();
 
@@ -24,7 +25,7 @@ function computeVehicleDays(from, to) {
   const rangeStart = new Date(from);
   const rangeEnd = new Date(to);
   const rangeDays = Math.max(1, dayDiff(rangeStart, rangeEnd) + 1);
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = businessTodayStr();
   const vehicles = db.prepare('SELECT id, year, make, model, license_plate FROM vehicles ORDER BY year DESC').all();
   return vehicles.map(v => {
     const apps = db.prepare(`
@@ -552,7 +553,7 @@ router.get('/:key/data', requireAuth, (req, res) => {
   const report = REPORTS[req.params.key];
   if (!report) return res.status(404).json({ error: 'Unknown report' });
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = businessTodayStr();
   const from = report.hasDateRange ? (req.query.from || today) : '0000-01-01';
   const to = report.hasDateRange ? (req.query.to || today) : '9999-12-31';
   if (from > to) return res.status(400).json({ error: '"From" date must be before "To" date' });
