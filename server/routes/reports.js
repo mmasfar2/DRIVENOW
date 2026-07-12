@@ -104,49 +104,41 @@ const REPORTS = {
 
   revenue_by_time_period: {
     category: 'revenue', label: 'Revenue by Time Period',
-    description: 'The car\'s daily rate, travel fee, and admin fee, accrued on the actual calendar day of the rental it applies to (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not the day a payment against it happened to be logged. Plus any security deposit amounts forfeited, counted as of the day they were forfeited. Less maintenance expense logged that day — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
+    description: 'Total revenue across every vehicle for the selected range — the car\'s daily rate, travel fee, and admin fee, accrued on the actual calendar days of the rental (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue), not the day a payment against it happened to be logged. Plus any security deposit amounts forfeited in range. Less maintenance expense logged in range — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
     hasDateRange: true,
     columns: [
-      { key: 'date', label: 'Date' },
+      { key: 'period', label: 'Period' },
       { key: 'revenue', label: 'Revenue', type: 'money' },
       { key: 'expense', label: 'Expense', type: 'money' },
       { key: 'profit', label: 'Profit', type: 'money' },
       { key: 'card_fees', label: 'Card Processing Fees', type: 'money' },
     ],
     run(from, to) {
-      const revenueByDay = new Map();
-      getAccruedRevenueDays().forEach(d => {
-        if (d.date < from || d.date > to) return;
-        revenueByDay.set(d.date, (revenueByDay.get(d.date) || 0) + d.amount);
-      });
+      const revenue = getAccruedRevenueDays()
+        .filter(d => d.date >= from && d.date <= to)
+        .reduce((sum, d) => sum + d.amount, 0);
+      const forfeited = getForfeitedDeposits()
+        .filter(d => d.date && d.date >= from && d.date <= to)
+        .reduce((sum, d) => sum + Number(d.forfeited_amount), 0);
+      const expense = db.prepare(`
+        SELECT COALESCE(SUM(cost), 0) as total FROM vehicle_maintenance
+        WHERE substr(performed_at, 1, 10) BETWEEN ? AND ?
+      `).get(from, to).total;
       // Card processing fees (a card payment's own surcharge) are a
       // separate, informational figure tied to when the payment actually
       // happened — not part of revenue-eligible amounts, just still shown
-      // here for the day it landed.
-      const cardFeesByDay = new Map(db.prepare(`
-        SELECT substr(paid_at, 1, 10) as date, COALESCE(SUM(processing_fee), 0) as card_fees
-        FROM payments WHERE substr(paid_at, 1, 10) BETWEEN ? AND ?
-        GROUP BY date
-      `).all(from, to).map(r => [r.date, r.card_fees]));
-      const expenseByDay = new Map(db.prepare(`
-        SELECT substr(performed_at, 1, 10) as date, COALESCE(SUM(cost), 0) as expense
-        FROM vehicle_maintenance WHERE substr(performed_at, 1, 10) BETWEEN ? AND ?
-        GROUP BY date
-      `).all(from, to).map(r => [r.date, r.expense]));
-      const forfeitedByDay = new Map();
-      getForfeitedDeposits().forEach(d => {
-        if (!d.date || d.date < from || d.date > to) return;
-        forfeitedByDay.set(d.date, (forfeitedByDay.get(d.date) || 0) + Number(d.forfeited_amount));
-      });
-      const days = new Set([...revenueByDay.keys(), ...expenseByDay.keys(), ...forfeitedByDay.keys()]);
-      return [...days].sort().map(date => {
-        const revenue = round2((revenueByDay.get(date) || 0) + (forfeitedByDay.get(date) || 0));
-        const expense = round2(expenseByDay.get(date) || 0);
-        return {
-          date, revenue, expense, profit: round2(revenue - expense),
-          card_fees: round2(cardFeesByDay.get(date) || 0),
-        };
-      });
+      // here for the range it landed in.
+      const cardFees = db.prepare(`
+        SELECT COALESCE(SUM(processing_fee), 0) as total FROM payments
+        WHERE substr(paid_at, 1, 10) BETWEEN ? AND ?
+      `).get(from, to).total;
+      const totalRevenue = round2(revenue + forfeited);
+      const totalExpense = round2(expense);
+      return [{
+        period: `${from} – ${to}`,
+        revenue: totalRevenue, expense: totalExpense, profit: round2(totalRevenue - totalExpense),
+        card_fees: round2(cardFees),
+      }];
     },
   },
 
