@@ -667,16 +667,14 @@ function getAccruedRevenueDays() {
     WHERE status IN ('active', 'completed')
       AND pickup_scheduled_at IS NOT NULL AND rental_end_at IS NOT NULL AND weekly_rate IS NOT NULL
   `).all();
-  const todayStr = new Date().toISOString().slice(0, 10);
   const days = [];
   rows.forEach(a => {
     const start = new Date(a.pickup_scheduled_at.slice(0, 10));
-    const scheduledEnd = a.rental_end_at.slice(0, 10);
-    // Still active (never checked in) past its scheduled return date? Keep
-    // accruing through today instead of stopping at a return that was never
-    // actually confirmed to have happened.
-    const endStr = a.status === 'active' && scheduledEnd < todayStr ? todayStr : scheduledEnd;
-    const end = new Date(endStr);
+    // Revenue is capped to the booking's own scheduled dates, full stop —
+    // whether or not it's been checked in yet does not extend earnings.
+    // (Whether a car still shows as "on rent" past a missed return date is a
+    // separate, utilization-only concern handled in reports.js.)
+    const end = new Date(a.rental_end_at.slice(0, 10));
     if (!(end > start)) return;
     const dailyRate = a.weekly_rate / 7;
     const adminFeeRate = Number(a.admin_fee_rate) || 0;
