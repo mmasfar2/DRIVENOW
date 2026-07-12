@@ -368,8 +368,8 @@ function render() {
   badge.className = `badge badge-${s.cls}`;
   renderStageRow();
 
-  document.getElementById('rd-pickup').textContent = booking.pickup_scheduled_at ? fmtDate(booking.pickup_scheduled_at) : '—';
-  document.getElementById('rd-return').textContent = booking.rental_end_at ? fmtDate(booking.rental_end_at) : '—';
+  document.getElementById('rd-pickup').textContent = booking.pickup_scheduled_at ? fmtDateOnly(booking.pickup_scheduled_at) : '—';
+  document.getElementById('rd-return').textContent = booking.rental_end_at ? fmtDateOnly(booking.rental_end_at) : '—';
   const days = (booking.pickup_scheduled_at && booking.rental_end_at)
     ? Math.round((new Date(booking.rental_end_at) - new Date(booking.pickup_scheduled_at)) / 86400000)
     : 0;
@@ -424,7 +424,7 @@ function render() {
     <div class="info-row"><div class="info-row__label">City</div><div class="info-row__val">${booking.city || '—'}</div></div>
     <div class="info-row"><div class="info-row__label">State</div><div class="info-row__val">${booking.state || '—'}</div></div>
     <div class="info-row"><div class="info-row__label">ZIP Code</div><div class="info-row__val">${booking.zip_code || '—'}</div></div>
-    <div class="info-row"><div class="info-row__label">Date of Birth</div><div class="info-row__val">${booking.dob ? fmtDate(booking.dob) : '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">Date of Birth</div><div class="info-row__val">${booking.dob ? fmtDateOnly(booking.dob) : '—'}</div></div>
     <div class="info-row" style="border-bottom:none;"><div class="info-row__label">License Number</div><div class="info-row__val">${booking.license_number || '—'}</div></div>
   `;
 
@@ -507,7 +507,7 @@ function renderDepositLog() {
   body.innerHTML = booking.deposits.length
     ? booking.deposits.map(d => `
       <tr class="deposit-row" data-id="${d.id}" style="cursor:pointer;" title="Double-click to adjust">
-        <td>${fmtDate(d.collected_at)}</td>
+        <td>${fmtDateOnly(d.collected_at)}</td>
         <td><span class="badge ${d.method === 'card' ? 'badge-reserved' : 'badge-available'}">${d.method === 'card' ? 'Card' : 'Cash'}</span></td>
         <td style="text-align:right;font-weight:600;">${fmtExact(d.amount)}</td>
         <td>${depositStatusBadge(d)}</td>

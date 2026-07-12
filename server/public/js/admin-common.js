@@ -232,6 +232,17 @@ function fmtDate(d) {
   return new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+// For calendar-date-only values (pickup/return dates, DOB, deposit collected
+// date) — never a timestamp. `new Date('2026-06-15')` parses as UTC midnight,
+// so formatting it with the viewer's local timezone (as fmtDate does) can
+// display the day *before* what's actually stored whenever the browser is
+// behind UTC. Anchoring to local midnight instead keeps the displayed date
+// identical to the stored date in every timezone.
+function fmtDateOnly(d) {
+  if (!d) return '—';
+  return new Date(d.length <= 10 ? d + 'T00:00:00' : d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 // Renders a "View File" link, plus a small thumbnail preview when the upload is an image.
 function filePreviewHtml(filePath, linkText) {
   if (!filePath) return 'Not provided';

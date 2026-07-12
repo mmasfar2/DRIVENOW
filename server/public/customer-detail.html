@@ -192,7 +192,7 @@ function render() {
         <div class="cd-booking-row__icon">${icon('car', 16)}</div>
         <div style="flex:1;">
           <div><strong>${b.year ? `${b.year} ${b.make} ${b.model}` : 'Application — no vehicle assigned'}</strong> <span class="badge badge-reserved">${b.stageLabel}</span></div>
-          <div style="color:var(--text-muted);font-size:0.8rem;">#${String(b.id).padStart(3, '0')} · ${b.pickup_scheduled_at ? fmtDate(b.pickup_scheduled_at) : '—'} – ${b.rental_end_at ? fmtDate(b.rental_end_at) : '—'}</div>
+          <div style="color:var(--text-muted);font-size:0.8rem;">#${String(b.id).padStart(3, '0')} · ${b.pickup_scheduled_at ? fmtDateOnly(b.pickup_scheduled_at) : '—'} – ${b.rental_end_at ? fmtDateOnly(b.rental_end_at) : '—'}</div>
         </div>
         <div style="text-align:right;">
           <div style="font-weight:800;">${fmtExact(b.charge)}</div>
