@@ -227,9 +227,39 @@ function fmtMoney(n) {
   return sign + '$' + Math.abs(num).toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 
+// DriveNow operates out of Charlotte, NC — every timestamp shown here is
+// pinned to Eastern time explicitly, rather than whatever timezone the
+// viewer's own device happens to be set to, so a booking made from a phone
+// set to a different timezone still reads the same way office staff would
+// read it.
+const DISPLAY_TZ = 'America/New_York';
+
+// "Today," in Charlotte — for prefilling date inputs (payment date, deposit
+// date, damage-reported date, default report range) with the business's own
+// calendar day rather than the viewer's UTC/local day, which can already be
+// tomorrow (or still yesterday) depending on where and when they're logged in.
+function todayStr() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: DISPLAY_TZ });
+}
+
 function fmtDate(d) {
   if (!d) return '—';
-  return new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: DISPLAY_TZ });
+}
+
+// For calendar-date-only values (pickup/return dates, DOB, deposit collected
+// date) — these are a plain YYYY-MM-DD label, not an instant in time, so
+// formatting them by routing through a timezone-aware Date object (as
+// fmtDate does) risks landing on the day before or after depending on both
+// the stored offset and the viewer's location. Parsing the digits directly
+// sidesteps timezones altogether — the displayed date always matches the
+// stored date, for every viewer, everywhere.
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function fmtDateOnly(d) {
+  if (!d) return '—';
+  const [y, m, day] = d.slice(0, 10).split('-').map(Number);
+  if (!y || !m || !day) return '—';
+  return `${MONTHS[m - 1]} ${day}, ${y}`;
 }
 
 // For calendar-date-only values (pickup/return dates, DOB, deposit collected

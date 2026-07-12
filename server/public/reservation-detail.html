@@ -536,7 +536,7 @@ function renderDepositLog() {
 function initFinCal() {
   finNewPickup = booking.pickup_scheduled_at ? booking.pickup_scheduled_at.slice(0, 10) : '';
   finNewReturn = booking.rental_end_at ? booking.rental_end_at.slice(0, 10) : '';
-  const anchor = finNewPickup || finNewReturn || new Date().toISOString().slice(0, 10);
+  const anchor = finNewPickup || finNewReturn || todayStr();
   const anchorDate = new Date(anchor + 'T00:00:00');
   finCalMonth = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1);
   renderFinCal();
@@ -972,7 +972,7 @@ function openPaymentModal(paymentId) {
   const payment = paymentId != null ? booking.payments.find(p => p.id === paymentId) : null;
   document.getElementById('ap-modal-title').textContent = payment ? 'Edit Payment' : 'Add Payment';
   document.getElementById('ap-submit').textContent = payment ? 'Save Changes' : 'Save Payment';
-  document.getElementById('ap-date').value = payment ? payment.paid_at.slice(0, 10) : new Date().toISOString().slice(0, 10);
+  document.getElementById('ap-date').value = payment ? payment.paid_at.slice(0, 10) : todayStr();
   document.getElementById('ap-amount').value = payment ? payment.amount : '';
   document.getElementById('ap-method').value = payment ? payment.method : 'cash';
   document.getElementById('ap-fee-rate').value = (payment && payment.processing_fee && payment.amount)
@@ -1023,7 +1023,7 @@ function updateDepositFeePreview() {
 }
 
 document.getElementById('rd-add-deposit-btn').addEventListener('click', () => {
-  document.getElementById('ad-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('ad-date').value = todayStr();
   document.getElementById('ad-amount').value = '';
   document.getElementById('ad-method').value = 'cash';
   document.getElementById('ad-fee-rate').value = DEFAULT_CARD_FEE_RATE;

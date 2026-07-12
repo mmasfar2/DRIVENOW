@@ -4,6 +4,7 @@ const { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, lo
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
 const { computeCharge, computeOwed } = require('../billing');
+const { todayStr } = require('../timezone');
 
 const router = express.Router();
 
@@ -353,7 +354,7 @@ router.post('/:id/payments', requireAuth, (req, res) => {
   const fee = paymentMethod === 'card' ? Math.max(0, Number(processing_fee) || 0) : 0;
 
   db.prepare('INSERT INTO payments (application_id, amount, paid_at, method, processing_fee) VALUES (?, ?, ?, ?, ?)')
-    .run(id, amount, paid_at || new Date().toISOString().slice(0, 10), paymentMethod, fee);
+    .run(id, amount, paid_at || todayStr(), paymentMethod, fee);
   logActivity(id, `Payment of $${amount} recorded (${paymentMethod}${fee ? `, +$${fee} processing fee` : ''})`);
   res.status(201).json({ ok: true });
 });
@@ -407,7 +408,7 @@ router.post('/:id/deposits', requireAuth, (req, res) => {
   const fee = depositMethod === 'card' ? Math.max(0, Number(processing_fee) || 0) : 0;
 
   db.prepare('INSERT INTO deposits (application_id, amount, method, processing_fee, collected_at) VALUES (?, ?, ?, ?, ?)')
-    .run(id, amount, depositMethod, fee, collected_at || new Date().toISOString().slice(0, 10));
+    .run(id, amount, depositMethod, fee, collected_at || todayStr());
   logActivity(id, `Security deposit of $${amount} collected (${depositMethod}${fee ? `, +$${fee} processing fee` : ''})`);
   res.status(201).json({ ok: true });
 });
@@ -430,7 +431,7 @@ router.post('/:id/deposits/:depositId/resolve', requireAuth, (req, res) => {
   // moves to now each time, so revenue reports attribute the forfeited
   // portion to whenever it was last actually decided.
   const wasHeld = deposit.status === 'held';
-  const resolvedAt = resolved_at || new Date().toISOString().slice(0, 10);
+  const resolvedAt = resolved_at || todayStr();
   db.prepare(`
     UPDATE deposits SET status = 'resolved', refunded_amount = ?, forfeited_amount = ?, resolved_at = ?, notes = ?
     WHERE id = ?
@@ -734,7 +735,7 @@ router.get('/bookings/all', requireAuth, (req, res) => {
   // here as its stage control shows there — no separate/parallel status logic.
   // The one exception: a booking that's checked out and due back today moves
   // into Pending Check In, a subset of On Lease flagging what needs handling now.
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const today = todayStr();
   const bookings = rows.map(r => {
     const charge = computeCharge(r);
     const owed = computeOwed(r, r.paid_total);
@@ -742,7 +743,7 @@ router.get('/bookings/all', requireAuth, (req, res) => {
     if (r.status === 'completed') bucket = 'completed';
     else if (r.vehicle_status === 'rented') {
       const returnDate = r.rental_end_at ? r.rental_end_at.slice(0, 10) : null;
-      bucket = returnDate === todayStr ? 'pending_check_in' : 'on_rental';
+      bucket = returnDate === today ? 'pending_check_in' : 'on_rental';
     }
     else bucket = 'potential_arrival';
     return { ...r, owed, bucket };
