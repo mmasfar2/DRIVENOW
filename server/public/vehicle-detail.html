@@ -216,11 +216,11 @@ function render() {
 
   renderMaintenanceTable();
 
-  document.getElementById('vd-purchase-price').textContent = fmtMoney(vehicle.purchase_price);
-  document.getElementById('vd-total-expense').textContent = fmtMoney(vehicle.totalExpense);
-  document.getElementById('vd-total-revenue').textContent = fmtMoney(vehicle.totalRevenue);
+  document.getElementById('vd-purchase-price').textContent = fmtExact(vehicle.purchase_price);
+  document.getElementById('vd-total-expense').textContent = fmtExact(vehicle.totalExpense);
+  document.getElementById('vd-total-revenue').textContent = fmtExact(vehicle.totalRevenue);
   const profitEl = document.getElementById('vd-total-profit');
-  profitEl.textContent = fmtMoney(vehicle.totalProfit);
+  profitEl.textContent = fmtExact(vehicle.totalProfit);
   profitEl.style.color = vehicle.totalProfit < 0 ? '#c62828' : '';
   renderBookingsTable();
 
@@ -250,7 +250,7 @@ function renderBookingsTable() {
       <td>${b.pickup ? fmtDate(b.pickup) : '—'}</td>
       <td>${b.dropoff ? fmtDate(b.dropoff) : '—'}</td>
       <td>${b.days || '—'}</td>
-      <td>${fmtMoney(b.revenue)}</td>
+      <td>${fmtExact(b.revenue)}</td>
     </tr>
   `).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:24px;">No rental history yet.</td></tr>';
 }
