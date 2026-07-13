@@ -66,7 +66,7 @@ router.get('/', requireAuth, (req, res) => {
   const customers = db.prepare(`
     SELECT c.id, c.first_name, c.last_name, c.email, c.phone, c.blacklisted,
       (SELECT COUNT(*) FROM applications a WHERE lower(a.email) = lower(c.email)) as total_bookings,
-      (SELECT COUNT(*) FROM applications a JOIN vehicles v ON v.id = a.assigned_vehicle_id WHERE lower(a.email) = lower(c.email) AND v.status = 'rented') as active_rentals,
+      (SELECT COUNT(*) FROM applications a JOIN vehicles v ON v.id = a.assigned_vehicle_id WHERE lower(a.email) = lower(c.email) AND a.status = 'active' AND v.status = 'rented') as active_rentals,
       (SELECT COALESCE(SUM(p.amount), 0) FROM payments p JOIN applications a ON a.id = p.application_id WHERE lower(a.email) = lower(c.email)) as total_spent
     FROM customers c
     ORDER BY c.last_name, c.first_name

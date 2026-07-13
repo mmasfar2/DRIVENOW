@@ -22,12 +22,18 @@ const upload = multer({
 // other pages (customer profile, reservation detail) read from here so
 // they can't show stale or conflicting insurance info. ──
 // "Currently renting" = this customer has a booking whose vehicle is
-// actually out with them right now (picked up, not just reserved).
+// actually out with them right now (picked up, not just reserved). Checking
+// only v.status = 'rented' isn't enough — a vehicle's status describes
+// whoever's driving it *now*, not this customer specifically, so a past
+// renter's own already-completed application (assigned_vehicle_id never
+// changes after the fact) would still match once that same car went back
+// out to someone else. a.status = 'active' scopes it to this customer's
+// own booking actually being the one still open.
 const CURRENTLY_RENTING_SUBQUERY = `
   EXISTS (
     SELECT 1 FROM applications a
     JOIN vehicles v ON v.id = a.assigned_vehicle_id
-    WHERE lower(a.email) = lower(c.email) AND v.status = 'rented'
+    WHERE lower(a.email) = lower(c.email) AND a.status = 'active' AND v.status = 'rented'
   ) as currently_renting
 `;
 
