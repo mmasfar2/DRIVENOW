@@ -2,6 +2,7 @@ const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const { DATA_DIR } = require('./paths');
+const { computeCharge } = require('./billing');
 
 const db = new Database(path.join(DATA_DIR, 'data.db'));
 db.pragma('journal_mode = WAL');
@@ -649,24 +650,34 @@ function getForfeitedDeposits() {
   }));
 }
 
-// Revenue as it's actually earned by the rental itself — one row per
-// calendar day of every active/completed booking, at that booking's own
-// daily rate plus that day's admin fee, with the one-time travel fee (minus
-// any discount) folded into the pickup day — rather than whenever a payment
-// against it happened to be logged. A booking paid in full on day one (or
-// not yet paid at all) still shows its revenue spread across the exact days
-// it covers: $43 on May 12, $43 on May 13, and so on. Sales tax, highway
-// tax, insurance fee, and processing fee are excluded — pass-through/
-// ancillary, not earnings. This is the single query every revenue figure in
-// the dashboard/reports/Vehicle Detail reads from so they can't drift apart.
+// Revenue as it's actually earned AND paid for — one row per calendar day
+// of every active/completed booking, at that booking's own daily rate plus
+// that day's admin fee, with the one-time travel fee (minus any discount)
+// folded into the pickup day — rather than whenever a payment happened to
+// be logged. A booking paid in full up front shows its revenue spread
+// across the exact days it covers: $43 on May 12, $43 on May 13, and so on.
+// Sales tax, highway tax, insurance fee, and processing fee are excluded —
+// pass-through/ancillary, not earnings.
+//
+// A booking that's only partly paid has only earned that same fraction of
+// its revenue — every day's amount is scaled by paid ÷ full invoice charge,
+// since payments aren't itemized against a specific day or line item. A
+// booking paid in full scales by 1 and is unaffected; a booking with
+// nothing paid yet contributes $0 here until it is. This is
+// the single query every revenue figure in the dashboard/reports/Vehicle
+// Detail reads from so they can't drift apart.
 function getAccruedRevenueDays() {
   const rows = db.prepare(`
     SELECT id as application_id, assigned_vehicle_id as vehicle_id, status,
-           pickup_scheduled_at, rental_end_at, weekly_rate, admin_fee_rate, travel_fee, discount
+           pickup_scheduled_at, rental_end_at, weekly_rate, admin_fee_rate, travel_fee, discount,
+           invoice_amount, total_due_at_pickup, insurance_fee_rate, processing_fee
     FROM applications
     WHERE status IN ('active', 'completed')
       AND pickup_scheduled_at IS NOT NULL AND rental_end_at IS NOT NULL AND weekly_rate IS NOT NULL
   `).all();
+  const paidByApp = new Map(db.prepare(`
+    SELECT application_id, COALESCE(SUM(amount), 0) as total FROM payments GROUP BY application_id
+  `).all().map(r => [r.application_id, r.total]));
   const days = [];
   rows.forEach(a => {
     const start = new Date(a.pickup_scheduled_at.slice(0, 10));
@@ -676,6 +687,9 @@ function getAccruedRevenueDays() {
     // separate, utilization-only concern handled in reports.js.)
     const end = new Date(a.rental_end_at.slice(0, 10));
     if (!(end > start)) return;
+    const totalCharge = computeCharge(a);
+    const paid = Math.max(0, Math.min(paidByApp.get(a.application_id) || 0, totalCharge));
+    const collectedRatio = totalCharge > 0 ? paid / totalCharge : 0;
     const dailyRate = a.weekly_rate / 7;
     const adminFeeRate = Number(a.admin_fee_rate) || 0;
     const travelFee = Math.round((Number(a.travel_fee) || 0) * 100) / 100;
@@ -683,7 +697,8 @@ function getAccruedRevenueDays() {
     const cursor = new Date(start);
     let firstDay = true;
     while (cursor < end) {
-      const amount = Math.round((dailyRate + adminFeeRate + (firstDay ? travelFee - discount : 0)) * 100) / 100;
+      const fullAmount = dailyRate + adminFeeRate + (firstDay ? travelFee - discount : 0);
+      const amount = Math.round(fullAmount * collectedRatio * 100) / 100;
       days.push({ application_id: a.application_id, vehicle_id: a.vehicle_id, date: cursor.toISOString().slice(0, 10), amount });
       firstDay = false;
       cursor.setDate(cursor.getDate() + 1);

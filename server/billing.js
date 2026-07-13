@@ -66,27 +66,6 @@ function computeRevenueEligible(row) {
   return Math.round((subtotal + adminFee + travelFee - discount) * 100) / 100;
 }
 
-// A booking's payments are logged as one lump sum against the whole
-// invoice, not itemized against a specific line — so there's no literal
-// fact about how much of what's been paid was "for" the rent versus "for"
-// tax. The standard way to estimate that split is pro-rata: apply the same
-// revenue-vs-tax/fees ratio the full invoice has to whatever's actually
-// been paid so far. This is the one place that split is computed, so
-// "revenue collected" means the same thing everywhere it's shown.
-function computeCollectionSplit(row, paidTotal) {
-  const totalCharge = computeCharge(row);
-  const revenueEligible = computeRevenueEligible(row);
-  if (totalCharge <= 0) {
-    return { revenueEligible, revenueCollected: 0, revenueOutstanding: revenueEligible };
-  }
-  const paid = Math.max(0, Math.min(Number(paidTotal) || 0, totalCharge));
-  const revenueShare = revenueEligible / totalCharge;
-  const revenueCollected = Math.round(paid * revenueShare * 100) / 100;
-  const revenueOutstanding = Math.round((revenueEligible - revenueCollected) * 100) / 100;
-  return { revenueEligible, revenueCollected, revenueOutstanding };
-}
-
 module.exports = {
-  SALES_TAX_RATE, HIGHWAY_TAX_RATE, computeCharge, computeOwed,
-  computeRevenueEligible, computeCollectionSplit,
+  SALES_TAX_RATE, HIGHWAY_TAX_RATE, computeCharge, computeOwed, computeRevenueEligible,
 };

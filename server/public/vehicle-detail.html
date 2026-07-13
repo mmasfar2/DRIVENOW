@@ -154,7 +154,7 @@
     <div class="panel" style="padding:0;overflow-x:auto;">
       <div class="panel-title" style="padding:18px 18px 0;">Rental History</div>
       <table>
-        <thead><tr><th>Applicant</th><th>Pickup</th><th>Dropoff</th><th>Days</th><th>Revenue</th><th>Collected</th><th>Outstanding</th></tr></thead>
+        <thead><tr><th>Applicant</th><th>Pickup</th><th>Dropoff</th><th>Days</th><th>Revenue</th><th>Outstanding</th></tr></thead>
         <tbody id="vd-bookings-table-body"></tbody>
       </table>
     </div>
@@ -251,10 +251,9 @@ function renderBookingsTable() {
       <td>${b.dropoff ? fmtDate(b.dropoff) : '—'}</td>
       <td>${b.days || '—'}</td>
       <td>${fmtExact(b.revenue)}</td>
-      <td>${fmtExact(b.collected)}</td>
       <td>${fmtExact(b.outstanding)}</td>
     </tr>
-  `).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:24px;">No rental history yet.</td></tr>';
+  `).join('') : '<tr><td colspan="6" style="text-align:center;color:#888;padding:24px;">No rental history yet.</td></tr>';
 }
 
 function renderInspectionPhotos() {
