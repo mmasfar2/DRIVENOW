@@ -3,6 +3,7 @@ const multer = require('multer');
 const { db, logUndo, getForfeitedDeposits, getAccruedRevenueDays } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
+const { computeCollectionSplit } = require('../billing');
 
 const router = express.Router();
 
@@ -62,6 +63,9 @@ router.get('/:id', requireAuth, (req, res) => {
     SELECT * FROM applications a
     WHERE a.assigned_vehicle_id = ? AND a.status != 'rejected'
   `).all(req.params.id);
+  const paidByApp = new Map(db.prepare(`
+    SELECT application_id, COALESCE(SUM(amount), 0) as total FROM payments GROUP BY application_id
+  `).all().map(r => [r.application_id, r.total]));
   const bookings = applications.map(a => {
     const pickup = a.pickup_scheduled_at || null;
     const dropoff = a.rental_end_at || null;
@@ -69,12 +73,20 @@ router.get('/:id', requireAuth, (req, res) => {
     if (pickup && dropoff) {
       days = Math.round((new Date(dropoff) - new Date(pickup)) / 86400000);
     }
+    const forfeited = forfeitedByApp.get(a.id) || 0;
+    // Collected/Outstanding split what's actually been paid between revenue
+    // and tax/fees pro-rata (computeCollectionSplit in billing.js) — a
+    // forfeited deposit has no "outstanding" side, since forfeiting money
+    // only happens against a deposit that was already collected up front.
+    const split = computeCollectionSplit(a, paidByApp.get(a.id) || 0);
     return {
       applicant: `${a.first_name} ${a.last_name}`,
       pickup,
       dropoff,
       days,
-      revenue: Math.round(((accruedByApp.get(a.id) || 0) + (forfeitedByApp.get(a.id) || 0)) * 100) / 100,
+      revenue: Math.round(((accruedByApp.get(a.id) || 0) + forfeited) * 100) / 100,
+      collected: Math.round((split.revenueCollected + forfeited) * 100) / 100,
+      outstanding: split.revenueOutstanding,
     };
   });
 

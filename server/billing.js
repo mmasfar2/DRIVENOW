@@ -48,4 +48,45 @@ function computeOwed(row, paidTotal) {
   return Math.round((charge - Number(paidTotal || 0)) * 100) / 100;
 }
 
-module.exports = { SALES_TAX_RATE, HIGHWAY_TAX_RATE, computeCharge, computeOwed };
+// The revenue-eligible portion of a booking's own charge — lease subtotal +
+// admin fee + travel fee, minus discount. Same components (and same
+// definition of "revenue") getAccruedRevenueDays() in db.js sums day-by-day
+// for reports; this is that same total for one booking, not spread across
+// days. Sales tax, highway tax, insurance fee, and processing fee are
+// excluded, same as everywhere else revenue is computed.
+function computeRevenueEligible(row) {
+  if (!row.pickup_scheduled_at || !row.rental_end_at || !row.weekly_rate) return 0;
+  const days = Math.round((new Date(row.rental_end_at) - new Date(row.pickup_scheduled_at)) / 86400000);
+  if (days <= 0) return 0;
+  const dailyRate = row.weekly_rate / 7;
+  const subtotal = Math.round(dailyRate * days * 100) / 100;
+  const adminFee = Math.round((Number(row.admin_fee_rate) || 0) * days * 100) / 100;
+  const travelFee = Math.round((Number(row.travel_fee) || 0) * 100) / 100;
+  const discount = Math.round((Number(row.discount) || 0) * 100) / 100;
+  return Math.round((subtotal + adminFee + travelFee - discount) * 100) / 100;
+}
+
+// A booking's payments are logged as one lump sum against the whole
+// invoice, not itemized against a specific line — so there's no literal
+// fact about how much of what's been paid was "for" the rent versus "for"
+// tax. The standard way to estimate that split is pro-rata: apply the same
+// revenue-vs-tax/fees ratio the full invoice has to whatever's actually
+// been paid so far. This is the one place that split is computed, so
+// "revenue collected" means the same thing everywhere it's shown.
+function computeCollectionSplit(row, paidTotal) {
+  const totalCharge = computeCharge(row);
+  const revenueEligible = computeRevenueEligible(row);
+  if (totalCharge <= 0) {
+    return { revenueEligible, revenueCollected: 0, revenueOutstanding: revenueEligible };
+  }
+  const paid = Math.max(0, Math.min(Number(paidTotal) || 0, totalCharge));
+  const revenueShare = revenueEligible / totalCharge;
+  const revenueCollected = Math.round(paid * revenueShare * 100) / 100;
+  const revenueOutstanding = Math.round((revenueEligible - revenueCollected) * 100) / 100;
+  return { revenueEligible, revenueCollected, revenueOutstanding };
+}
+
+module.exports = {
+  SALES_TAX_RATE, HIGHWAY_TAX_RATE, computeCharge, computeOwed,
+  computeRevenueEligible, computeCollectionSplit,
+};
