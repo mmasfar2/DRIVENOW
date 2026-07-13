@@ -1037,8 +1037,11 @@ function initNewReservationModal() {
 
   function renderDatesStep() {
     const today = new Date(); today.setHours(0, 0, 0, 0);
+    // No minimum rental length — a return date just has to be after the
+    // pickup date, so any duration (including historical bookings shorter
+    // than a week) can be entered.
     const minReturn = form.pickup_scheduled_at
-      ? new Date(new Date(form.pickup_scheduled_at).getTime() + 7 * 86400000).toISOString().slice(0, 10)
+      ? new Date(new Date(form.pickup_scheduled_at).getTime() + 86400000).toISOString().slice(0, 10)
       : null;
 
     if (!calMonth) {
