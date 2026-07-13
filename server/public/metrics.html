@@ -52,7 +52,7 @@
       <div style="font-size:1.6rem;font-weight:800;" id="m-active-count">—</div>
     </div>
     <div>
-      <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;">Expected Daily Total</div>
+      <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#888;">Outstanding Balance</div>
       <div style="font-size:1.6rem;font-weight:800;" id="m-expected-daily">—</div>
     </div>
     <div>
@@ -223,7 +223,7 @@ async function loadStats() {
   const data = await api('/api/metrics/cashflow');
 
   document.getElementById('m-active-count').textContent = data.activeRenters.length;
-  document.getElementById('m-expected-daily').textContent = fmtMoney(data.expectedDailyTotal);
+  document.getElementById('m-expected-daily').textContent = fmtMoney(data.outstandingBalance);
   document.getElementById('m-deposits-held').textContent = fmtMoney(data.depositsHeld);
 
   document.getElementById('renters-table-body').innerHTML = data.activeRenters.length ? data.activeRenters.map(r => `
