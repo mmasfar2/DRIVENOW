@@ -304,12 +304,6 @@ function fmtFinCalDate(dateStr) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function fmtExact(n) {
-  const num = Number(n || 0);
-  const sign = num < 0 ? '-' : '';
-  return sign + '$' + Math.abs(num).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 // Signed balance -> a normalized amount plus whether it's gone negative
 // (customer overpaid). The label stays whatever each panel already calls
 // it ("Balance Owed" / "Balance Due") — only the number goes negative.

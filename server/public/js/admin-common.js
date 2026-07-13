@@ -227,6 +227,15 @@ function fmtMoney(n) {
   return sign + '$' + Math.abs(num).toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 
+// Same as fmtMoney but to the cent, not rounded to the nearest whole
+// dollar — for figures where the cents actually matter (reports, vehicle
+// financials, itemized invoice amounts) rather than dashboard-style tiles.
+function fmtExact(n) {
+  const num = Number(n || 0);
+  const sign = num < 0 ? '-' : '';
+  return sign + '$' + Math.abs(num).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 // DriveNow operates out of Charlotte, NC — every timestamp shown here is
 // pinned to Eastern time explicitly, rather than whatever timezone the
 // viewer's own device happens to be set to, so a booking made from a phone
