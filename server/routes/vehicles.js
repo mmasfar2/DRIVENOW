@@ -3,7 +3,7 @@ const multer = require('multer');
 const { db, logUndo, getForfeitedDeposits, getAccruedRevenueDays } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
-const { computeCollectionSplit } = require('../billing');
+const { computeRevenueEligible } = require('../billing');
 
 const router = express.Router();
 
@@ -43,12 +43,16 @@ router.get('/:id', requireAuth, (req, res) => {
 
   // Revenue per booking is accrued day-by-day across its actual rental
   // dates — the car's daily rate, travel fee, and admin fee only; sales tax,
-  // highway tax, insurance fee, and processing fee are excluded (see
-  // getAccruedRevenueDays in db.js). Matches the definition used everywhere
-  // else (Dashboard, Reports), and excludes rejected applications that
-  // never became a real rental. Any forfeited security deposit tied to the
-  // booking counts toward revenue too, as of the day it was actually
-  // forfeited — held deposits stay excluded as a liability.
+  // highway tax, insurance fee, and processing fee are excluded — and
+  // scaled by how much of the invoice has actually been paid, since an
+  // unpaid balance hasn't been earned yet (see getAccruedRevenueDays in
+  // db.js). Matches the definition used everywhere else (Dashboard,
+  // Reports), and excludes rejected applications that never became a real
+  // rental. Any forfeited security deposit tied to the booking counts
+  // toward revenue too, in full, as of the day it was actually forfeited —
+  // forfeiting only ever happens against a deposit already collected up
+  // front, so it's never partly unpaid. Held deposits stay excluded as a
+  // liability.
   const forfeitedByApp = new Map();
   getForfeitedDeposits().forEach(d => {
     if (d.vehicle_id !== Number(req.params.id)) return;
@@ -63,9 +67,6 @@ router.get('/:id', requireAuth, (req, res) => {
     SELECT * FROM applications a
     WHERE a.assigned_vehicle_id = ? AND a.status != 'rejected'
   `).all(req.params.id);
-  const paidByApp = new Map(db.prepare(`
-    SELECT application_id, COALESCE(SUM(amount), 0) as total FROM payments GROUP BY application_id
-  `).all().map(r => [r.application_id, r.total]));
   const bookings = applications.map(a => {
     const pickup = a.pickup_scheduled_at || null;
     const dropoff = a.rental_end_at || null;
@@ -74,19 +75,21 @@ router.get('/:id', requireAuth, (req, res) => {
       days = Math.round((new Date(dropoff) - new Date(pickup)) / 86400000);
     }
     const forfeited = forfeitedByApp.get(a.id) || 0;
-    // Collected/Outstanding split what's actually been paid between revenue
-    // and tax/fees pro-rata (computeCollectionSplit in billing.js) — a
-    // forfeited deposit has no "outstanding" side, since forfeiting money
-    // only happens against a deposit that was already collected up front.
-    const split = computeCollectionSplit(a, paidByApp.get(a.id) || 0);
+    const revenue = Math.round(((accruedByApp.get(a.id) || 0) + forfeited) * 100) / 100;
+    // Outstanding is the revenue-eligible portion of the invoice not yet
+    // paid for — computed against the same summed `revenue` figure above
+    // (not re-derived independently) so the two always add up exactly to
+    // what the booking would earn if paid in full, with no rounding drift
+    // between them. Forfeited has no outstanding side, since forfeiting
+    // only ever happens against a deposit already collected up front.
+    const outstanding = Math.round((computeRevenueEligible(a) - (accruedByApp.get(a.id) || 0)) * 100) / 100;
     return {
       applicant: `${a.first_name} ${a.last_name}`,
       pickup,
       dropoff,
       days,
-      revenue: Math.round(((accruedByApp.get(a.id) || 0) + forfeited) * 100) / 100,
-      collected: Math.round((split.revenueCollected + forfeited) * 100) / 100,
-      outstanding: split.revenueOutstanding,
+      revenue,
+      outstanding,
     };
   });
 
