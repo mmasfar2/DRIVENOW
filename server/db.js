@@ -703,20 +703,26 @@ function getAccruedRevenueDays() {
     const cursor = new Date(start);
     let firstDay = true;
     while (cursor < end) {
-      const revenuePortion = Math.round((dailyRate + adminFeeRate + (firstDay ? travelFee - discount : 0)) * 100) / 100;
-      const fullDayInvoice = Math.round((dailyTaxedRate + adminFeeRate + insuranceFeeRate + (firstDay ? travelFee + processingFee - discount : 0)) * 100) / 100;
+      // Kept at full precision through the loop — rounding to the cent only
+      // happens once, on the final amount below. Rounding the running ledger
+      // itself on every single day would compound into a few cents of drift
+      // by the end of a multi-week booking, for no reason: FIFO and pro-rata
+      // are mathematically the same total at full precision, so there's
+      // nothing to round until the last step.
+      const revenuePortion = dailyRate + adminFeeRate + (firstDay ? travelFee - discount : 0);
+      const fullDayInvoice = dailyTaxedRate + adminFeeRate + insuranceFeeRate + (firstDay ? travelFee + processingFee - discount : 0);
       let amount;
       if (remainingPaid >= fullDayInvoice) {
         amount = revenuePortion;
-        remainingPaid = Math.round((remainingPaid - fullDayInvoice) * 100) / 100;
+        remainingPaid -= fullDayInvoice;
       } else if (remainingPaid > 0) {
         const fraction = fullDayInvoice > 0 ? remainingPaid / fullDayInvoice : 0;
-        amount = Math.round(revenuePortion * fraction * 100) / 100;
+        amount = revenuePortion * fraction;
         remainingPaid = 0;
       } else {
         amount = 0;
       }
-      days.push({ application_id: a.application_id, vehicle_id: a.vehicle_id, date: cursor.toISOString().slice(0, 10), amount });
+      days.push({ application_id: a.application_id, vehicle_id: a.vehicle_id, date: cursor.toISOString().slice(0, 10), amount: Math.round(amount * 100) / 100 });
       firstDay = false;
       cursor.setDate(cursor.getDate() + 1);
     }
