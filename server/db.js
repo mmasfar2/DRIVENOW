@@ -670,6 +670,15 @@ function getForfeitedDeposits() {
 // paid % evenly across every day) means a day already fully paid for stays
 // that way — an old, closed month's revenue doesn't retroactively shift
 // just because a later payment came in on the same booking.
+//
+// Each day's invoice cost is its own real, independently cent-rounded
+// charge — the same number it'd be if this booking had actually been
+// billed and paid day by day, rather than one lump total — so the running
+// ledger only ever spends whole cents. That means the sum of every day's
+// invoice can land a few cents away from the booking's actual stored total
+// (rounding 18 separate days up/down independently doesn't perfectly
+// cancel out the way rounding one number once does); that's an accepted
+// tradeoff of treating each day as its own real charge.
 function getAccruedRevenueDays() {
   const rows = db.prepare(`
     SELECT id as application_id, assigned_vehicle_id as vehicle_id, status,
@@ -703,26 +712,20 @@ function getAccruedRevenueDays() {
     const cursor = new Date(start);
     let firstDay = true;
     while (cursor < end) {
-      // Kept at full precision through the loop — rounding to the cent only
-      // happens once, on the final amount below. Rounding the running ledger
-      // itself on every single day would compound into a few cents of drift
-      // by the end of a multi-week booking, for no reason: FIFO and pro-rata
-      // are mathematically the same total at full precision, so there's
-      // nothing to round until the last step.
-      const revenuePortion = dailyRate + adminFeeRate + (firstDay ? travelFee - discount : 0);
-      const fullDayInvoice = dailyTaxedRate + adminFeeRate + insuranceFeeRate + (firstDay ? travelFee + processingFee - discount : 0);
+      const revenuePortion = Math.round((dailyRate + adminFeeRate + (firstDay ? travelFee - discount : 0)) * 100) / 100;
+      const fullDayInvoice = Math.round((dailyTaxedRate + adminFeeRate + insuranceFeeRate + (firstDay ? travelFee + processingFee - discount : 0)) * 100) / 100;
       let amount;
       if (remainingPaid >= fullDayInvoice) {
         amount = revenuePortion;
-        remainingPaid -= fullDayInvoice;
+        remainingPaid = Math.round((remainingPaid - fullDayInvoice) * 100) / 100;
       } else if (remainingPaid > 0) {
         const fraction = fullDayInvoice > 0 ? remainingPaid / fullDayInvoice : 0;
-        amount = revenuePortion * fraction;
+        amount = Math.round(revenuePortion * fraction * 100) / 100;
         remainingPaid = 0;
       } else {
         amount = 0;
       }
-      days.push({ application_id: a.application_id, vehicle_id: a.vehicle_id, date: cursor.toISOString().slice(0, 10), amount: Math.round(amount * 100) / 100 });
+      days.push({ application_id: a.application_id, vehicle_id: a.vehicle_id, date: cursor.toISOString().slice(0, 10), amount });
       firstDay = false;
       cursor.setDate(cursor.getDate() + 1);
     }
