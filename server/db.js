@@ -2,7 +2,7 @@ const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const { DATA_DIR } = require('./paths');
-const { computeCharge } = require('./billing');
+const { computeCharge, SALES_TAX_RATE, HIGHWAY_TAX_RATE } = require('./billing');
 
 const db = new Database(path.join(DATA_DIR, 'data.db'));
 db.pragma('journal_mode = WAL');
@@ -659,13 +659,17 @@ function getForfeitedDeposits() {
 // Sales tax, highway tax, insurance fee, and processing fee are excluded —
 // pass-through/ancillary, not earnings.
 //
-// A booking that's only partly paid has only earned that same fraction of
-// its revenue — every day's amount is scaled by paid ÷ full invoice charge,
-// since payments aren't itemized against a specific day or line item. A
-// booking paid in full scales by 1 and is unaffected; a booking with
-// nothing paid yet contributes $0 here until it is. This is
-// the single query every revenue figure in the dashboard/reports/Vehicle
-// Detail reads from so they can't drift apart.
+// A booking that's only partly paid has only earned the days its payments
+// actually cover — allocated FIFO, oldest day first, like a running tab:
+// walk the booking chronologically and keep "spending" what's been paid
+// against each day's full invoice cost (rate + its share of tax + admin +
+// insurance fee, plus travel/processing fee and minus discount on the
+// pickup day) until it runs out. Earlier days are marked fully earned
+// before later ones get anything, and the one day payment runs out mid-way
+// through gets its own partial share. This (rather than spreading the same
+// paid % evenly across every day) means a day already fully paid for stays
+// that way — an old, closed month's revenue doesn't retroactively shift
+// just because a later payment came in on the same booking.
 function getAccruedRevenueDays() {
   const rows = db.prepare(`
     SELECT id as application_id, assigned_vehicle_id as vehicle_id, status,
@@ -688,17 +692,30 @@ function getAccruedRevenueDays() {
     const end = new Date(a.rental_end_at.slice(0, 10));
     if (!(end > start)) return;
     const totalCharge = computeCharge(a);
-    const paid = Math.max(0, Math.min(paidByApp.get(a.application_id) || 0, totalCharge));
-    const collectedRatio = totalCharge > 0 ? paid / totalCharge : 0;
+    let remainingPaid = Math.max(0, Math.min(paidByApp.get(a.application_id) || 0, totalCharge));
     const dailyRate = a.weekly_rate / 7;
+    const dailyTaxedRate = dailyRate * (1 + HIGHWAY_TAX_RATE + SALES_TAX_RATE);
     const adminFeeRate = Number(a.admin_fee_rate) || 0;
+    const insuranceFeeRate = Number(a.insurance_fee_rate) || 0;
     const travelFee = Math.round((Number(a.travel_fee) || 0) * 100) / 100;
+    const processingFee = Math.round((Number(a.processing_fee) || 0) * 100) / 100;
     const discount = Math.round((Number(a.discount) || 0) * 100) / 100;
     const cursor = new Date(start);
     let firstDay = true;
     while (cursor < end) {
-      const fullAmount = dailyRate + adminFeeRate + (firstDay ? travelFee - discount : 0);
-      const amount = Math.round(fullAmount * collectedRatio * 100) / 100;
+      const revenuePortion = Math.round((dailyRate + adminFeeRate + (firstDay ? travelFee - discount : 0)) * 100) / 100;
+      const fullDayInvoice = Math.round((dailyTaxedRate + adminFeeRate + insuranceFeeRate + (firstDay ? travelFee + processingFee - discount : 0)) * 100) / 100;
+      let amount;
+      if (remainingPaid >= fullDayInvoice) {
+        amount = revenuePortion;
+        remainingPaid = Math.round((remainingPaid - fullDayInvoice) * 100) / 100;
+      } else if (remainingPaid > 0) {
+        const fraction = fullDayInvoice > 0 ? remainingPaid / fullDayInvoice : 0;
+        amount = Math.round(revenuePortion * fraction * 100) / 100;
+        remainingPaid = 0;
+      } else {
+        amount = 0;
+      }
       days.push({ application_id: a.application_id, vehicle_id: a.vehicle_id, date: cursor.toISOString().slice(0, 10), amount });
       firstDay = false;
       cursor.setDate(cursor.getDate() + 1);
