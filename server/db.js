@@ -679,6 +679,14 @@ function getForfeitedDeposits() {
 // (rounding 18 separate days up/down independently doesn't perfectly
 // cancel out the way rounding one number once does); that's an accepted
 // tradeoff of treating each day as its own real charge.
+//
+// Each row also carries taxAmount — that same day's share of highway +
+// sales tax (only ever levied on the lease subtotal, never on admin/
+// travel/insurance/processing fees), collected using the identical FIFO
+// fraction as the day's revenue. This is what the Taxes Collected report
+// reads from, so "how much tax was collected" always uses the same
+// payment-allocation logic as "how much revenue was collected" instead of
+// a separate cash-basis estimate.
 function getAccruedRevenueDays() {
   const rows = db.prepare(`
     SELECT id as application_id, assigned_vehicle_id as vehicle_id, status,
@@ -704,6 +712,7 @@ function getAccruedRevenueDays() {
     let remainingPaid = Math.max(0, Math.min(paidByApp.get(a.application_id) || 0, totalCharge));
     const dailyRate = a.weekly_rate / 7;
     const dailyTaxedRate = dailyRate * (1 + HIGHWAY_TAX_RATE + SALES_TAX_RATE);
+    const dailyTaxPortion = Math.round((dailyRate * (HIGHWAY_TAX_RATE + SALES_TAX_RATE)) * 100) / 100;
     const adminFeeRate = Number(a.admin_fee_rate) || 0;
     const insuranceFeeRate = Number(a.insurance_fee_rate) || 0;
     const travelFee = Math.round((Number(a.travel_fee) || 0) * 100) / 100;
@@ -715,17 +724,21 @@ function getAccruedRevenueDays() {
       const revenuePortion = Math.round((dailyRate + adminFeeRate + (firstDay ? travelFee - discount : 0)) * 100) / 100;
       const fullDayInvoice = Math.round((dailyTaxedRate + adminFeeRate + insuranceFeeRate + (firstDay ? travelFee + processingFee - discount : 0)) * 100) / 100;
       let amount;
+      let taxAmount;
       if (remainingPaid >= fullDayInvoice) {
         amount = revenuePortion;
+        taxAmount = dailyTaxPortion;
         remainingPaid = Math.round((remainingPaid - fullDayInvoice) * 100) / 100;
       } else if (remainingPaid > 0) {
         const fraction = fullDayInvoice > 0 ? remainingPaid / fullDayInvoice : 0;
         amount = Math.round(revenuePortion * fraction * 100) / 100;
+        taxAmount = Math.round(dailyTaxPortion * fraction * 100) / 100;
         remainingPaid = 0;
       } else {
         amount = 0;
+        taxAmount = 0;
       }
-      days.push({ application_id: a.application_id, vehicle_id: a.vehicle_id, date: cursor.toISOString().slice(0, 10), amount });
+      days.push({ application_id: a.application_id, vehicle_id: a.vehicle_id, date: cursor.toISOString().slice(0, 10), amount, taxAmount });
       firstDay = false;
       cursor.setDate(cursor.getDate() + 1);
     }
