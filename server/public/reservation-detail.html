@@ -641,7 +641,15 @@ function renderFinCal() {
   box.querySelectorAll('.resv-cal__day[data-date]').forEach(el => {
     el.addEventListener('click', () => {
       const dateStr = el.dataset.date;
-      if (!finNewPickup || finNewReturn) {
+      if (dateStr === finNewPickup) {
+        // Re-clicking pickup starts a fresh selection from here.
+        finNewPickup = dateStr;
+        finNewReturn = '';
+      } else if (dateStr === finNewReturn) {
+        // Re-clicking return only clears the return date, leaving pickup
+        // untouched, so a new return can be picked without losing pickup.
+        finNewReturn = '';
+      } else if (!finNewPickup || finNewReturn) {
         finNewPickup = dateStr;
         finNewReturn = '';
       } else if (dateStr > finNewPickup) {

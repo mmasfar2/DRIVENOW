@@ -1263,7 +1263,15 @@ function initNewReservationModal() {
     body.querySelectorAll('.resv-cal__day[data-date]').forEach(el => {
       el.addEventListener('click', () => {
         const dateStr = el.dataset.date;
-        if (!form.pickup_scheduled_at || form.rental_end_at) {
+        if (dateStr === form.pickup_scheduled_at) {
+          // Re-clicking pickup starts a fresh selection from here.
+          form.pickup_scheduled_at = dateStr;
+          form.rental_end_at = '';
+        } else if (dateStr === form.rental_end_at) {
+          // Re-clicking return only clears the return date, leaving pickup
+          // untouched, so a new return can be picked without losing pickup.
+          form.rental_end_at = '';
+        } else if (!form.pickup_scheduled_at || form.rental_end_at) {
           form.pickup_scheduled_at = dateStr;
           form.rental_end_at = '';
         } else if (dateStr >= minReturn) {
