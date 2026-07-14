@@ -103,7 +103,7 @@ const REPORTS = {
 
   revenue_by_time_period: {
     category: 'revenue', label: 'Revenue by Time Period',
-    description: 'Total revenue across every vehicle for the selected range — the car\'s daily rate, travel fee, and admin fee, accrued on the actual calendar days of the rental (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue), not the day a payment against it happened to be logged. Plus any security deposit amounts forfeited in range. Less maintenance expense logged in range — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
+    description: 'Total revenue across every vehicle for the selected range — the car\'s daily rate, travel fee, and admin fee, accrued on the actual calendar days of the rental (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue), not the day a payment against it happened to be logged. Plus any security deposit amounts forfeited in range. Less maintenance expense logged in range and general business expenses (card processing fees absorbed, subscriptions, etc.) logged in range — the only report that also counts non-vehicle overhead against profit, since this one represents the whole business, not one car.',
     hasDateRange: true,
     columns: [
       { key: 'period', label: 'Period' },
@@ -119,9 +119,13 @@ const REPORTS = {
       const forfeited = getForfeitedDeposits()
         .filter(d => d.date && d.date >= from && d.date <= to)
         .reduce((sum, d) => sum + Number(d.forfeited_amount), 0);
-      const expense = db.prepare(`
+      const vehicleExpense = db.prepare(`
         SELECT COALESCE(SUM(cost), 0) as total FROM vehicle_maintenance
         WHERE substr(performed_at, 1, 10) BETWEEN ? AND ?
+      `).get(from, to).total;
+      const businessExpense = db.prepare(`
+        SELECT COALESCE(SUM(amount), 0) as total FROM business_expenses
+        WHERE expense_date BETWEEN ? AND ?
       `).get(from, to).total;
       // Card processing fees (a card payment's own surcharge) are a
       // separate, informational figure tied to when the payment actually
@@ -132,7 +136,7 @@ const REPORTS = {
         WHERE substr(paid_at, 1, 10) BETWEEN ? AND ?
       `).get(from, to).total;
       const totalRevenue = round2(revenue + forfeited);
-      const totalExpense = round2(expense);
+      const totalExpense = round2(vehicleExpense + businessExpense);
       return [{
         period: `${from} – ${to}`,
         revenue: totalRevenue, expense: totalExpense, profit: round2(totalRevenue - totalExpense),

@@ -23,6 +23,7 @@ const insuranceRoutes = require('./routes/insurance');
 const claimRoutes = require('./routes/claims');
 const reportRoutes = require('./routes/reports');
 const downtimeRoutes = require('./routes/downtime');
+const businessExpenseRoutes = require('./routes/business-expenses');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -69,6 +70,7 @@ app.use('/api/insurance', insuranceRoutes);
 app.use('/api/claims', claimRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/downtime', downtimeRoutes);
+app.use('/api/business-expenses', businessExpenseRoutes);
 
 app.use('/uploads', express.static(UPLOADS_DIR));
 app.use(express.static(path.join(__dirname, 'public')));
