@@ -1,7 +1,7 @@
 const express = require('express');
 const { db, getForfeitedDeposits, getAccruedRevenueDays } = require('../db');
 const { requireAuth } = require('../middleware/auth');
-const { SALES_TAX_RATE, computeCharge, computeOwed } = require('../billing');
+const { SALES_TAX_RATE, HIGHWAY_TAX_RATE, computeCharge, computeOwed } = require('../billing');
 const { todayStr: businessTodayStr } = require('../timezone');
 
 const router = express.Router();
@@ -9,7 +9,6 @@ const router = express.Router();
 // Every report reads from the same tables the rest of the app already treats
 // as the source of truth (payments, deposits, vehicle_maintenance, claims,
 // billing.js) instead of recomputing its own version of "revenue" or "owed".
-const TAX_FRACTION = SALES_TAX_RATE / (1 + SALES_TAX_RATE);
 
 function round2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
 function dayDiff(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
@@ -144,28 +143,28 @@ const REPORTS = {
 
   taxes_collected: {
     category: 'revenue', label: 'Taxes Collected',
-    description: `Estimated sales tax (${(SALES_TAX_RATE * 100).toFixed(2)}%) embedded in each payment collected, using the same rate billing.js uses to price every booking.`,
+    description: `Highway tax (${(HIGHWAY_TAX_RATE * 100).toFixed(2)}%) and sales tax (${(SALES_TAX_RATE * 100).toFixed(2)}%) actually collected for the selected range — accrued day-by-day and allocated using the same FIFO payment logic as Revenue (see getAccruedRevenueDays in db.js), not estimated as a flat percentage of raw payment totals.`,
     hasDateRange: true,
     columns: [
-      { key: 'date', label: 'Date' },
-      { key: 'customer', label: 'Customer' },
-      { key: 'vehicle', label: 'Vehicle' },
-      { key: 'amount', label: 'Payment Amount', type: 'money' },
-      { key: 'tax', label: 'Est. Tax Collected', type: 'money' },
+      { key: 'period', label: 'Period' },
+      { key: 'highway_tax', label: 'Highway Tax Collected', type: 'money' },
+      { key: 'sales_tax', label: 'Sales Tax Collected', type: 'money' },
+      { key: 'total_tax', label: 'Total Tax Collected', type: 'money' },
     ],
     run(from, to) {
-      return db.prepare(`
-        SELECT p.paid_at, p.amount, a.first_name, a.last_name, v.year, v.make, v.model
-        FROM payments p
-        JOIN applications a ON a.id = p.application_id
-        LEFT JOIN vehicles v ON v.id = a.assigned_vehicle_id
-        WHERE substr(p.paid_at, 1, 10) BETWEEN ? AND ?
-        ORDER BY p.paid_at
-      `).all(from, to).map(r => ({
-        date: r.paid_at.slice(0, 10), customer: `${r.first_name} ${r.last_name}`,
-        vehicle: r.make ? `${r.year} ${r.make} ${r.model}` : '—',
-        amount: round2(r.amount), tax: round2(r.amount * TAX_FRACTION),
-      }));
+      const totalTax = getAccruedRevenueDays()
+        .filter(d => d.date >= from && d.date <= to)
+        .reduce((sum, d) => sum + d.taxAmount, 0);
+      // Both taxes are levied on the same lease subtotal at a fixed rate
+      // each, so splitting the combined collected total by that fixed
+      // rate ratio is exact, not an approximation.
+      const highwayShare = HIGHWAY_TAX_RATE / (HIGHWAY_TAX_RATE + SALES_TAX_RATE);
+      const highwayTax = round2(totalTax * highwayShare);
+      const salesTax = round2(totalTax - highwayTax);
+      return [{
+        period: `${from} – ${to}`,
+        highway_tax: highwayTax, sales_tax: salesTax, total_tax: round2(totalTax),
+      }];
     },
   },
 
