@@ -844,15 +844,26 @@ document.querySelectorAll('.rd-tab').forEach(tab => {
 // this page's memory until it's actually persisted — Send Invoice does that,
 // but it also texts the customer and advances their pipeline stage, which
 // isn't what you want for a purely internal correction. This saves the
-// current total, plus the Discount amount specifically as its own stored
-// field so the checkbox reflects what was saved (checked, with its amount)
-// on the next reload instead of resetting to unchecked/0 — same pattern as
-// Admin/Travel/Insurance Fee already use.
+// current total, plus Discount/Admin Fee/Travel Fee/Insurance Fee/Processing
+// Fee each as their own stored field (unchecked -> 0) so their checkboxes
+// reflect what was actually saved on the next reload instead of resetting to
+// whatever the booking's original rate happened to be — initBreakdown derives
+// each checkbox's starting state from these same columns.
 document.getElementById('rd-save-adjustments-btn').addEventListener('click', async () => {
   const total = getInvoiceTotal();
-  const discountItem = paymentBreakdownItems.find(i => i.key === 'discount');
-  const discount = discountItem && discountItem.checked ? Number(discountItem.amount) || 0 : 0;
-  await api(`/api/applications/${id}`, { method: 'PATCH', body: JSON.stringify({ invoice_total: total, discount }) });
+  const itemValue = (key, field) => {
+    const item = paymentBreakdownItems.find(i => i.key === key);
+    if (!item || !item.checked) return 0;
+    return Number(item[field]) || 0;
+  };
+  await api(`/api/applications/${id}`, { method: 'PATCH', body: JSON.stringify({
+    invoice_total: total,
+    discount: itemValue('discount', 'amount'),
+    admin_fee_rate: itemValue('admin', 'rate'),
+    travel_fee: itemValue('travel', 'amount'),
+    insurance_fee_rate: itemValue('insurancefee', 'rate'),
+    processing_fee: itemValue('processingfee', 'amount'),
+  }) });
   await load();
 });
 
