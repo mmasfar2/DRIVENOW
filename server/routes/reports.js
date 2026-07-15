@@ -59,7 +59,7 @@ function computeVehicleDays(from, to) {
 const REPORTS = {
   revenue_by_vehicle: {
     category: 'revenue', label: 'Revenue by Vehicle',
-    description: 'The car\'s daily rate, travel fee, and admin fee, accrued day-by-day across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged. Plus any deposit amounts forfeited against that vehicle, counted as of the booking\'s return date. Less maintenance expense (tolls excluded — a pass-through cost recovered from the customer, not money actually lost) and any business expenses attributed to that specific vehicle (e.g. Swipe card-processing fees traced back to its bookings) — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
+    description: 'The car\'s daily rate, travel fee, and admin fee, accrued day-by-day across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged. Plus any deposit amounts forfeited against that vehicle, counted as of the booking\'s return date. Expense is maintenance cost only (tolls excluded — a pass-through cost recovered from the customer, not money actually lost); Business Expense is any business expense attributed to that specific vehicle (e.g. Swipe card-processing fees traced back to its bookings) — shown as its own column. Profit is Revenue less both.',
     hasDateRange: true,
     columns: [
       { key: 'vehicle', label: 'Vehicle' },
@@ -67,6 +67,7 @@ const REPORTS = {
       { key: 'bookings', label: 'Bookings', type: 'number' },
       { key: 'revenue', label: 'Revenue', type: 'money' },
       { key: 'expense', label: 'Expense', type: 'money' },
+      { key: 'business_expense', label: 'Business Expense', type: 'money' },
       { key: 'profit', label: 'Profit', type: 'money' },
     ],
     run(from, to) {
@@ -95,16 +96,15 @@ const REPORTS = {
       `).all(from, to).map(r => [r.vehicle_id, r.expense]));
       // Business expenses attributed to a specific vehicle (currently just
       // Swipe card-processing fees traced through payment -> application ->
-      // assigned_vehicle_id) count against that car too — same as Vehicle
-      // Detail's Expense/Profit.
-      db.prepare(`
+      // assigned_vehicle_id) — kept as its own column rather than folded
+      // into Expense, so maintenance cost and absorbed business cost stay
+      // distinguishable at a glance.
+      const businessExpenseByVehicle = new Map(db.prepare(`
         SELECT vehicle_id, COALESCE(SUM(amount), 0) as expense
         FROM business_expenses
         WHERE vehicle_id IS NOT NULL AND expense_date BETWEEN ? AND ?
         GROUP BY vehicle_id
-      `).all(from, to).forEach(r => {
-        expenseByVehicle.set(r.vehicle_id, (expenseByVehicle.get(r.vehicle_id) || 0) + r.expense);
-      });
+      `).all(from, to).map(r => [r.vehicle_id, r.expense]));
       const forfeitedByVehicle = new Map();
       getForfeitedDeposits().forEach(d => {
         if (!d.date || d.date < from || d.date > to) return;
@@ -114,9 +114,11 @@ const REPORTS = {
         const entry = byVehicle.get(v.id);
         const revenue = round2((entry ? entry.revenue : 0) + (forfeitedByVehicle.get(v.id) || 0));
         const expense = round2(expenseByVehicle.get(v.id) || 0);
+        const businessExpense = round2(businessExpenseByVehicle.get(v.id) || 0);
         return {
           vehicle: `${v.year} ${v.make} ${v.model}`, license_plate: v.license_plate || '—',
-          bookings: entry ? entry.appIds.size : 0, revenue, expense, profit: round2(revenue - expense),
+          bookings: entry ? entry.appIds.size : 0, revenue, expense, business_expense: businessExpense,
+          profit: round2(revenue - expense - businessExpense),
         };
       }).sort((a, b) => b.revenue - a.revenue);
     },
