@@ -592,22 +592,30 @@ router.patch('/:id', requireAuth, (req, res) => {
   // The Financials tab's Invoice Adjustments panel has its own "Save
   // Adjustments" action, separate from "Send Invoice" — that one also texts
   // the customer and advances their pipeline stage, which isn't wanted for
-  // a purely internal correction (e.g. applying a Discount checkbox). This
-  // just persists whatever total the checked/edited rows currently add up
-  // to, the same way a date change recomputes and persists a new total.
-  // Discount is saved as its own column (like travel_fee) so the checkbox
-  // reflects what was actually saved instead of resetting to unchecked/0 on
-  // the next reload — computeCharge subtracts it on any future recompute
-  // too (e.g. a later date change), so it isn't silently lost.
+  // a purely internal correction (e.g. applying a Discount or Insurance Fee
+  // checkbox). This persists whatever total the checked/edited rows
+  // currently add up to, the same way a date change recomputes and persists
+  // a new total. Discount/Admin Fee/Travel Fee/Insurance Fee/Processing Fee
+  // are each saved as their own column too (unchecked -> 0) so their
+  // checkboxes reflect what was actually saved instead of resetting to
+  // whatever the booking's original rate happened to be on the next reload
+  // — computeCharge picks these up on any future recompute too (e.g. a
+  // later date change), so they aren't silently lost.
   if (hasInvoiceTotal) {
     const id = req.params.id;
     const total = Math.round(Number(req.body.invoice_total) * 100) / 100;
-    if (req.body.discount !== undefined) {
-      const discount = Math.round(Number(req.body.discount) * 100) / 100;
-      db.prepare('UPDATE applications SET total_due_at_pickup = ?, invoice_amount = ?, discount = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(total, total, discount, id);
-    } else {
-      db.prepare('UPDATE applications SET total_due_at_pickup = ?, invoice_amount = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(total, total, id);
+    const extraFields = { discount: 'discount', admin_fee_rate: 'admin_fee_rate', travel_fee: 'travel_fee', insurance_fee_rate: 'insurance_fee_rate', processing_fee: 'processing_fee' };
+    const setCols = ['total_due_at_pickup = ?', 'invoice_amount = ?'];
+    const setParams = [total, total];
+    for (const [bodyKey, column] of Object.entries(extraFields)) {
+      if (req.body[bodyKey] !== undefined) {
+        setCols.push(`${column} = ?`);
+        setParams.push(Math.round(Number(req.body[bodyKey]) * 100) / 100);
+      }
     }
+    setCols.push('updated_at = CURRENT_TIMESTAMP');
+    setParams.push(id);
+    db.prepare(`UPDATE applications SET ${setCols.join(', ')} WHERE id = ?`).run(...setParams);
     logActivity(id, `Invoice adjustments saved — total set to $${total}`);
   }
 
