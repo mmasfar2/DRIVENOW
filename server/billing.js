@@ -4,6 +4,11 @@
 // used to (Booking Summary vs. Financials showing two different numbers).
 const SALES_TAX_RATE = 0.0725;
 const HIGHWAY_TAX_RATE = 0.08;
+// What the real card processor actually takes on a "Payment through Swipe"
+// payment — absorbed as a business expense, never billed to the customer
+// (that's what makes it different from the Card method's customer-facing
+// surcharge, which is a separate, adjustable rate entered per payment).
+const SWIPE_FEE_RATE = 0.0275;
 
 // A booking's charge is whatever was actually invoiced/quoted if that exists;
 // only falls back to a live rate x days estimate before a number's been set.
@@ -67,5 +72,5 @@ function computeRevenueEligible(row) {
 }
 
 module.exports = {
-  SALES_TAX_RATE, HIGHWAY_TAX_RATE, computeCharge, computeOwed, computeRevenueEligible,
+  SALES_TAX_RATE, HIGHWAY_TAX_RATE, SWIPE_FEE_RATE, computeCharge, computeOwed, computeRevenueEligible,
 };

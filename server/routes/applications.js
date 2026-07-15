@@ -3,7 +3,7 @@ const multer = require('multer');
 const { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
-const { computeCharge, computeOwed } = require('../billing');
+const { computeCharge, computeOwed, SWIPE_FEE_RATE } = require('../billing');
 const { todayStr } = require('../timezone');
 
 const router = express.Router();
@@ -343,6 +343,31 @@ router.get('/:id/payments', requireAuth, (req, res) => {
   res.json(rows);
 });
 
+// "Payment through Swipe" is a card payment where the processor's real cut
+// (SWIPE_FEE_RATE) is absorbed by the business rather than billed to the
+// customer — unlike the Card method's processing_fee, which is a
+// customer-facing surcharge added to what they owe. The absorbed cost still
+// has to show up somewhere, so it's auto-logged as a Business Expense (see
+// business-expenses.js) tied back to this specific payment via payment_id,
+// so editing or deleting the payment keeps that expense entry in sync
+// instead of leaving a stale one behind.
+function syncSwipeExpense(paymentId, applicationId, method, amount, paidAt, customerName) {
+  const existing = db.prepare('SELECT id FROM business_expenses WHERE payment_id = ?').get(paymentId);
+  if (method === 'swipe') {
+    const fee = Math.round(Number(amount) * SWIPE_FEE_RATE * 100) / 100;
+    const notes = `Swipe processing fee — payment on reservation #${applicationId} (${customerName})`;
+    if (existing) {
+      db.prepare('UPDATE business_expenses SET amount = ?, expense_date = ?, notes = ? WHERE id = ?')
+        .run(fee, paidAt, notes, existing.id);
+    } else {
+      db.prepare('INSERT INTO business_expenses (category, amount, expense_date, notes, payment_id) VALUES (?, ?, ?, ?, ?)')
+        .run('Card Processing Fee', fee, paidAt, notes, paymentId);
+    }
+  } else if (existing) {
+    db.prepare('DELETE FROM business_expenses WHERE id = ?').run(existing.id);
+  }
+}
+
 router.post('/:id/payments', requireAuth, (req, res) => {
   const { amount, paid_at, method, processing_fee } = req.body;
   const id = req.params.id;
@@ -350,11 +375,15 @@ router.post('/:id/payments', requireAuth, (req, res) => {
   if (!app) return res.status(404).json({ error: 'Not found' });
   if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'A valid amount is required' });
 
-  const paymentMethod = method === 'card' ? 'card' : 'cash';
+  const paymentMethod = method === 'card' ? 'card' : method === 'swipe' ? 'swipe' : 'cash';
   const fee = paymentMethod === 'card' ? Math.max(0, Number(processing_fee) || 0) : 0;
+  const paidAt = paid_at || todayStr();
 
-  db.prepare('INSERT INTO payments (application_id, amount, paid_at, method, processing_fee) VALUES (?, ?, ?, ?, ?)')
-    .run(id, amount, paid_at || todayStr(), paymentMethod, fee);
+  const result = db.prepare('INSERT INTO payments (application_id, amount, paid_at, method, processing_fee) VALUES (?, ?, ?, ?, ?)')
+    .run(id, amount, paidAt, paymentMethod, fee);
+  if (paymentMethod === 'swipe') {
+    syncSwipeExpense(result.lastInsertRowid, id, paymentMethod, amount, paidAt, `${app.first_name} ${app.last_name}`);
+  }
   logActivity(id, `Payment of $${amount} recorded (${paymentMethod}${fee ? `, +$${fee} processing fee` : ''})`);
   res.status(201).json({ ok: true });
 });
@@ -362,16 +391,20 @@ router.post('/:id/payments', requireAuth, (req, res) => {
 router.put('/:id/payments/:paymentId', requireAuth, (req, res) => {
   const { amount, paid_at, method, processing_fee } = req.body;
   const id = req.params.id;
+  const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
   const existing = db.prepare('SELECT * FROM payments WHERE id = ? AND application_id = ?').get(req.params.paymentId, id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
   if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'A valid amount is required' });
 
-  const paymentMethod = method === 'card' ? 'card' : 'cash';
+  const paymentMethod = method === 'card' ? 'card' : method === 'swipe' ? 'swipe' : 'cash';
   const fee = paymentMethod === 'card' ? Math.max(0, Number(processing_fee) || 0) : 0;
+  const paidAt = paid_at || existing.paid_at;
+  const linkedExpense = db.prepare('SELECT * FROM business_expenses WHERE payment_id = ?').get(existing.id);
 
-  logUndo('payment_edit', `Edited a payment on reservation #${id}`, { previous: existing });
+  logUndo('payment_edit', `Edited a payment on reservation #${id}`, { previous: existing, previousExpense: linkedExpense });
   db.prepare('UPDATE payments SET amount = ?, paid_at = ?, method = ?, processing_fee = ? WHERE id = ?')
-    .run(amount, paid_at || existing.paid_at, paymentMethod, fee, existing.id);
+    .run(amount, paidAt, paymentMethod, fee, existing.id);
+  syncSwipeExpense(existing.id, id, paymentMethod, amount, paidAt, `${app.first_name} ${app.last_name}`);
   logActivity(id, `Payment edited — now $${amount} (${paymentMethod}${fee ? `, +$${fee} processing fee` : ''})`);
   res.json({ ok: true });
 });
@@ -380,8 +413,10 @@ router.delete('/:id/payments/:paymentId', requireAuth, (req, res) => {
   const id = req.params.id;
   const existing = db.prepare('SELECT * FROM payments WHERE id = ? AND application_id = ?').get(req.params.paymentId, id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
+  const linkedExpense = db.prepare('SELECT * FROM business_expenses WHERE payment_id = ?').get(existing.id);
 
-  logUndo('payment_delete', `Deleted a payment on reservation #${id}`, { payment: existing });
+  logUndo('payment_delete', `Deleted a payment on reservation #${id}`, { payment: existing, linkedExpense });
+  if (linkedExpense) db.prepare('DELETE FROM business_expenses WHERE id = ?').run(linkedExpense.id);
   db.prepare('DELETE FROM payments WHERE id = ?').run(existing.id);
   logActivity(id, `Payment of $${existing.amount} deleted`);
   res.json({ ok: true });
@@ -667,6 +702,13 @@ router.delete('/:id', requireAuth, (req, res) => {
   const activity = db.prepare('SELECT * FROM activity_log WHERE application_id = ?').all(id);
   const messages = db.prepare('SELECT * FROM messages_outbox WHERE application_id = ?').all(id);
   const notes = db.prepare('SELECT * FROM booking_notes WHERE application_id = ?').all(id);
+  // Any swipe-linked business expenses tied to this booking's payments need
+  // to go with them — otherwise they'd be left behind pointing at a
+  // payment_id that no longer exists.
+  const paymentIds = payments.map(p => p.id);
+  const linkedExpenses = paymentIds.length
+    ? db.prepare(`SELECT * FROM business_expenses WHERE payment_id IN (${paymentIds.map(() => '?').join(',')})`).all(...paymentIds)
+    : [];
 
   // If this was the customer's only actual booking (an application that had a
   // vehicle assigned — not just a lead/inquiry that never went anywhere),
@@ -691,11 +733,14 @@ router.delete('/:id', requireAuth, (req, res) => {
   }
 
   logUndo('application_delete', `Removed reservation for ${application.first_name} ${application.last_name}`, {
-    application, payments, deposits, activity, messages, notes, customer, insuranceRecords,
+    application, payments, deposits, activity, messages, notes, customer, insuranceRecords, linkedExpenses,
   });
 
   if (application.assigned_vehicle_id) {
     db.prepare("UPDATE vehicles SET status = 'available' WHERE id = ? AND status IN ('reserved', 'rented')").run(application.assigned_vehicle_id);
+  }
+  if (paymentIds.length) {
+    db.prepare(`DELETE FROM business_expenses WHERE payment_id IN (${paymentIds.map(() => '?').join(',')})`).run(...paymentIds);
   }
   db.prepare('DELETE FROM payments WHERE application_id = ?').run(id);
   db.prepare('DELETE FROM deposits WHERE application_id = ?').run(id);
