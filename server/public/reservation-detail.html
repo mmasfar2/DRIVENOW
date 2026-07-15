@@ -176,6 +176,7 @@
         <select id="ap-method">
           <option value="cash">Cash</option>
           <option value="card">Card</option>
+          <option value="swipe">Payment through Swipe</option>
         </select>
       </div>
       <div class="field" id="ap-fee-field" style="display:none;">
@@ -184,6 +185,12 @@
         <div style="font-size:0.8rem;color:#666;margin-top:6px;">
           Fee charged to customer: <strong id="ap-fee-amount">$0.00</strong><br>
           Total to collect: <strong id="ap-total-amount">$0.00</strong>
+        </div>
+      </div>
+      <div class="field" id="ap-swipe-fee-field" style="display:none;">
+        <div style="font-size:0.8rem;color:#666;">
+          Processor's real cut (2.75%, absorbed — not billed to the customer): <strong id="ap-swipe-fee-amount">$0.00</strong><br>
+          Logged automatically as a Business Expense.
         </div>
       </div>
       <div style="font-size:0.82rem;color:#444;margin-bottom:14px;padding-top:10px;border-top:1px solid var(--gray-border);">
@@ -961,6 +968,12 @@ function updatePaymentFeePreview() {
     const fee = Math.round(amount * (rate / 100) * 100) / 100;
     document.getElementById('ap-fee-amount').textContent = fmtExact(fee);
     document.getElementById('ap-total-amount').textContent = fmtExact(amount + fee);
+  }
+  const swipeFeeField = document.getElementById('ap-swipe-fee-field');
+  swipeFeeField.style.display = method === 'swipe' ? '' : 'none';
+  if (method === 'swipe') {
+    const amount = Number(document.getElementById('ap-amount').value) || 0;
+    document.getElementById('ap-swipe-fee-amount').textContent = fmtExact(Math.round(amount * PROCESSING_FEE_RATE * 100) / 100);
   }
 
   const amount = Number(document.getElementById('ap-amount').value) || 0;

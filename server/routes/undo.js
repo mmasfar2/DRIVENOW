@@ -37,13 +37,20 @@ router.post('/', requireAuth, (req, res) => {
     db.prepare('INSERT INTO vehicle_photos (id, vehicle_id, photo_path, created_at) VALUES (?, ?, ?, ?)').run(p.id, p.vehicle_id, p.photo_path, p.created_at);
     db.prepare('UPDATE vehicles SET photo_path = ? WHERE id = ?').run(p.photo_path, p.vehicle_id);
   } else if (row.entity_type === 'application_delete') {
-    const { application, payments, deposits, activity, messages, notes, customer, insuranceRecords } = payload;
+    const { application, payments, deposits, activity, messages, notes, customer, insuranceRecords, linkedExpenses } = payload;
     const cols = Object.keys(application);
     db.prepare(`
       INSERT INTO applications (${cols.join(', ')}) VALUES (${cols.map(c => `@${c}`).join(', ')})
     `).run(application);
     const insPayment = db.prepare('INSERT INTO payments (id, application_id, amount, paid_at, method, processing_fee, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
     payments.forEach(p => insPayment.run(p.id, p.application_id, p.amount, p.paid_at, p.method || 'cash', p.processing_fee || 0, p.created_at));
+    if (linkedExpenses && linkedExpenses.length) {
+      const insExpense = db.prepare(`
+        INSERT INTO business_expenses (id, category, amount, expense_date, notes, payment_id, created_at)
+        VALUES (@id, @category, @amount, @expense_date, @notes, @payment_id, @created_at)
+      `);
+      linkedExpenses.forEach(e => insExpense.run(e));
+    }
     const insDeposit = db.prepare(`
       INSERT INTO deposits (id, application_id, amount, method, processing_fee, status, collected_at, refunded_amount, forfeited_amount, resolved_at, notes, created_at)
       VALUES (@id, @application_id, @amount, @method, @processing_fee, @status, @collected_at, @refunded_amount, @forfeited_amount, @resolved_at, @notes, @created_at)
@@ -69,13 +76,36 @@ router.post('/', requireAuth, (req, res) => {
       insuranceRecords.forEach(r => insIns.run(r));
     }
   } else if (row.entity_type === 'payment_delete') {
-    const { payment } = payload;
+    const { payment, linkedExpense } = payload;
     db.prepare('INSERT INTO payments (id, application_id, amount, paid_at, method, processing_fee, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run(payment.id, payment.application_id, payment.amount, payment.paid_at, payment.method, payment.processing_fee, payment.created_at);
+    if (linkedExpense) {
+      db.prepare(`
+        INSERT INTO business_expenses (id, category, amount, expense_date, notes, payment_id, created_at)
+        VALUES (@id, @category, @amount, @expense_date, @notes, @payment_id, @created_at)
+      `).run(linkedExpense);
+    }
   } else if (row.entity_type === 'payment_edit') {
-    const { previous } = payload;
+    const { previous, previousExpense } = payload;
     db.prepare('UPDATE payments SET amount = ?, paid_at = ?, method = ?, processing_fee = ? WHERE id = ?')
       .run(previous.amount, previous.paid_at, previous.method, previous.processing_fee, previous.id);
+    // The edit may have created, updated, or removed a swipe-linked business
+    // expense — put that back to whatever it was before the edit too, not
+    // just the payment row itself.
+    const currentExpense = db.prepare('SELECT id FROM business_expenses WHERE payment_id = ?').get(previous.id);
+    if (previousExpense) {
+      if (currentExpense) {
+        db.prepare('UPDATE business_expenses SET category = ?, amount = ?, expense_date = ?, notes = ? WHERE id = ?')
+          .run(previousExpense.category, previousExpense.amount, previousExpense.expense_date, previousExpense.notes, currentExpense.id);
+      } else {
+        db.prepare(`
+          INSERT INTO business_expenses (id, category, amount, expense_date, notes, payment_id, created_at)
+          VALUES (@id, @category, @amount, @expense_date, @notes, @payment_id, @created_at)
+        `).run(previousExpense);
+      }
+    } else if (currentExpense) {
+      db.prepare('DELETE FROM business_expenses WHERE id = ?').run(currentExpense.id);
+    }
   } else if (row.entity_type === 'insurance_delete') {
     const { record } = payload;
     db.prepare(`

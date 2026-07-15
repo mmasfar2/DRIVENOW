@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS payments (
   application_id INTEGER NOT NULL,
   amount REAL NOT NULL,
   paid_at TEXT NOT NULL,
-  method TEXT NOT NULL DEFAULT 'cash', -- cash | card
+  method TEXT NOT NULL DEFAULT 'cash', -- cash | card | swipe
   processing_fee REAL NOT NULL DEFAULT 0,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (application_id) REFERENCES applications(id)
@@ -329,6 +329,14 @@ if (!vehicleCols.includes('purchase_mileage')) {
 const maintenanceCols = db.prepare("PRAGMA table_info(vehicle_maintenance)").all().map(c => c.name);
 if (!maintenanceCols.includes('category')) {
   db.exec('ALTER TABLE vehicle_maintenance ADD COLUMN category TEXT');
+}
+
+const businessExpenseCols = db.prepare("PRAGMA table_info(business_expenses)").all().map(c => c.name);
+if (!businessExpenseCols.includes('payment_id')) {
+  // Set only on expense rows auto-generated from a "Payment through Swipe"
+  // payment, so editing/deleting that payment can find and keep its
+  // absorbed-fee expense entry in sync instead of leaving it orphaned.
+  db.exec('ALTER TABLE business_expenses ADD COLUMN payment_id INTEGER');
 }
 
 const paymentCols = db.prepare("PRAGMA table_info(payments)").all().map(c => c.name);
