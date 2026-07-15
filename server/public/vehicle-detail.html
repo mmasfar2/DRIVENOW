@@ -100,6 +100,14 @@
           <button class="btn btn-sm" id="vd-mileage-save">Save</button>
         </div>
       </div>
+      <div class="vd-stat-card">
+        <div class="vd-stat-card__label">Total Maintenance Cost</div>
+        <div class="vd-stat-card__value" id="vd-maint-total">$0</div>
+      </div>
+      <div class="vd-stat-card">
+        <div class="vd-stat-card__label">Total Business Expenses (This Vehicle)</div>
+        <div class="vd-stat-card__value" id="vd-expense-total">$0</div>
+      </div>
     </div>
 
     <div class="panel">
@@ -222,6 +230,8 @@ function render() {
   document.getElementById('vd-last-serviced').textContent = vehicle.lastServiced || '—';
   document.getElementById('vd-next-service-input').value = vehicle.next_service_at ? vehicle.next_service_at.slice(0, 10) : '';
   document.getElementById('vd-mileage-input').value = vehicle.mileage ?? '';
+  document.getElementById('vd-maint-total').textContent = fmtExact(vehicle.maintenanceTotal);
+  document.getElementById('vd-expense-total').textContent = fmtExact(vehicle.businessExpenseTotal);
 
   renderMaintenanceTable();
   renderExpenseTable();
