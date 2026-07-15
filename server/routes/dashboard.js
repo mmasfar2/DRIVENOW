@@ -39,8 +39,8 @@ router.get('/summary', requireAuth, (req, res) => {
   // it happened to be logged — a booking paid on July 11 for a May 12–June
   // 14 rental still shows its revenue spread across those May/June days
   // (see getAccruedRevenueDays in db.js). Forfeited security deposits count
-  // as revenue too, as of the day they were actually forfeited (held
-  // deposits stay a liability, excluded). Every revenue figure below reads
+  // as revenue too, as of the booking's return date (held deposits stay a
+  // liability, excluded). Every revenue figure below reads
   // from these same two queries so a forfeiture or a fee can't show up as
   // revenue in one place and not another.
   const accruedDays = getAccruedRevenueDays();

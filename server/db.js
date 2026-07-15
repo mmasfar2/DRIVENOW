@@ -2,7 +2,7 @@ const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const { DATA_DIR } = require('./paths');
-const { computeCharge, SALES_TAX_RATE, HIGHWAY_TAX_RATE } = require('./billing');
+const { computeCharge, computeRevenueEligible, SALES_TAX_RATE, HIGHWAY_TAX_RATE } = require('./billing');
 
 const db = new Database(path.join(DATA_DIR, 'data.db'));
 db.pragma('journal_mode = WAL');
@@ -656,20 +656,23 @@ if (vehicleCount === 0) {
 // stays a refundable liability, but the moment some (or all) of it is
 // forfeited, that portion is real revenue and needs to show up everywhere
 // revenue does (dashboard totals, Revenue reports, Vehicle Detail profit).
-// Attributed to the day it was actually forfeited (resolved_at), not the
-// booking's own rental dates — unlike getAccruedRevenueDays below, a
-// deposit resolution is its own event with its own date, not something that
-// accrues across the rental period. Every revenue figure reads from this
-// single query so a forfeiture can't show up in one place and not another.
+// Attributed to the booking's own return date (rental_end_at) — not
+// resolved_at (whenever the resolve-deposit action actually happened, which
+// could be days after the return if it wasn't processed right away) and not
+// any check-in button click timestamp either. A booking's forfeiture always
+// belongs to when the rental itself ended, regardless of when staff got
+// around to marking it resolved in the system. Every revenue figure reads
+// from this single query so a forfeiture can't show up in one place and not
+// another.
 function getForfeitedDeposits() {
   return db.prepare(`
-    SELECT d.id, d.application_id, a.assigned_vehicle_id as vehicle_id, d.forfeited_amount, d.resolved_at
+    SELECT d.id, d.application_id, a.assigned_vehicle_id as vehicle_id, d.forfeited_amount, a.rental_end_at
     FROM deposits d JOIN applications a ON a.id = d.application_id
     WHERE d.status = 'resolved' AND d.forfeited_amount > 0
   `).all().map(d => ({
     id: d.id, application_id: d.application_id, vehicle_id: d.vehicle_id,
     forfeited_amount: d.forfeited_amount,
-    date: d.resolved_at ? d.resolved_at.slice(0, 10) : null,
+    date: d.rental_end_at ? d.rental_end_at.slice(0, 10) : null,
   }));
 }
 
@@ -710,6 +713,15 @@ function getForfeitedDeposits() {
 // reads from, so "how much tax was collected" always uses the same
 // payment-allocation logic as "how much revenue was collected" instead of
 // a separate cash-basis estimate.
+//
+// A booking paid MORE than its full invoice (an overpayment — the same
+// thing computeOwed shows as a negative balance) still has that excess
+// classified the same way as everything else: split by the booking's own
+// revenue-vs-tax ratio and added to the last day's totals, rather than
+// left uncounted. It doesn't change what's owed back to the customer if
+// they ask for a refund — that's still tracked separately by computeOwed
+// — this only affects how the money is classified for revenue reporting
+// in the meantime.
 function getAccruedRevenueDays() {
   const rows = db.prepare(`
     SELECT id as application_id, assigned_vehicle_id as vehicle_id, status,
@@ -732,7 +744,8 @@ function getAccruedRevenueDays() {
     const end = new Date(a.rental_end_at.slice(0, 10));
     if (!(end > start)) return;
     const totalCharge = computeCharge(a);
-    let remainingPaid = Math.max(0, Math.min(paidByApp.get(a.application_id) || 0, totalCharge));
+    let remainingPaid = Math.max(0, paidByApp.get(a.application_id) || 0);
+    const revenueShare = totalCharge > 0 ? computeRevenueEligible(a) / totalCharge : 0;
     const dailyRate = a.weekly_rate / 7;
     const dailyTaxedRate = dailyRate * (1 + HIGHWAY_TAX_RATE + SALES_TAX_RATE);
     const dailyTaxPortion = Math.round((dailyRate * (HIGHWAY_TAX_RATE + SALES_TAX_RATE)) * 100) / 100;
@@ -743,6 +756,7 @@ function getAccruedRevenueDays() {
     const discount = Math.round((Number(a.discount) || 0) * 100) / 100;
     const cursor = new Date(start);
     let firstDay = true;
+    let lastEntry = null;
     while (cursor < end) {
       const revenuePortion = Math.round((dailyRate + adminFeeRate + (firstDay ? travelFee - discount : 0)) * 100) / 100;
       const fullDayInvoice = Math.round((dailyTaxedRate + adminFeeRate + insuranceFeeRate + (firstDay ? travelFee + processingFee - discount : 0)) * 100) / 100;
@@ -761,9 +775,19 @@ function getAccruedRevenueDays() {
         amount = 0;
         taxAmount = 0;
       }
-      days.push({ application_id: a.application_id, vehicle_id: a.vehicle_id, date: cursor.toISOString().slice(0, 10), amount, taxAmount });
+      lastEntry = { application_id: a.application_id, vehicle_id: a.vehicle_id, date: cursor.toISOString().slice(0, 10), amount, taxAmount };
+      days.push(lastEntry);
       firstDay = false;
       cursor.setDate(cursor.getDate() + 1);
+    }
+    // Every day's invoice is spent — anything still left in remainingPaid is
+    // an overpayment. Split it the same way as everything else and fold it
+    // into the last day rather than dropping it.
+    if (remainingPaid > 0 && lastEntry) {
+      const extraRevenue = Math.round(remainingPaid * revenueShare * 100) / 100;
+      const extraTax = Math.round((remainingPaid - extraRevenue) * 100) / 100;
+      lastEntry.amount = Math.round((lastEntry.amount + extraRevenue) * 100) / 100;
+      lastEntry.taxAmount = Math.round((lastEntry.taxAmount + extraTax) * 100) / 100;
     }
   });
   return days;

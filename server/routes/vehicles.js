@@ -7,6 +7,14 @@ const { computeRevenueEligible } = require('../billing');
 
 const router = express.Router();
 
+// A toll is a pass-through cost — paid out, then recovered from the
+// customer — not money actually lost on the vehicle, so it's excluded
+// from Expense/Profit even though it's still logged via the maintenance
+// table. Same condition the Toll Report (reports.js) uses to find tolls.
+function isTollRecord(m) {
+  return m.category === 'toll' || (m.description || '').toLowerCase().includes('toll');
+}
+
 const upload = multer({
   storage: multer.diskStorage({
     destination: UPLOADS_DIR,
@@ -49,7 +57,7 @@ router.get('/:id', requireAuth, (req, res) => {
   // db.js). Matches the definition used everywhere else (Dashboard,
   // Reports), and excludes rejected applications that never became a real
   // rental. Any forfeited security deposit tied to the booking counts
-  // toward revenue too, in full, as of the day it was actually forfeited —
+  // toward revenue too, in full, as of the booking's return date —
   // forfeiting only ever happens against a deposit already collected up
   // front, so it's never partly unpaid. Held deposits stay excluded as a
   // liability.
@@ -94,7 +102,11 @@ router.get('/:id', requireAuth, (req, res) => {
   });
 
   const totalRevenue = Math.round(bookings.reduce((sum, b) => sum + b.revenue, 0) * 100) / 100;
-  const totalExpense = Math.round(maintenance.reduce((sum, m) => sum + (Number(m.cost) || 0), 0) * 100) / 100;
+  // Tolls are excluded from expense — they're a pass-through cost recovered
+  // from the customer, not money actually lost on the vehicle (see
+  // isTollRecord below; the same records still show up in the Maintenance
+  // log and the dedicated Toll Report, just not dragging down Profit here).
+  const totalExpense = Math.round(maintenance.filter(m => !isTollRecord(m)).reduce((sum, m) => sum + (Number(m.cost) || 0), 0) * 100) / 100;
   // Profit = revenue minus everything spent on the vehicle — both what it cost
   // to acquire (purchase price) and what's been spent on it since (maintenance).
   // Can go negative if the vehicle hasn't earned back what was put into it yet.
