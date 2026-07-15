@@ -14,10 +14,12 @@
     position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%;
     border: none; background: #c62828; color: #fff; font-size: 12px; line-height: 20px; cursor: pointer; padding: 0;
   }
-  .vd-stat-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
-  .vd-stat-card { flex: 1; min-width: 180px; background: var(--gray-light); border-radius: 6px; padding: 16px; }
-  .vd-stat-card__label { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #888; margin-bottom: 6px; }
-  .vd-stat-card__value { font-size: 1.5rem; font-weight: 800; margin-bottom: 8px; }
+  .vd-stat-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+  .vd-stat-row:last-of-type { margin-bottom: 18px; }
+  .vd-stat-card { flex: 1; min-width: 180px; background: var(--gray-light); border-radius: 6px; padding: 14px 16px; }
+  .vd-stat-card--solo { flex: 0 1 260px; }
+  .vd-stat-card__label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #888; margin-bottom: 6px; }
+  .vd-stat-card__value { font-size: 1.4rem; font-weight: 800; margin-bottom: 4px; }
   .vd-stat-card__edit { display: flex; gap: 6px; align-items: center; }
   .vd-stat-card__edit input { padding: 6px 8px; border: 1.5px solid #e0e0e0; border-radius: 4px; font-family: inherit; width: 100%; }
 </style>
@@ -82,10 +84,12 @@
 
   <div id="vd-panel-maintenance" style="display:none;">
     <div class="vd-stat-row">
-      <div class="vd-stat-card">
+      <div class="vd-stat-card vd-stat-card--solo">
         <div class="vd-stat-card__label">Date Last Serviced</div>
         <div class="vd-stat-card__value" id="vd-last-serviced">—</div>
       </div>
+    </div>
+    <div class="vd-stat-row">
       <div class="vd-stat-card">
         <div class="vd-stat-card__label">Next Service Date</div>
         <div class="vd-stat-card__edit">
@@ -100,12 +104,14 @@
           <button class="btn btn-sm" id="vd-mileage-save">Save</button>
         </div>
       </div>
+    </div>
+    <div class="vd-stat-row">
       <div class="vd-stat-card">
         <div class="vd-stat-card__label">Total Maintenance Cost</div>
         <div class="vd-stat-card__value" id="vd-maint-total">$0</div>
       </div>
       <div class="vd-stat-card">
-        <div class="vd-stat-card__label">Total Business Expenses (This Vehicle)</div>
+        <div class="vd-stat-card__label">Total Business Expenses</div>
         <div class="vd-stat-card__value" id="vd-expense-total">$0</div>
       </div>
     </div>
