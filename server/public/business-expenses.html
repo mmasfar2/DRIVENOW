@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Business Expenses — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="admin-layout">
+<div id="sidebar-root"></div>
+<div class="main-content">
+<div class="page">
+  <div class="page-title">Business Expenses</div>
+  <div class="page-sub">General overhead that isn't tied to any one vehicle — card processing fees absorbed rather than billed, subscriptions, insurance premiums, and anything else you add.</div>
+
+  <div class="panel">
+    <div class="panel-title">Log a Business Expense</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div class="field"><label>Category</label>
+        <input type="text" id="e-category" list="e-category-options" placeholder="Card Processing Fee, Miscellaneous, etc.">
+        <datalist id="e-category-options"></datalist>
+      </div>
+      <div class="field"><label>Date</label><input type="date" id="e-date"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div class="field"><label>Amount ($)</label><input type="number" id="e-amount" step="0.01"></div>
+      <div class="field"><label>Notes</label><input type="text" id="e-notes"></div>
+    </div>
+    <button class="btn" onclick="submitExpense()">Log Expense</button>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Filter by Category</div>
+    <select id="filter-category" style="padding:10px 14px;border:1.5px solid #e0e0e0;border-radius:4px;font-family:inherit;">
+      <option value="">All Categories</option>
+    </select>
+  </div>
+
+  <div class="panel" style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;">
+    <div>
+      <div style="font-size:0.78rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#888;">Total Expense</div>
+      <div id="total-expense" style="font-size:1.8rem;font-weight:800;">$0</div>
+    </div>
+    <div style="color:#bbb;">·</div>
+    <div>
+      <div style="font-size:0.78rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#888;">Records</div>
+      <div id="total-count" style="font-size:1.8rem;font-weight:800;">0</div>
+    </div>
+  </div>
+
+  <div class="panel" style="padding:0;overflow-x:auto;">
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Category</th><th>Amount</th><th>Notes</th><th></th></tr>
+      </thead>
+      <tbody id="expense-table-body"></tbody>
+    </table>
+  </div>
+</div>
+</div>
+</div>
+
+<script src="js/admin-common.js"></script>
+<script>
+let records = [];
+
+async function loadCategories() {
+  const categories = await api('/api/business-expenses/categories');
+  document.getElementById('e-category-options').innerHTML = categories.map(c => `<option value="${c}">`).join('');
+  document.getElementById('filter-category').innerHTML = '<option value="">All Categories</option>' +
+    categories.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
+async function loadRecords() {
+  const category = document.getElementById('filter-category').value;
+  const params = category ? `?category=${encodeURIComponent(category)}` : '';
+  records = await api('/api/business-expenses' + params);
+  renderRecords();
+}
+
+function renderTotals() {
+  const total = records.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+  document.getElementById('total-expense').textContent = fmtExact(total);
+  document.getElementById('total-count').textContent = records.length;
+}
+
+function renderRecords() {
+  renderTotals();
+  document.getElementById('expense-table-body').innerHTML = records.length ? records.map(r => `
+    <tr>
+      <td>${fmtDateOnly(r.expense_date)}</td>
+      <td>${r.category}</td>
+      <td>${fmtExact(r.amount)}</td>
+      <td>${r.notes || '—'}</td>
+      <td><button class="btn btn-sm btn-outline" onclick="deleteRecord(${r.id})">Delete</button></td>
+    </tr>
+  `).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:32px;">No business expenses logged yet.</td></tr>';
+}
+
+async function submitExpense() {
+  const category = document.getElementById('e-category').value;
+  const amount = document.getElementById('e-amount').value;
+  const expense_date = document.getElementById('e-date').value;
+  const notes = document.getElementById('e-notes').value;
+  if (!category || !amount || !expense_date) { alert('Category, amount, and date are required'); return; }
+
+  const res = await fetch('/api/business-expenses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ category, amount, expense_date, notes }),
+  });
+  if (!res.ok) { alert('Failed to log business expense'); return; }
+
+  document.getElementById('e-category').value = '';
+  document.getElementById('e-amount').value = '';
+  document.getElementById('e-date').value = '';
+  document.getElementById('e-notes').value = '';
+  await loadCategories();
+  loadRecords();
+}
+
+async function deleteRecord(id) {
+  if (!confirm('Delete this business expense?')) return;
+  await api(`/api/business-expenses/${id}`, { method: 'DELETE' });
+  loadRecords();
+}
+
+(async () => {
+  renderSidebar('business-expenses');
+  await requireLogin();
+  document.getElementById('e-date').value = todayStr();
+  await loadCategories();
+  document.getElementById('filter-category').addEventListener('change', loadRecords);
+  loadRecords();
+})();
+</script>
+</body>
+</html>

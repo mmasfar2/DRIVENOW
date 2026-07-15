@@ -106,6 +106,12 @@ router.post('/', requireAuth, (req, res) => {
       VALUES
         (@id, @vehicle_id, @service_type, @status, @date_reported, @clearance_eta, @vendor, @est_cost, @notes, @remove_from_availability, @created_at, @updated_at)
     `).run(record);
+  } else if (row.entity_type === 'business_expense_delete') {
+    const { record } = payload;
+    db.prepare(`
+      INSERT INTO business_expenses (id, category, amount, expense_date, notes, created_at)
+      VALUES (@id, @category, @amount, @expense_date, @notes, @created_at)
+    `).run(record);
   }
 
   db.prepare('DELETE FROM undo_log WHERE id = ?').run(row.id);

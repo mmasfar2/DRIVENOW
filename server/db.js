@@ -119,6 +119,21 @@ CREATE TABLE IF NOT EXISTS vehicle_maintenance (
   FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
 );
 
+-- General business overhead that isn't tied to any one vehicle (card
+-- processing fees absorbed rather than billed to the customer, software
+-- subscriptions, insurance premiums, etc.) — kept separate from
+-- vehicle_maintenance on purpose, since that table only ever means
+-- "spent on this specific car." category is free text, not an enum, so
+-- new expense types don't need a code change to start using.
+CREATE TABLE IF NOT EXISTS business_expenses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  category TEXT NOT NULL,
+  amount REAL NOT NULL,
+  expense_date TEXT NOT NULL,
+  notes TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS waitlist (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   first_name TEXT NOT NULL,
