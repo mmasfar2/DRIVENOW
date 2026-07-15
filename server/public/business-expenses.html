@@ -54,7 +54,7 @@
   <div class="panel" style="padding:0;overflow-x:auto;">
     <table>
       <thead>
-        <tr><th>Date</th><th>Category</th><th>Amount</th><th>Notes</th><th></th></tr>
+        <tr><th>Date</th><th>Category</th><th>Vehicle</th><th>Amount</th><th>Notes</th><th></th></tr>
       </thead>
       <tbody id="expense-table-body"></tbody>
     </table>
@@ -93,11 +93,12 @@ function renderRecords() {
     <tr>
       <td>${fmtDateOnly(r.expense_date)}</td>
       <td>${r.category}</td>
+      <td>${r.vehicle_make ? `${r.vehicle_year} ${r.vehicle_make} ${r.vehicle_model}` : '—'}</td>
       <td>${fmtExact(r.amount)}</td>
       <td>${r.notes || '—'}</td>
       <td><button class="btn btn-sm btn-outline" onclick="deleteRecord(${r.id})">Delete</button></td>
     </tr>
-  `).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:32px;">No business expenses logged yet.</td></tr>';
+  `).join('') : '<tr><td colspan="6" style="text-align:center;color:#888;padding:32px;">No business expenses logged yet.</td></tr>';
 }
 
 async function submitExpense() {

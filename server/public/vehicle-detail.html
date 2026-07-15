@@ -129,6 +129,15 @@
         <tbody id="vd-maint-table-body"></tbody>
       </table>
     </div>
+
+    <div class="panel" style="padding:0;overflow-x:auto;">
+      <div class="panel-title" style="padding:18px 18px 0;">Business Expenses Attributed to This Vehicle</div>
+      <div class="page-sub" style="padding:0 18px 12px;">Auto-logged when a payment on one of this vehicle's bookings is taken via Payment through Swipe — manage or remove these from the Business Expenses page.</div>
+      <table>
+        <thead><tr><th>Category</th><th>Amount</th><th>Date</th><th>Notes</th></tr></thead>
+        <tbody id="vd-expense-table-body"></tbody>
+      </table>
+    </div>
   </div>
 
   <div id="vd-panel-financials" style="display:none;">
@@ -215,6 +224,7 @@ function render() {
   document.getElementById('vd-mileage-input').value = vehicle.mileage ?? '';
 
   renderMaintenanceTable();
+  renderExpenseTable();
 
   document.getElementById('vd-purchase-price').textContent = fmtExact(vehicle.purchase_price);
   document.getElementById('vd-total-expense').textContent = fmtExact(vehicle.totalExpense);
@@ -239,6 +249,19 @@ function renderMaintenanceTable() {
       <td><button class="btn btn-sm btn-outline" onclick="deleteMaintenance(${m.id})">Delete</button></td>
     </tr>
   `).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:24px;">No maintenance records yet.</td></tr>';
+}
+
+function renderExpenseTable() {
+  const body = document.getElementById('vd-expense-table-body');
+  const records = vehicle.businessExpenses || [];
+  body.innerHTML = records.length ? records.map(e => `
+    <tr>
+      <td>${e.category}</td>
+      <td>${fmtExact(e.amount)}</td>
+      <td>${fmtDateOnly(e.expense_date)}</td>
+      <td>${e.notes || '—'}</td>
+    </tr>
+  `).join('') : '<tr><td colspan="4" style="text-align:center;color:#888;padding:24px;">No business expenses attributed to this vehicle yet.</td></tr>';
 }
 
 function renderBookingsTable() {

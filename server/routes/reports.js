@@ -59,7 +59,7 @@ function computeVehicleDays(from, to) {
 const REPORTS = {
   revenue_by_vehicle: {
     category: 'revenue', label: 'Revenue by Vehicle',
-    description: 'The car\'s daily rate, travel fee, and admin fee, accrued day-by-day across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged. Plus any deposit amounts forfeited against that vehicle, counted as of the booking\'s return date. Less maintenance expense (tolls excluded — a pass-through cost recovered from the customer, not money actually lost) — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
+    description: 'The car\'s daily rate, travel fee, and admin fee, accrued day-by-day across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged. Plus any deposit amounts forfeited against that vehicle, counted as of the booking\'s return date. Less maintenance expense (tolls excluded — a pass-through cost recovered from the customer, not money actually lost) and any business expenses attributed to that specific vehicle (e.g. Swipe card-processing fees traced back to its bookings) — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
     hasDateRange: true,
     columns: [
       { key: 'vehicle', label: 'Vehicle' },
@@ -93,6 +93,18 @@ const REPORTS = {
           AND NOT (COALESCE(category, '') = 'toll' OR lower(COALESCE(description, '')) LIKE '%toll%')
         GROUP BY vehicle_id
       `).all(from, to).map(r => [r.vehicle_id, r.expense]));
+      // Business expenses attributed to a specific vehicle (currently just
+      // Swipe card-processing fees traced through payment -> application ->
+      // assigned_vehicle_id) count against that car too — same as Vehicle
+      // Detail's Expense/Profit.
+      db.prepare(`
+        SELECT vehicle_id, COALESCE(SUM(amount), 0) as expense
+        FROM business_expenses
+        WHERE vehicle_id IS NOT NULL AND expense_date BETWEEN ? AND ?
+        GROUP BY vehicle_id
+      `).all(from, to).forEach(r => {
+        expenseByVehicle.set(r.vehicle_id, (expenseByVehicle.get(r.vehicle_id) || 0) + r.expense);
+      });
       const forfeitedByVehicle = new Map();
       getForfeitedDeposits().forEach(d => {
         if (!d.date || d.date < from || d.date > to) return;

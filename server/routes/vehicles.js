@@ -48,6 +48,12 @@ router.get('/:id', requireAuth, (req, res) => {
 
   const photos = db.prepare('SELECT * FROM vehicle_photos WHERE vehicle_id = ? ORDER BY created_at ASC').all(req.params.id);
   const maintenance = db.prepare('SELECT * FROM vehicle_maintenance WHERE vehicle_id = ? ORDER BY performed_at DESC').all(req.params.id);
+  // Business expenses attributed to this specific vehicle — currently just
+  // Swipe card-processing fees auto-traced through payment -> application ->
+  // assigned_vehicle_id (see syncSwipeExpense in applications.js), plus any
+  // manually-attributed entries. Counted in Expense/Profit below alongside
+  // maintenance, since this is a real absorbed cost, not a pass-through.
+  const businessExpenses = db.prepare('SELECT * FROM business_expenses WHERE vehicle_id = ? ORDER BY expense_date DESC').all(req.params.id);
 
   // Revenue per booking is accrued day-by-day across its actual rental
   // dates — the car's daily rate, travel fee, and admin fee only; sales tax,
@@ -106,7 +112,9 @@ router.get('/:id', requireAuth, (req, res) => {
   // from the customer, not money actually lost on the vehicle (see
   // isTollRecord below; the same records still show up in the Maintenance
   // log and the dedicated Toll Report, just not dragging down Profit here).
-  const totalExpense = Math.round(maintenance.filter(m => !isTollRecord(m)).reduce((sum, m) => sum + (Number(m.cost) || 0), 0) * 100) / 100;
+  const maintenanceExpense = maintenance.filter(m => !isTollRecord(m)).reduce((sum, m) => sum + (Number(m.cost) || 0), 0);
+  const businessExpenseTotal = businessExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  const totalExpense = Math.round((maintenanceExpense + businessExpenseTotal) * 100) / 100;
   // Profit = revenue minus everything spent on the vehicle — both what it cost
   // to acquire (purchase price) and what's been spent on it since (maintenance).
   // Can go negative if the vehicle hasn't earned back what was put into it yet.
@@ -118,6 +126,7 @@ router.get('/:id', requireAuth, (req, res) => {
     ...vehicle,
     photos,
     maintenance,
+    businessExpenses,
     bookings,
     totalRevenue,
     totalExpense,

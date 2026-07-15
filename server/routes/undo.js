@@ -46,8 +46,8 @@ router.post('/', requireAuth, (req, res) => {
     payments.forEach(p => insPayment.run(p.id, p.application_id, p.amount, p.paid_at, p.method || 'cash', p.processing_fee || 0, p.created_at));
     if (linkedExpenses && linkedExpenses.length) {
       const insExpense = db.prepare(`
-        INSERT INTO business_expenses (id, category, amount, expense_date, notes, payment_id, created_at)
-        VALUES (@id, @category, @amount, @expense_date, @notes, @payment_id, @created_at)
+        INSERT INTO business_expenses (id, category, amount, expense_date, notes, payment_id, vehicle_id, created_at)
+        VALUES (@id, @category, @amount, @expense_date, @notes, @payment_id, @vehicle_id, @created_at)
       `);
       linkedExpenses.forEach(e => insExpense.run(e));
     }
@@ -81,8 +81,8 @@ router.post('/', requireAuth, (req, res) => {
       .run(payment.id, payment.application_id, payment.amount, payment.paid_at, payment.method, payment.processing_fee, payment.created_at);
     if (linkedExpense) {
       db.prepare(`
-        INSERT INTO business_expenses (id, category, amount, expense_date, notes, payment_id, created_at)
-        VALUES (@id, @category, @amount, @expense_date, @notes, @payment_id, @created_at)
+        INSERT INTO business_expenses (id, category, amount, expense_date, notes, payment_id, vehicle_id, created_at)
+        VALUES (@id, @category, @amount, @expense_date, @notes, @payment_id, @vehicle_id, @created_at)
       `).run(linkedExpense);
     }
   } else if (row.entity_type === 'payment_edit') {
@@ -95,12 +95,12 @@ router.post('/', requireAuth, (req, res) => {
     const currentExpense = db.prepare('SELECT id FROM business_expenses WHERE payment_id = ?').get(previous.id);
     if (previousExpense) {
       if (currentExpense) {
-        db.prepare('UPDATE business_expenses SET category = ?, amount = ?, expense_date = ?, notes = ? WHERE id = ?')
-          .run(previousExpense.category, previousExpense.amount, previousExpense.expense_date, previousExpense.notes, currentExpense.id);
+        db.prepare('UPDATE business_expenses SET category = ?, amount = ?, expense_date = ?, notes = ?, vehicle_id = ? WHERE id = ?')
+          .run(previousExpense.category, previousExpense.amount, previousExpense.expense_date, previousExpense.notes, previousExpense.vehicle_id || null, currentExpense.id);
       } else {
         db.prepare(`
-          INSERT INTO business_expenses (id, category, amount, expense_date, notes, payment_id, created_at)
-          VALUES (@id, @category, @amount, @expense_date, @notes, @payment_id, @created_at)
+          INSERT INTO business_expenses (id, category, amount, expense_date, notes, payment_id, vehicle_id, created_at)
+          VALUES (@id, @category, @amount, @expense_date, @notes, @payment_id, @vehicle_id, @created_at)
         `).run(previousExpense);
       }
     } else if (currentExpense) {
@@ -139,8 +139,8 @@ router.post('/', requireAuth, (req, res) => {
   } else if (row.entity_type === 'business_expense_delete') {
     const { record } = payload;
     db.prepare(`
-      INSERT INTO business_expenses (id, category, amount, expense_date, notes, created_at)
-      VALUES (@id, @category, @amount, @expense_date, @notes, @created_at)
+      INSERT INTO business_expenses (id, category, amount, expense_date, notes, payment_id, vehicle_id, created_at)
+      VALUES (@id, @category, @amount, @expense_date, @notes, @payment_id, @vehicle_id, @created_at)
     `).run(record);
   }
 

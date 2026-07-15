@@ -351,17 +351,17 @@ router.get('/:id/payments', requireAuth, (req, res) => {
 // business-expenses.js) tied back to this specific payment via payment_id,
 // so editing or deleting the payment keeps that expense entry in sync
 // instead of leaving a stale one behind.
-function syncSwipeExpense(paymentId, applicationId, method, amount, paidAt, customerName) {
+function syncSwipeExpense(paymentId, applicationId, method, amount, paidAt, customerName, vehicleId) {
   const existing = db.prepare('SELECT id FROM business_expenses WHERE payment_id = ?').get(paymentId);
   if (method === 'swipe') {
     const fee = Math.round(Number(amount) * SWIPE_FEE_RATE * 100) / 100;
     const notes = `Swipe processing fee — payment on reservation #${applicationId} (${customerName})`;
     if (existing) {
-      db.prepare('UPDATE business_expenses SET amount = ?, expense_date = ?, notes = ? WHERE id = ?')
-        .run(fee, paidAt, notes, existing.id);
+      db.prepare('UPDATE business_expenses SET amount = ?, expense_date = ?, notes = ?, vehicle_id = ? WHERE id = ?')
+        .run(fee, paidAt, notes, vehicleId || null, existing.id);
     } else {
-      db.prepare('INSERT INTO business_expenses (category, amount, expense_date, notes, payment_id) VALUES (?, ?, ?, ?, ?)')
-        .run('Card Processing Fee', fee, paidAt, notes, paymentId);
+      db.prepare('INSERT INTO business_expenses (category, amount, expense_date, notes, payment_id, vehicle_id) VALUES (?, ?, ?, ?, ?, ?)')
+        .run('Card Processing Fee', fee, paidAt, notes, paymentId, vehicleId || null);
     }
   } else if (existing) {
     db.prepare('DELETE FROM business_expenses WHERE id = ?').run(existing.id);
@@ -382,7 +382,7 @@ router.post('/:id/payments', requireAuth, (req, res) => {
   const result = db.prepare('INSERT INTO payments (application_id, amount, paid_at, method, processing_fee) VALUES (?, ?, ?, ?, ?)')
     .run(id, amount, paidAt, paymentMethod, fee);
   if (paymentMethod === 'swipe') {
-    syncSwipeExpense(result.lastInsertRowid, id, paymentMethod, amount, paidAt, `${app.first_name} ${app.last_name}`);
+    syncSwipeExpense(result.lastInsertRowid, id, paymentMethod, amount, paidAt, `${app.first_name} ${app.last_name}`, app.assigned_vehicle_id);
   }
   logActivity(id, `Payment of $${amount} recorded (${paymentMethod}${fee ? `, +$${fee} processing fee` : ''})`);
   res.status(201).json({ ok: true });
@@ -404,7 +404,7 @@ router.put('/:id/payments/:paymentId', requireAuth, (req, res) => {
   logUndo('payment_edit', `Edited a payment on reservation #${id}`, { previous: existing, previousExpense: linkedExpense });
   db.prepare('UPDATE payments SET amount = ?, paid_at = ?, method = ?, processing_fee = ? WHERE id = ?')
     .run(amount, paidAt, paymentMethod, fee, existing.id);
-  syncSwipeExpense(existing.id, id, paymentMethod, amount, paidAt, `${app.first_name} ${app.last_name}`);
+  syncSwipeExpense(existing.id, id, paymentMethod, amount, paidAt, `${app.first_name} ${app.last_name}`, app.assigned_vehicle_id);
   logActivity(id, `Payment edited — now $${amount} (${paymentMethod}${fee ? `, +$${fee} processing fee` : ''})`);
   res.json({ ok: true });
 });
