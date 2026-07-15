@@ -656,20 +656,23 @@ if (vehicleCount === 0) {
 // stays a refundable liability, but the moment some (or all) of it is
 // forfeited, that portion is real revenue and needs to show up everywhere
 // revenue does (dashboard totals, Revenue reports, Vehicle Detail profit).
-// Attributed to the day it was actually forfeited (resolved_at), not the
-// booking's own rental dates — unlike getAccruedRevenueDays below, a
-// deposit resolution is its own event with its own date, not something that
-// accrues across the rental period. Every revenue figure reads from this
-// single query so a forfeiture can't show up in one place and not another.
+// Attributed to the booking's own return date (rental_end_at) — not
+// resolved_at (whenever the resolve-deposit action actually happened, which
+// could be days after the return if it wasn't processed right away) and not
+// any check-in button click timestamp either. A booking's forfeiture always
+// belongs to when the rental itself ended, regardless of when staff got
+// around to marking it resolved in the system. Every revenue figure reads
+// from this single query so a forfeiture can't show up in one place and not
+// another.
 function getForfeitedDeposits() {
   return db.prepare(`
-    SELECT d.id, d.application_id, a.assigned_vehicle_id as vehicle_id, d.forfeited_amount, d.resolved_at
+    SELECT d.id, d.application_id, a.assigned_vehicle_id as vehicle_id, d.forfeited_amount, a.rental_end_at
     FROM deposits d JOIN applications a ON a.id = d.application_id
     WHERE d.status = 'resolved' AND d.forfeited_amount > 0
   `).all().map(d => ({
     id: d.id, application_id: d.application_id, vehicle_id: d.vehicle_id,
     forfeited_amount: d.forfeited_amount,
-    date: d.resolved_at ? d.resolved_at.slice(0, 10) : null,
+    date: d.rental_end_at ? d.rental_end_at.slice(0, 10) : null,
   }));
 }
 

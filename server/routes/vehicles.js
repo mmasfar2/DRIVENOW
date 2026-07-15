@@ -49,7 +49,7 @@ router.get('/:id', requireAuth, (req, res) => {
   // db.js). Matches the definition used everywhere else (Dashboard,
   // Reports), and excludes rejected applications that never became a real
   // rental. Any forfeited security deposit tied to the booking counts
-  // toward revenue too, in full, as of the day it was actually forfeited —
+  // toward revenue too, in full, as of the booking's return date —
   // forfeiting only ever happens against a deposit already collected up
   // front, so it's never partly unpaid. Held deposits stay excluded as a
   // liability.

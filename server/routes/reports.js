@@ -59,7 +59,7 @@ function computeVehicleDays(from, to) {
 const REPORTS = {
   revenue_by_vehicle: {
     category: 'revenue', label: 'Revenue by Vehicle',
-    description: 'The car\'s daily rate, travel fee, and admin fee, accrued day-by-day across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged. Plus any deposit amounts forfeited against that vehicle, counted as of the day they were forfeited. Less maintenance expense — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
+    description: 'The car\'s daily rate, travel fee, and admin fee, accrued day-by-day across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged. Plus any deposit amounts forfeited against that vehicle, counted as of the booking\'s return date. Less maintenance expense — same Revenue/Expense/Profit definition as the Vehicle Detail page.',
     hasDateRange: true,
     columns: [
       { key: 'vehicle', label: 'Vehicle' },
