@@ -6,19 +6,23 @@ const router = express.Router();
 
 router.get('/', requireAuth, (req, res) => {
   const { from, to, category } = req.query;
-  let query = 'SELECT * FROM business_expenses';
+  let query = `
+    SELECT be.*, v.make as vehicle_make, v.model as vehicle_model, v.year as vehicle_year
+    FROM business_expenses be
+    LEFT JOIN vehicles v ON v.id = be.vehicle_id
+  `;
   const clauses = [];
   const params = [];
   if (from && to) {
-    clauses.push('expense_date BETWEEN ? AND ?');
+    clauses.push('be.expense_date BETWEEN ? AND ?');
     params.push(from, to);
   }
   if (category) {
-    clauses.push('category = ?');
+    clauses.push('be.category = ?');
     params.push(category);
   }
   if (clauses.length) query += ' WHERE ' + clauses.join(' AND ');
-  query += ' ORDER BY expense_date DESC, created_at DESC';
+  query += ' ORDER BY be.expense_date DESC, be.created_at DESC';
   res.json(db.prepare(query).all(...params));
 });
 
@@ -42,7 +46,7 @@ router.post('/', requireAuth, (req, res) => {
 });
 
 router.patch('/:id', requireAuth, (req, res) => {
-  const allowed = ['category', 'amount', 'expense_date', 'notes'];
+  const allowed = ['category', 'amount', 'expense_date', 'notes', 'vehicle_id'];
   const updates = [];
   const params = [];
   for (const key of allowed) {

@@ -338,6 +338,15 @@ if (!businessExpenseCols.includes('payment_id')) {
   // absorbed-fee expense entry in sync instead of leaving it orphaned.
   db.exec('ALTER TABLE business_expenses ADD COLUMN payment_id INTEGER');
 }
+if (!businessExpenseCols.includes('vehicle_id')) {
+  // Set automatically for swipe-triggered expenses (traced through
+  // payment -> application -> assigned_vehicle_id), so that specific cost
+  // can show up against the vehicle it actually came from in Vehicle
+  // Detail / Revenue by Vehicle, not just the fleet-wide total. Left null
+  // for manually-logged expenses that aren't tied to one car (most of
+  // them — subscriptions, misc overhead, etc.).
+  db.exec('ALTER TABLE business_expenses ADD COLUMN vehicle_id INTEGER');
+}
 
 const paymentCols = db.prepare("PRAGMA table_info(payments)").all().map(c => c.name);
 if (!paymentCols.includes('method')) {
