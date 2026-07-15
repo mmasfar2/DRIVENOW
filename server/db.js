@@ -347,6 +347,19 @@ if (!businessExpenseCols.includes('vehicle_id')) {
   // them — subscriptions, misc overhead, etc.).
   db.exec('ALTER TABLE business_expenses ADD COLUMN vehicle_id INTEGER');
 }
+// Backfill vehicle_id on swipe-triggered expenses created before that column
+// existed — traces the same payment -> application -> assigned_vehicle_id
+// path syncSwipeExpense now sets automatically going forward. Only ever
+// touches rows still missing it, so this is a no-op once caught up.
+db.exec(`
+  UPDATE business_expenses
+  SET vehicle_id = (
+    SELECT a.assigned_vehicle_id
+    FROM payments p JOIN applications a ON a.id = p.application_id
+    WHERE p.id = business_expenses.payment_id
+  )
+  WHERE vehicle_id IS NULL AND payment_id IS NOT NULL
+`);
 
 const paymentCols = db.prepare("PRAGMA table_info(payments)").all().map(c => c.name);
 if (!paymentCols.includes('method')) {
