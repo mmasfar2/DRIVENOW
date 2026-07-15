@@ -360,6 +360,23 @@ db.exec(`
   )
   WHERE vehicle_id IS NULL AND payment_id IS NOT NULL
 `);
+// Swipe-triggered expenses are dated to the booking's own return date (or
+// pickup date if no return is set) — not whenever the payment happened to be
+// logged, which matters when backfilling old bookings entered well after the
+// fact. syncSwipeExpense sets this correctly going forward; this re-derives
+// it for every swipe-linked row on every startup (cheap, and safe to re-run
+// since it always recomputes the same answer) so a booking's dates edited
+// after the payment was logged stay in sync too.
+db.exec(`
+  UPDATE business_expenses
+  SET expense_date = COALESCE(
+    (SELECT substr(COALESCE(a.rental_end_at, a.pickup_scheduled_at), 1, 10)
+     FROM payments p JOIN applications a ON a.id = p.application_id
+     WHERE p.id = business_expenses.payment_id),
+    expense_date
+  )
+  WHERE payment_id IS NOT NULL
+`);
 
 const paymentCols = db.prepare("PRAGMA table_info(payments)").all().map(c => c.name);
 if (!paymentCols.includes('method')) {
