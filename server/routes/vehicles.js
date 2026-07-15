@@ -112,9 +112,9 @@ router.get('/:id', requireAuth, (req, res) => {
   // from the customer, not money actually lost on the vehicle (see
   // isTollRecord below; the same records still show up in the Maintenance
   // log and the dedicated Toll Report, just not dragging down Profit here).
-  const maintenanceExpense = maintenance.filter(m => !isTollRecord(m)).reduce((sum, m) => sum + (Number(m.cost) || 0), 0);
-  const businessExpenseTotal = businessExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-  const totalExpense = Math.round((maintenanceExpense + businessExpenseTotal) * 100) / 100;
+  const maintenanceTotal = Math.round(maintenance.filter(m => !isTollRecord(m)).reduce((sum, m) => sum + (Number(m.cost) || 0), 0) * 100) / 100;
+  const businessExpenseTotal = Math.round(businessExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0) * 100) / 100;
+  const totalExpense = Math.round((maintenanceTotal + businessExpenseTotal) * 100) / 100;
   // Profit = revenue minus everything spent on the vehicle — both what it cost
   // to acquire (purchase price) and what's been spent on it since (maintenance).
   // Can go negative if the vehicle hasn't earned back what was put into it yet.
@@ -130,6 +130,8 @@ router.get('/:id', requireAuth, (req, res) => {
     bookings,
     totalRevenue,
     totalExpense,
+    maintenanceTotal,
+    businessExpenseTotal,
     totalProfit,
     lastServiced,
   });
