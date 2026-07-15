@@ -45,10 +45,14 @@ function computeCharge(row) {
 }
 
 // Signed: positive means the customer still owes money, negative means
-// they've overpaid and are owed a credit. Only applies to active bookings —
-// once rejected/completed the balance is considered settled either way.
+// they've overpaid and are owed a credit. A rejected lead never became a
+// real rental — no charge, no balance, regardless of what dates might be
+// sitting on the row from a change of heart mid-application. Active and
+// completed bookings both show their true balance, including a credit if
+// the customer overpaid — marking a booking "completed" (checking it in)
+// doesn't erase an unresolved balance, it just means the car came back.
 function computeOwed(row, paidTotal) {
-  if (row.status !== 'active') return 0;
+  if (row.status === 'rejected') return 0;
   const charge = computeCharge(row);
   return Math.round((charge - Number(paidTotal || 0)) * 100) / 100;
 }
