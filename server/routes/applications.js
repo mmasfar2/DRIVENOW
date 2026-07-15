@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo } = require('../db');
+const { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo, getAccruedRevenueDays } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
 const { computeCharge, computeOwed, SWIPE_FEE_RATE } = require('../billing');
@@ -343,6 +343,23 @@ router.get('/:id/payments', requireAuth, (req, res) => {
   res.json(rows);
 });
 
+// Same day-by-day FIFO logic getAccruedRevenueDays uses to figure out how
+// far a booking's cumulative payments actually reach — reused here so a
+// Swipe fee lands on the same day its revenue does, rather than a fixed
+// field. Naturally handles both ends: a booking paid in full lands on its
+// last day (old convention, same as forfeited deposits); a partial payment
+// on a still-active booking lands wherever that money actually reaches,
+// which might be well before the (possibly future) return date.
+function getPaymentFrontierDate(applicationId, app) {
+  // req.params.id arrives as a string; application_id out of getAccruedRevenueDays
+  // is a number (straight off an INTEGER column) — Number() both sides so the
+  // filter below doesn't silently match nothing.
+  const appId = Number(applicationId);
+  const days = getAccruedRevenueDays().filter(d => d.application_id === appId && d.amount > 0);
+  if (days.length) return days[days.length - 1].date;
+  return (app.rental_end_at || app.pickup_scheduled_at || todayStr()).slice(0, 10);
+}
+
 // "Payment through Swipe" is a card payment where the processor's real cut
 // (SWIPE_FEE_RATE) is absorbed by the business rather than billed to the
 // customer — unlike the Card method's processing_fee, which is a
@@ -350,15 +367,12 @@ router.get('/:id/payments', requireAuth, (req, res) => {
 // has to show up somewhere, so it's auto-logged as a Business Expense (see
 // business-expenses.js) tied back to this specific payment via payment_id,
 // so editing or deleting the payment keeps that expense entry in sync
-// instead of leaving a stale one behind. Dated to the booking's own return
-// date (same convention as forfeited deposits), not whenever the payment was
-// actually logged — matters for backfilling old bookings, where the payment
-// might be entered today but the fee belongs to the rental's real dates.
+// instead of leaving a stale one behind.
 function syncSwipeExpense(paymentId, applicationId, method, amount, app, customerName) {
   const existing = db.prepare('SELECT id FROM business_expenses WHERE payment_id = ?').get(paymentId);
   if (method === 'swipe') {
     const fee = Math.round(Number(amount) * SWIPE_FEE_RATE * 100) / 100;
-    const expenseDate = (app.rental_end_at || app.pickup_scheduled_at || todayStr()).slice(0, 10);
+    const expenseDate = getPaymentFrontierDate(applicationId, app);
     const notes = `Swipe processing fee — payment on reservation #${applicationId} (${customerName})`;
     if (existing) {
       db.prepare('UPDATE business_expenses SET amount = ?, expense_date = ?, notes = ?, vehicle_id = ? WHERE id = ?')

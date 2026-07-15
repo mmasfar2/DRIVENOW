@@ -360,23 +360,35 @@ db.exec(`
   )
   WHERE vehicle_id IS NULL AND payment_id IS NOT NULL
 `);
-// Swipe-triggered expenses are dated to the booking's own return date (or
-// pickup date if no return is set) — not whenever the payment happened to be
-// logged, which matters when backfilling old bookings entered well after the
-// fact. syncSwipeExpense sets this correctly going forward; this re-derives
-// it for every swipe-linked row on every startup (cheap, and safe to re-run
-// since it always recomputes the same answer) so a booking's dates edited
-// after the payment was logged stay in sync too.
-db.exec(`
-  UPDATE business_expenses
-  SET expense_date = COALESCE(
-    (SELECT substr(COALESCE(a.rental_end_at, a.pickup_scheduled_at), 1, 10)
-     FROM payments p JOIN applications a ON a.id = p.application_id
-     WHERE p.id = business_expenses.payment_id),
-    expense_date
-  )
-  WHERE payment_id IS NOT NULL
-`);
+// Swipe-triggered expenses are dated to wherever the booking's cumulative
+// payments actually reach in the same day-by-day FIFO walk getAccruedRevenueDays
+// uses for revenue — not whenever the payment happened to be logged, and not
+// a fixed field, so the fee lands on the same day its revenue does. Matters
+// when backfilling old bookings entered well after the fact, and for partial
+// payments on still-active bookings that shouldn't land on a future date.
+// applications.js's syncSwipeExpense sets this correctly going forward; this
+// re-derives it for every swipe-linked row on every startup (cheap, and safe
+// to re-run since it recomputes the same answer) so edits to a booking's
+// dates or payments stay in sync too.
+{
+  const frontierByApp = new Map();
+  getAccruedRevenueDays().forEach(d => {
+    if (d.amount > 0) frontierByApp.set(d.application_id, d.date);
+  });
+  const rows = db.prepare(`
+    SELECT be.id, p.application_id, a.rental_end_at, a.pickup_scheduled_at
+    FROM business_expenses be
+    JOIN payments p ON p.id = be.payment_id
+    JOIN applications a ON a.id = p.application_id
+    WHERE be.payment_id IS NOT NULL
+  `).all();
+  const updExpenseDate = db.prepare('UPDATE business_expenses SET expense_date = ? WHERE id = ?');
+  rows.forEach(r => {
+    const date = frontierByApp.get(r.application_id)
+      || (r.rental_end_at || r.pickup_scheduled_at || '').slice(0, 10);
+    if (date) updExpenseDate.run(date, r.id);
+  });
+}
 
 const paymentCols = db.prepare("PRAGMA table_info(payments)").all().map(c => c.name);
 if (!paymentCols.includes('method')) {
