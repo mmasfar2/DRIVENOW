@@ -65,7 +65,7 @@ function render() {
   document.getElementById('clients-table-body').innerHTML = filtered.length ? filtered.map(c => `
     <tr style="cursor:pointer;" onclick="window.location.href='customer-detail.html?email=${encodeURIComponent(c.email)}'">
       <td><strong>${c.first_name} ${c.last_name}</strong>${c.blacklisted ? ' <span class="badge badge-rejected">Blacklisted</span>' : ''}</td>
-      <td>${c.email}</td>
+      <td>${displayEmail(c.email)}</td>
       <td>${c.phone || '—'}</td>
       <td><span class="badge ${c.status === 'current' ? 'badge-active' : 'badge-completed'}">${c.status === 'current' ? 'Current Renter' : 'Previous Renter'}</span></td>
       <td>${c.total_bookings}</td>

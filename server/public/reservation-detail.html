@@ -405,7 +405,7 @@ function render() {
   `;
 
   document.getElementById('rd-cust-name').innerHTML = `<a href="customer-detail.html?email=${encodeURIComponent(booking.email)}" style="color:inherit;">${booking.first_name} ${booking.last_name}</a>`;
-  document.getElementById('rd-cust-email').textContent = booking.email || '—';
+  document.getElementById('rd-cust-email').textContent = booking.email ? displayEmail(booking.email) : '—';
   document.getElementById('rd-cust-phone').textContent = booking.phone || '—';
 
   renderVehiclePhotos();
@@ -419,7 +419,7 @@ function render() {
   document.getElementById('rd-veh-dropoff-loc').textContent = booking.dropoff_location || '—';
 
   document.getElementById('rd-doc-contact').innerHTML = `
-    <div class="info-row"><div class="info-row__label">Email</div><div class="info-row__val">${booking.email || '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">Email</div><div class="info-row__val">${booking.email ? displayEmail(booking.email) : '—'}</div></div>
     <div class="info-row"><div class="info-row__label">Phone</div><div class="info-row__val">${booking.phone || '—'}</div></div>
     <div class="info-row"><div class="info-row__label">Address</div><div class="info-row__val">${booking.address || '—'}</div></div>
     <div class="info-row"><div class="info-row__label">City</div><div class="info-row__val">${booking.city || '—'}</div></div>

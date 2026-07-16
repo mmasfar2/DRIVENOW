@@ -625,12 +625,44 @@ for (const c of customersMissingDetails) {
   updateCustomerDetails.run(app.city || null, app.state || null, app.dob || null, app.address || null, app.phone || null, app.zip_code || null, c.id);
 }
 
+// customers.email is NOT NULL/UNIQUE, so a walk-in manual booking (email is
+// optional there — only phone is required) used to silently skip customer
+// registration entirely whenever the front desk left email blank. Falls
+// back to a deterministic placeholder keyed off phone instead, so every
+// booking still produces a client record — the same phone number always
+// resolves to the same placeholder, so repeat walk-ins by the same person
+// still dedupe correctly instead of piling up new rows. If a real email
+// shows up later for that same phone, it upgrades the placeholder to the
+// real one rather than creating a second, separate customer.
+function placeholderEmailForPhone(phone) {
+  const digits = (phone || '').replace(/\D/g, '');
+  return digits ? `walkin-${digits}@no-email.drivenow` : null;
+}
+
 function upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob, license_number }) {
-  if (!email) return;
-  const existing = db.prepare('SELECT id FROM customers WHERE lower(email) = lower(?)').get(email);
+  const realEmail = (email || '').trim();
+  const placeholder = placeholderEmailForPhone(phone);
+  if (!realEmail && !placeholder) return; // nothing to identify this person by at all
+
+  let existing = realEmail
+    ? db.prepare('SELECT id, email FROM customers WHERE lower(email) = lower(?)').get(realEmail)
+    : null;
+  if (!existing && realEmail && placeholder) {
+    // A real email that doesn't match anything yet — before creating a new
+    // customer, check whether this same phone is already registered under
+    // a placeholder from an earlier email-less visit, so this upgrades that
+    // record instead of duplicating it.
+    existing = db.prepare('SELECT id, email FROM customers WHERE lower(email) = lower(?)').get(placeholder);
+  }
+  if (!existing && !realEmail && placeholder) {
+    existing = db.prepare('SELECT id, email FROM customers WHERE lower(email) = lower(?)').get(placeholder);
+  }
+  const finalEmail = realEmail || (existing ? existing.email : placeholder);
+
   if (existing) {
     db.prepare(`
       UPDATE customers SET
+        email = ?,
         city = COALESCE(city, ?),
         state = COALESCE(state, ?),
         zip_code = COALESCE(zip_code, ?),
@@ -639,13 +671,13 @@ function upsertCustomer({ email, first_name, last_name, phone, address, city, st
         phone = COALESCE(phone, ?),
         license_number = COALESCE(license_number, ?)
       WHERE id = ?
-    `).run(city || null, state || null, zip_code || null, address || null, dob || null, phone || null, license_number || null, existing.id);
+    `).run(finalEmail, city || null, state || null, zip_code || null, address || null, dob || null, phone || null, license_number || null, existing.id);
     return existing.id;
   }
   const result = db.prepare(`
     INSERT INTO customers (email, first_name, last_name, phone, address, city, state, zip_code, dob, license_number)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(email, first_name || null, last_name || null, phone || null, address || null, city || null, state || null, zip_code || null, dob || null, license_number || null);
+  `).run(finalEmail, first_name || null, last_name || null, phone || null, address || null, city || null, state || null, zip_code || null, dob || null, license_number || null);
   return result.lastInsertRowid;
 }
 
