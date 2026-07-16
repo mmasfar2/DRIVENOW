@@ -518,32 +518,50 @@ if (!customerCols.includes('insurance_policy_number')) {
 // customers can coexist. Column list built from PRAGMA (not hardcoded) so
 // this can't silently shuffle data into the wrong columns if the schema
 // has drifted from what's read here.
+//
+// customer_tags, applications, and insurance_records all hold a live
+// foreign key into this table. With foreign key enforcement on (confirmed
+// this database has it on), DROP TABLE on a table something else still
+// references throws a constraint violation outright — which crashes this
+// entire synchronous startup sequence, taking the whole server down with
+// it. SQLite's own docs cover exactly this case: disable enforcement for
+// the duration of the rebuild, then turn it back on and verify nothing
+// actually broke via foreign_key_check before trusting the result.
 const emailColInfo = db.prepare("PRAGMA table_info(customers)").all().find(c => c.name === 'email');
 if (emailColInfo && emailColInfo.notnull) {
   const cols = db.prepare("PRAGMA table_info(customers)").all().map(c => c.name).join(', ');
-  db.exec(`
-    CREATE TABLE customers_new (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      email TEXT UNIQUE,
-      first_name TEXT,
-      last_name TEXT,
-      phone TEXT,
-      address TEXT,
-      city TEXT,
-      state TEXT,
-      zip_code TEXT,
-      dob TEXT,
-      blacklisted INTEGER DEFAULT 0,
-      internal_notes TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      license_number TEXT,
-      insurance_company TEXT,
-      insurance_policy_number TEXT
-    );
-    INSERT INTO customers_new (${cols}) SELECT ${cols} FROM customers;
-    DROP TABLE customers;
-    ALTER TABLE customers_new RENAME TO customers;
-  `);
+  db.pragma('foreign_keys = OFF');
+  try {
+    db.exec(`
+      CREATE TABLE customers_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE,
+        first_name TEXT,
+        last_name TEXT,
+        phone TEXT,
+        address TEXT,
+        city TEXT,
+        state TEXT,
+        zip_code TEXT,
+        dob TEXT,
+        blacklisted INTEGER DEFAULT 0,
+        internal_notes TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        license_number TEXT,
+        insurance_company TEXT,
+        insurance_policy_number TEXT
+      );
+      INSERT INTO customers_new (${cols}) SELECT ${cols} FROM customers;
+      DROP TABLE customers;
+      ALTER TABLE customers_new RENAME TO customers;
+    `);
+    const violations = db.pragma('foreign_key_check');
+    if (violations.length) {
+      throw new Error(`customers table rebuild left dangling references: ${JSON.stringify(violations)}`);
+    }
+  } finally {
+    db.pragma('foreign_keys = ON');
+  }
 }
 // Any placeholder emails written before real NULL was possible (see #86) —
 // convert them back now that the column actually allows it.
