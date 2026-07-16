@@ -499,6 +499,96 @@ if (!customerCols.includes('insurance_policy_number')) {
   db.exec('ALTER TABLE customers ADD COLUMN insurance_policy_number TEXT');
 }
 
+// customers.email used to be NOT NULL, which forced a fake placeholder
+// address (walkin-<phone>@no-email.drivenow) onto walk-in customers who
+// never gave a real one — SQLite can't drop a NOT NULL constraint in place,
+// so rebuild the table without it. UNIQUE still holds; SQLite allows
+// multiple NULLs under a UNIQUE constraint, so any number of no-email
+// customers can coexist. Column list built from PRAGMA (not hardcoded) so
+// this can't silently shuffle data into the wrong columns if the schema
+// has drifted from what's read here.
+const emailColInfo = db.prepare("PRAGMA table_info(customers)").all().find(c => c.name === 'email');
+if (emailColInfo && emailColInfo.notnull) {
+  const cols = db.prepare("PRAGMA table_info(customers)").all().map(c => c.name).join(', ');
+  db.exec(`
+    CREATE TABLE customers_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT UNIQUE,
+      first_name TEXT,
+      last_name TEXT,
+      phone TEXT,
+      address TEXT,
+      city TEXT,
+      state TEXT,
+      zip_code TEXT,
+      dob TEXT,
+      blacklisted INTEGER DEFAULT 0,
+      internal_notes TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      license_number TEXT,
+      insurance_company TEXT,
+      insurance_policy_number TEXT
+    );
+    INSERT INTO customers_new (${cols}) SELECT ${cols} FROM customers;
+    DROP TABLE customers;
+    ALTER TABLE customers_new RENAME TO customers;
+  `);
+}
+// Any placeholder emails written before real NULL was possible (see #86) —
+// convert them back now that the column actually allows it.
+db.prepare("UPDATE customers SET email = NULL WHERE email LIKE 'walkin-%@no-email.drivenow'").run();
+
+// One-time backfill: strip punctuation/spacing from existing phone numbers
+// so matching the same person by phone (upsertCustomer, the applications<->
+// customers join) works on old data too, not just numbers entered going
+// forward. Cheap to re-run — already-clean digits-only values are a no-op.
+db.exec(`
+  UPDATE customers SET phone = replace(replace(replace(replace(replace(phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '')
+  WHERE phone IS NOT NULL AND phone GLOB '*[^0-9]*'
+`);
+db.exec(`
+  UPDATE applications SET phone = replace(replace(replace(replace(replace(phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '')
+  WHERE phone IS NOT NULL AND phone GLOB '*[^0-9]*'
+`);
+
+// One-time cleanup: consolidate existing customer records that share a
+// phone number into one — likely genuine duplicates from before
+// upsertCustomer matched by phone (e.g. the same walk-in registered twice
+// under slightly different emails, or with none at all, on separate
+// visits). Keeps whichever record already has an email (oldest, if more
+// than one does), re-points customer_tags/insurance_records to that
+// survivor, fills in any fields it's missing from the others via COALESCE,
+// then removes the redundant rows. Safe to leave running on every
+// startup — once a phone number resolves to a single row, its group no
+// longer has anything to merge, so this is a no-op after the first pass.
+{
+  const dupeGroups = db.prepare(`
+    SELECT phone FROM customers WHERE phone IS NOT NULL AND phone != '' GROUP BY phone HAVING COUNT(*) > 1
+  `).all();
+  const updateSurvivor = db.prepare(`
+    UPDATE customers SET
+      email = COALESCE(email, ?), first_name = COALESCE(first_name, ?), last_name = COALESCE(last_name, ?),
+      address = COALESCE(address, ?), city = COALESCE(city, ?), state = COALESCE(state, ?),
+      zip_code = COALESCE(zip_code, ?), dob = COALESCE(dob, ?), license_number = COALESCE(license_number, ?),
+      insurance_company = COALESCE(insurance_company, ?), insurance_policy_number = COALESCE(insurance_policy_number, ?)
+    WHERE id = ?
+  `);
+  for (const g of dupeGroups) {
+    const rows = db.prepare('SELECT * FROM customers WHERE phone = ? ORDER BY (email IS NULL), created_at ASC').all(g.phone);
+    const [survivor, ...duplicates] = rows;
+    for (const dup of duplicates) {
+      updateSurvivor.run(
+        dup.email, dup.first_name, dup.last_name, dup.address, dup.city, dup.state,
+        dup.zip_code, dup.dob, dup.license_number, dup.insurance_company, dup.insurance_policy_number,
+        survivor.id
+      );
+      db.prepare('UPDATE customer_tags SET customer_id = ? WHERE customer_id = ?').run(survivor.id, dup.id);
+      db.prepare('UPDATE insurance_records SET customer_id = ? WHERE customer_id = ?').run(survivor.id, dup.id);
+      db.prepare('DELETE FROM customers WHERE id = ?').run(dup.id);
+    }
+  }
+}
+
 db.exec(`
 CREATE TABLE IF NOT EXISTS insurance_records (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -582,22 +672,20 @@ CREATE TABLE IF NOT EXISTS downtime_events (
 );
 `);
 
-// Backfill: build a customers record for every distinct email already in
-// applications, so existing leads/bookings get a profile retroactively.
-const existingCustomerEmails = new Set(db.prepare('SELECT lower(email) as e FROM customers').all().map(r => r.e));
+// Backfill: build a customers record for every distinct applicant already
+// in applications (grouped by phone-or-email, same identity rule as
+// upsertCustomer — not email alone), so existing leads/bookings get a
+// profile retroactively. Routed through upsertCustomer itself rather than a
+// separate raw INSERT so it can't drift out of sync with — or undo — the
+// phone-based dedup above by recreating a row upsertCustomer would have
+// recognized as an existing customer.
 const distinctApplicants = db.prepare(`
   SELECT first_name, last_name, phone, email, address, dob, MIN(created_at) as first_seen
   FROM applications
-  WHERE email IS NOT NULL AND email != ''
-  GROUP BY lower(email)
+  GROUP BY COALESCE(NULLIF(phone, ''), lower(email))
 `).all();
-const insertCustomer = db.prepare(`
-  INSERT INTO customers (email, first_name, last_name, phone, address, dob, created_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
-`);
 for (const a of distinctApplicants) {
-  if (existingCustomerEmails.has(a.email.toLowerCase())) continue;
-  insertCustomer.run(a.email, a.first_name, a.last_name, a.phone, a.address || null, a.dob || null, a.first_seen);
+  upsertCustomer(a);
 }
 
 // Backfill: fill in any missing contact details on existing customer records
@@ -625,44 +713,40 @@ for (const c of customersMissingDetails) {
   updateCustomerDetails.run(app.city || null, app.state || null, app.dob || null, app.address || null, app.phone || null, app.zip_code || null, c.id);
 }
 
-// customers.email is NOT NULL/UNIQUE, so a walk-in manual booking (email is
-// optional there — only phone is required) used to silently skip customer
-// registration entirely whenever the front desk left email blank. Falls
-// back to a deterministic placeholder keyed off phone instead, so every
-// booking still produces a client record — the same phone number always
-// resolves to the same placeholder, so repeat walk-ins by the same person
-// still dedupe correctly instead of piling up new rows. If a real email
-// shows up later for that same phone, it upgrades the placeholder to the
-// real one rather than creating a second, separate customer.
-function placeholderEmailForPhone(phone) {
-  const digits = (phone || '').replace(/\D/g, '');
-  return digits ? `walkin-${digits}@no-email.drivenow` : null;
+// Digits only — phone is the one field required on every booking path
+// (public application and manual/walk-in booking alike), unlike email
+// (optional on manual bookings) or license number, so it's the most
+// reliable identity key available. Stripping punctuation/spacing means
+// "(555) 123-4567", "555-123-4567", and "5551234567" all match as the same
+// person instead of silently being treated as different customers because
+// of formatting alone.
+function normalizePhone(phone) {
+  return (phone || '').replace(/\D/g, '');
 }
 
+// Matches primarily by phone, falling back to email — phone because it's
+// universally required, email because a phone can occasionally be re-used
+// (a shared household line) and a matching email is stronger evidence of
+// the same specific person. customers.email is nullable (see migration
+// above), so a walk-in with no email at all just gets a NULL one instead of
+// silently never being registered as a client.
 function upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob, license_number }) {
   const realEmail = (email || '').trim();
-  const placeholder = placeholderEmailForPhone(phone);
-  if (!realEmail && !placeholder) return; // nothing to identify this person by at all
+  const normalizedPhone = normalizePhone(phone);
+  if (!realEmail && !normalizedPhone) return; // nothing to identify this person by at all
 
-  let existing = realEmail
-    ? db.prepare('SELECT id, email FROM customers WHERE lower(email) = lower(?)').get(realEmail)
+  let existing = normalizedPhone
+    ? db.prepare("SELECT id, email FROM customers WHERE replace(replace(replace(replace(phone, '-', ''), '(', ''), ')', ''), ' ', '') = ?").get(normalizedPhone)
     : null;
-  if (!existing && realEmail && placeholder) {
-    // A real email that doesn't match anything yet — before creating a new
-    // customer, check whether this same phone is already registered under
-    // a placeholder from an earlier email-less visit, so this upgrades that
-    // record instead of duplicating it.
-    existing = db.prepare('SELECT id, email FROM customers WHERE lower(email) = lower(?)').get(placeholder);
+  if (!existing && realEmail) {
+    existing = db.prepare('SELECT id, email FROM customers WHERE lower(email) = lower(?)').get(realEmail);
   }
-  if (!existing && !realEmail && placeholder) {
-    existing = db.prepare('SELECT id, email FROM customers WHERE lower(email) = lower(?)').get(placeholder);
-  }
-  const finalEmail = realEmail || (existing ? existing.email : placeholder);
+  const finalEmail = realEmail || (existing ? existing.email : null);
 
   if (existing) {
     db.prepare(`
       UPDATE customers SET
-        email = ?,
+        email = COALESCE(?, email),
         city = COALESCE(city, ?),
         state = COALESCE(state, ?),
         zip_code = COALESCE(zip_code, ?),

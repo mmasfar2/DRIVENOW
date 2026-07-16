@@ -99,7 +99,7 @@ function render() {
 
   document.getElementById('ins-table-body').innerHTML = filtered.length ? filtered.map(r => `
     <tr class="ins-row" data-id="${r.id}" style="cursor:pointer;">
-      <td><a href="customer-detail.html?email=${encodeURIComponent(r.email)}" class="ins-cust-link" data-id="${r.id}">${r.first_name} ${r.last_name}</a></td>
+      <td><a href="customer-detail.html?id=${r.customer_id}" class="ins-cust-link" data-id="${r.id}">${r.first_name} ${r.last_name}</a></td>
       <td>${r.carrier || '—'}</td>
       <td>${r.protection_type || '—'}</td>
       <td><span class="badge ${STATUS_BADGE[r.status] || 'badge-available'}">${r.status || 'Active'}</span></td>

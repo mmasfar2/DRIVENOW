@@ -91,7 +91,7 @@ function render() {
   badge.textContent = TYPE_LABELS[record.type] || record.type;
   badge.className = `badge ${record.type === 'our_policy' ? 'badge-reserved' : 'badge-available'}`;
 
-  document.getElementById('ind-cust-name').innerHTML = `<a href="customer-detail.html?email=${encodeURIComponent(record.email)}" style="color:inherit;">${record.first_name} ${record.last_name}</a>`;
+  document.getElementById('ind-cust-name').innerHTML = `<a href="customer-detail.html?id=${record.customer_id}" style="color:inherit;">${record.first_name} ${record.last_name}</a>`;
   document.getElementById('ind-cust-email').textContent = record.email || '—';
   document.getElementById('ind-cust-phone').textContent = record.phone || '—';
 

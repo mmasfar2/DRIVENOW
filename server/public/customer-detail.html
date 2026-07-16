@@ -50,6 +50,7 @@
       <div id="cd-contact-edit" style="display:none;">
         <div class="field-row"><div class="field"><label>First Name</label><input id="cd-f-first"></div><div class="field"><label>Last Name</label><input id="cd-f-last"></div></div>
         <div class="field"><label>Phone</label><input id="cd-f-phone"></div>
+        <div class="field"><label>Email</label><input id="cd-f-email" placeholder="No email on file"></div>
         <div class="field"><label>Address</label><input id="cd-f-address"></div>
         <div class="field-row"><div class="field"><label>City</label><input id="cd-f-city"></div><div class="field"><label>State</label><input id="cd-f-state"></div></div>
         <div class="field"><label>ZIP Code</label><input id="cd-f-zip"></div>
@@ -102,7 +103,12 @@
 
 <script src="js/admin-common.js"></script>
 <script>
-const email = new URLSearchParams(window.location.search).get('email');
+// id is the preferred, always-resolvable key (a customer's email can be
+// null for a walk-in with no email on file) — email stays supported only
+// for old links/bookmarks that predate id-based routing.
+const params = new URLSearchParams(window.location.search);
+const customerId = params.get('id');
+const email = params.get('email');
 let customer;
 
 function fmtExact(n) {
@@ -110,7 +116,9 @@ function fmtExact(n) {
 }
 
 async function load() {
-  customer = await api(`/api/customers/by-email/${encodeURIComponent(email)}`);
+  customer = customerId
+    ? await api(`/api/customers/id/${encodeURIComponent(customerId)}`)
+    : await api(`/api/customers/by-email/${encodeURIComponent(email)}`);
   render();
 }
 
@@ -221,7 +229,9 @@ document.getElementById('cd-tag-input').addEventListener('keydown', async (e) =>
   if (e.key !== 'Enter' || !e.target.value.trim()) return;
   await api(`/api/customers/${customer.id}/tags`, { method: 'POST', body: JSON.stringify({ tag: e.target.value.trim() }) });
   e.target.value = '';
-  customer = await api(`/api/customers/by-email/${encodeURIComponent(email)}`);
+  customer = customerId
+    ? await api(`/api/customers/id/${encodeURIComponent(customerId)}`)
+    : await api(`/api/customers/by-email/${encodeURIComponent(email)}`);
   renderTags();
 });
 
@@ -240,6 +250,7 @@ document.getElementById('cd-edit-btn').addEventListener('click', () => {
   document.getElementById('cd-f-first').value = customer.first_name || '';
   document.getElementById('cd-f-last').value = customer.last_name || '';
   document.getElementById('cd-f-phone').value = customer.phone || '';
+  document.getElementById('cd-f-email').value = customer.email || '';
   document.getElementById('cd-f-address').value = customer.address || '';
   document.getElementById('cd-f-city').value = customer.city || '';
   document.getElementById('cd-f-state').value = customer.state || '';
@@ -256,6 +267,7 @@ document.getElementById('cd-save-btn').addEventListener('click', async () => {
     first_name: document.getElementById('cd-f-first').value,
     last_name: document.getElementById('cd-f-last').value,
     phone: document.getElementById('cd-f-phone').value,
+    email: document.getElementById('cd-f-email').value || null,
     address: document.getElementById('cd-f-address').value,
     city: document.getElementById('cd-f-city').value,
     state: document.getElementById('cd-f-state').value,

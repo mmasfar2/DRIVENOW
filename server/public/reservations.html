@@ -526,7 +526,7 @@ function renderList() {
       <tr class="resv-table__row" data-id="${b.id}" style="cursor:pointer;">
         <td><input type="checkbox"></td>
         <td class="resv-table__resnum">#${String(b.id).padStart(3, '0')}</td>
-        <td><a href="customer-detail.html?email=${encodeURIComponent(b.email)}" class="resv-row__name">${b.first_name} ${b.last_name}</a></td>
+        <td>${b.customer_id ? `<a href="customer-detail.html?id=${b.customer_id}" class="resv-row__name">${b.first_name} ${b.last_name}</a>` : `<span class="resv-row__name">${b.first_name} ${b.last_name}</span>`}</td>
         <td>
           <div class="resv-table__vehicle">
             <div class="resv-table__vehicle-icon">${icon('car', 16)}</div>

@@ -5,15 +5,13 @@ const { computeCharge, computeOwed } = require('../billing');
 
 const router = express.Router();
 
-function getProfile(email) {
-  let customer = db.prepare('SELECT * FROM customers WHERE lower(email) = lower(?)').get(email);
-  if (!customer) {
-    const app = db.prepare('SELECT * FROM applications WHERE lower(email) = lower(?) ORDER BY created_at ASC LIMIT 1').get(email);
-    if (!app) return null;
-    upsertCustomer(app);
-    customer = db.prepare('SELECT * FROM customers WHERE lower(email) = lower(?)').get(email);
-  }
-
+// Every booking tied to this customer, matched by phone OR email — phone
+// because it's required on every booking path (email is optional on
+// manual/walk-in bookings, and customers.email can now be NULL), email as a
+// second signal. Phone is stored digits-only on both sides (see
+// normalizePhone in db.js).
+function buildProfile(customer) {
+  if (!customer) return null;
   const bookings = db.prepare(`
     SELECT a.id, a.first_name, a.last_name, a.status, a.payment_status, a.invoice_amount, a.total_due_at_pickup, a.weekly_rate,
            a.pickup_scheduled_at, a.rental_end_at, a.created_at, a.license_path, a.insurance_path,
@@ -22,9 +20,10 @@ function getProfile(email) {
            COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.application_id = a.id), 0) as paid_total
     FROM applications a
     LEFT JOIN vehicles v ON v.id = a.assigned_vehicle_id
-    WHERE lower(a.email) = lower(?)
+    WHERE (a.phone != '' AND a.phone = ?)
+       OR (a.email != '' AND ? IS NOT NULL AND lower(a.email) = lower(?))
     ORDER BY a.created_at DESC
-  `).all(email).map(b => {
+  `).all(customer.phone || '', customer.email, customer.email || '').map(b => {
     const charge = computeCharge(b);
     const owed = computeOwed(b, b.paid_total);
     let stageLabel;
@@ -62,12 +61,28 @@ function getProfile(email) {
   };
 }
 
+function getProfileByEmail(email) {
+  let customer = db.prepare('SELECT * FROM customers WHERE lower(email) = lower(?)').get(email);
+  if (!customer) {
+    const app = db.prepare('SELECT * FROM applications WHERE lower(email) = lower(?) ORDER BY created_at ASC LIMIT 1').get(email);
+    if (!app) return null;
+    upsertCustomer(app);
+    customer = db.prepare('SELECT * FROM customers WHERE lower(email) = lower(?)').get(email);
+  }
+  return buildProfile(customer);
+}
+
+function getProfileById(id) {
+  const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(id);
+  return buildProfile(customer);
+}
+
 router.get('/', requireAuth, (req, res) => {
   const customers = db.prepare(`
     SELECT c.id, c.first_name, c.last_name, c.email, c.phone, c.blacklisted,
-      (SELECT COUNT(*) FROM applications a WHERE lower(a.email) = lower(c.email)) as total_bookings,
-      (SELECT COUNT(*) FROM applications a JOIN vehicles v ON v.id = a.assigned_vehicle_id WHERE lower(a.email) = lower(c.email) AND a.status = 'active' AND v.status = 'rented') as active_rentals,
-      (SELECT COALESCE(SUM(p.amount), 0) FROM payments p JOIN applications a ON a.id = p.application_id WHERE lower(a.email) = lower(c.email)) as total_spent
+      (SELECT COUNT(*) FROM applications a WHERE (a.phone != '' AND a.phone = c.phone) OR (a.email != '' AND c.email IS NOT NULL AND lower(a.email) = lower(c.email))) as total_bookings,
+      (SELECT COUNT(*) FROM applications a JOIN vehicles v ON v.id = a.assigned_vehicle_id WHERE ((a.phone != '' AND a.phone = c.phone) OR (a.email != '' AND c.email IS NOT NULL AND lower(a.email) = lower(c.email))) AND a.status = 'active' AND v.status = 'rented') as active_rentals,
+      (SELECT COALESCE(SUM(p.amount), 0) FROM payments p JOIN applications a ON a.id = p.application_id WHERE (a.phone != '' AND a.phone = c.phone) OR (a.email != '' AND c.email IS NOT NULL AND lower(a.email) = lower(c.email))) as total_spent
     FROM customers c
     ORDER BY c.last_name, c.first_name
   `).all().map(c => ({ ...c, status: c.active_rentals > 0 ? 'current' : 'previous' }));
@@ -75,22 +90,38 @@ router.get('/', requireAuth, (req, res) => {
 });
 
 router.get('/by-email/:email', requireAuth, (req, res) => {
-  const profile = getProfile(req.params.email);
+  const profile = getProfileByEmail(req.params.email);
+  if (!profile) return res.status(404).json({ error: 'Not found' });
+  res.json(profile);
+});
+
+// Preferred lookup — email can be null (walk-in customers with no email on
+// file), so a customer's own numeric id is the only identifier guaranteed
+// to always resolve them.
+router.get('/id/:id', requireAuth, (req, res) => {
+  const profile = getProfileById(req.params.id);
   if (!profile) return res.status(404).json({ error: 'Not found' });
   res.json(profile);
 });
 
 router.patch('/:id', requireAuth, (req, res) => {
-  const allowed = ['first_name', 'last_name', 'phone', 'address', 'city', 'state', 'zip_code', 'dob', 'internal_notes', 'blacklisted', 'license_number'];
+  const allowed = ['first_name', 'last_name', 'phone', 'email', 'address', 'city', 'state', 'zip_code', 'dob', 'internal_notes', 'blacklisted', 'license_number'];
   const updates = [];
   const params = [];
   for (const key of allowed) {
     if (req.body[key] !== undefined) {
+      let value = req.body[key];
+      if (key === 'email') value = value ? value.trim() || null : null;
+      if (key === 'phone') value = value ? value.replace(/\D/g, '') : null;
       updates.push(`${key} = ?`);
-      params.push(req.body[key]);
+      params.push(value);
     }
   }
   if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update' });
+  if (req.body.email) {
+    const clash = db.prepare('SELECT id FROM customers WHERE lower(email) = lower(?) AND id != ?').get(req.body.email, req.params.id);
+    if (clash) return res.status(400).json({ error: 'Another customer already uses that email' });
+  }
   params.push(req.params.id);
   db.prepare(`UPDATE customers SET ${updates.join(', ')} WHERE id = ?`).run(...params);
   res.json({ ok: true });
