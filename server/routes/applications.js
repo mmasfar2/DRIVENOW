@@ -595,16 +595,18 @@ router.patch('/:id', requireAuth, (req, res) => {
   // a purely internal correction (e.g. applying a Discount or Insurance Fee
   // checkbox). This persists whatever total the checked/edited rows
   // currently add up to, the same way a date change recomputes and persists
-  // a new total. Discount/Admin Fee/Travel Fee/Insurance Fee/Processing Fee
-  // are each saved as their own column too (unchecked -> 0) so their
-  // checkboxes reflect what was actually saved instead of resetting to
-  // whatever the booking's original rate happened to be on the next reload
-  // — computeCharge picks these up on any future recompute too (e.g. a
-  // later date change), so they aren't silently lost.
+  // a new total. Every toggleable row (Discount/Admin Fee/Travel Fee/
+  // Insurance Fee/Processing Fee/Miscellaneous/Tolls) is saved as its own
+  // column too (unchecked -> 0) so its checkbox reflects what was actually
+  // saved instead of resetting to whatever the booking's original rate
+  // happened to be on the next reload — computeCharge picks these up on any
+  // future recompute too (e.g. a later date change), so they aren't
+  // silently lost. Add any new row to extraFields below too, or it'll have
+  // this same bug.
   if (hasInvoiceTotal) {
     const id = req.params.id;
     const total = Math.round(Number(req.body.invoice_total) * 100) / 100;
-    const extraFields = { discount: 'discount', admin_fee_rate: 'admin_fee_rate', travel_fee: 'travel_fee', insurance_fee_rate: 'insurance_fee_rate', processing_fee: 'processing_fee' };
+    const extraFields = { discount: 'discount', admin_fee_rate: 'admin_fee_rate', travel_fee: 'travel_fee', insurance_fee_rate: 'insurance_fee_rate', processing_fee: 'processing_fee', misc_fee: 'misc_fee', toll_fee: 'toll_fee' };
     const setCols = ['total_due_at_pickup = ?', 'invoice_amount = ?'];
     const setParams = [total, total];
     for (const [bodyKey, column] of Object.entries(extraFields)) {

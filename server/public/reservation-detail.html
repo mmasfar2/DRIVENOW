@@ -714,8 +714,8 @@ function initBreakdown() {
     { key: 'processingfee', type: 'amount', label: 'Processing Fee (2.75%)',
       amount: booking.processing_fee ? Number(booking.processing_fee) : Math.round((Number(booking.charge) || 0) * PROCESSING_FEE_RATE * 100) / 100,
       checked: !!booking.processing_fee },
-    { key: 'misc', type: 'amount', label: 'Miscellaneous', amount: 0, checked: false },
-    { key: 'tolls', type: 'amount', label: 'Tolls', amount: 0, checked: false },
+    { key: 'misc', type: 'amount', label: 'Miscellaneous', amount: Number(booking.misc_fee) || 0, checked: !!booking.misc_fee },
+    { key: 'tolls', type: 'amount', label: 'Tolls', amount: Number(booking.toll_fee) || 0, checked: !!booking.toll_fee },
     { key: 'discount', type: 'amount', label: 'Discount', amount: Number(booking.discount) || 0, checked: !!booking.discount, sign: -1 },
   ];
   recalcTaxes();
@@ -844,11 +844,16 @@ document.querySelectorAll('.rd-tab').forEach(tab => {
 // this page's memory until it's actually persisted — Send Invoice does that,
 // but it also texts the customer and advances their pipeline stage, which
 // isn't what you want for a purely internal correction. This saves the
-// current total, plus Discount/Admin Fee/Travel Fee/Insurance Fee/Processing
-// Fee each as their own stored field (unchecked -> 0) so their checkboxes
-// reflect what was actually saved on the next reload instead of resetting to
-// whatever the booking's original rate happened to be — initBreakdown derives
-// each checkbox's starting state from these same columns.
+// current total, plus every toggleable row (Discount/Admin Fee/Travel Fee/
+// Insurance Fee/Processing Fee/Miscellaneous/Tolls) each as their own stored
+// field (unchecked -> 0) so their checkboxes reflect what was actually saved
+// on the next reload instead of resetting to whatever the booking's original
+// rate happened to be — initBreakdown derives each checkbox's starting state
+// from these same columns. Every row in the panel needs an entry here; a row
+// left out silently reverts on reload even though it affected the saved
+// total (this bit Admin/Travel/Insurance/Processing Fee once already, then
+// Miscellaneous/Tolls a second time — don't add a new row without adding it
+// here too).
 document.getElementById('rd-save-adjustments-btn').addEventListener('click', async () => {
   const total = getInvoiceTotal();
   const itemValue = (key, field) => {
@@ -863,6 +868,8 @@ document.getElementById('rd-save-adjustments-btn').addEventListener('click', asy
     travel_fee: itemValue('travel', 'amount'),
     insurance_fee_rate: itemValue('insurancefee', 'rate'),
     processing_fee: itemValue('processingfee', 'amount'),
+    misc_fee: itemValue('misc', 'amount'),
+    toll_fee: itemValue('tolls', 'amount'),
   }) });
   await load();
 });

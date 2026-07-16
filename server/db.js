@@ -284,6 +284,18 @@ if (!existingCols.includes('discount')) {
   // every reload — a positive dollar amount, subtracted from the charge.
   db.exec('ALTER TABLE applications ADD COLUMN discount REAL');
 }
+if (!existingCols.includes('misc_fee')) {
+  // Flat, one-time, same shape as travel_fee. Counts toward revenue like
+  // Admin/Travel Fee — a generic catch-all charge, not a pass-through cost.
+  db.exec('ALTER TABLE applications ADD COLUMN misc_fee REAL');
+}
+if (!existingCols.includes('toll_fee')) {
+  // Flat, one-time — a toll billed to the customer on this specific
+  // invoice (separate from the vehicle_maintenance toll log used for
+  // fleet-wide toll tracking). Excluded from revenue, same "surplus, not
+  // profit" treatment as every other toll and Insurance Fee.
+  db.exec('ALTER TABLE applications ADD COLUMN toll_fee REAL');
+}
 
 const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);
 if (!vehicleCols.includes('photo_path')) {
@@ -729,19 +741,19 @@ function getForfeitedDeposits() {
 
 // Revenue as it's actually earned AND paid for — one row per calendar day
 // of every active/completed booking, at that booking's own daily rate plus
-// that day's admin fee, with the one-time travel fee (minus any discount)
-// folded into the pickup day — rather than whenever a payment happened to
-// be logged. A booking paid in full up front shows its revenue spread
-// across the exact days it covers: $43 on May 12, $43 on May 13, and so on.
-// Sales tax, highway tax, insurance fee, and processing fee are excluded —
-// pass-through/ancillary, not earnings.
+// that day's admin fee, with the one-time travel/misc fees (minus any
+// discount) folded into the pickup day — rather than whenever a payment
+// happened to be logged. A booking paid in full up front shows its revenue
+// spread across the exact days it covers: $43 on May 12, $43 on May 13,
+// and so on. Sales tax, highway tax, insurance fee, processing fee, and
+// tolls are excluded — pass-through/ancillary, not earnings.
 //
 // A booking that's only partly paid has only earned the days its payments
 // actually cover — allocated FIFO, oldest day first, like a running tab:
 // walk the booking chronologically and keep "spending" what's been paid
 // against each day's full invoice cost (rate + its share of tax + admin +
-// insurance fee, plus travel/processing fee and minus discount on the
-// pickup day) until it runs out. Earlier days are marked fully earned
+// insurance fee, plus travel/processing/misc/toll fee and minus discount on
+// the pickup day) until it runs out. Earlier days are marked fully earned
 // before later ones get anything, and the one day payment runs out mid-way
 // through gets its own partial share. This (rather than spreading the same
 // paid % evenly across every day) means a day already fully paid for stays
@@ -777,7 +789,7 @@ function getAccruedRevenueDays() {
   const rows = db.prepare(`
     SELECT id as application_id, assigned_vehicle_id as vehicle_id, status,
            pickup_scheduled_at, rental_end_at, weekly_rate, admin_fee_rate, travel_fee, discount,
-           invoice_amount, total_due_at_pickup, insurance_fee_rate, processing_fee
+           invoice_amount, total_due_at_pickup, insurance_fee_rate, processing_fee, misc_fee, toll_fee
     FROM applications
     WHERE status IN ('active', 'completed')
       AND pickup_scheduled_at IS NOT NULL AND rental_end_at IS NOT NULL AND weekly_rate IS NOT NULL
@@ -804,13 +816,15 @@ function getAccruedRevenueDays() {
     const insuranceFeeRate = Number(a.insurance_fee_rate) || 0;
     const travelFee = Math.round((Number(a.travel_fee) || 0) * 100) / 100;
     const processingFee = Math.round((Number(a.processing_fee) || 0) * 100) / 100;
+    const miscFee = Math.round((Number(a.misc_fee) || 0) * 100) / 100;
+    const tollFee = Math.round((Number(a.toll_fee) || 0) * 100) / 100;
     const discount = Math.round((Number(a.discount) || 0) * 100) / 100;
     const cursor = new Date(start);
     let firstDay = true;
     let lastEntry = null;
     while (cursor < end) {
-      const revenuePortion = Math.round((dailyRate + adminFeeRate + (firstDay ? travelFee - discount : 0)) * 100) / 100;
-      const fullDayInvoice = Math.round((dailyTaxedRate + adminFeeRate + insuranceFeeRate + (firstDay ? travelFee + processingFee - discount : 0)) * 100) / 100;
+      const revenuePortion = Math.round((dailyRate + adminFeeRate + (firstDay ? travelFee + miscFee - discount : 0)) * 100) / 100;
+      const fullDayInvoice = Math.round((dailyTaxedRate + adminFeeRate + insuranceFeeRate + (firstDay ? travelFee + processingFee + miscFee + tollFee - discount : 0)) * 100) / 100;
       let amount;
       let taxAmount;
       if (remainingPaid >= fullDayInvoice) {
