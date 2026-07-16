@@ -725,6 +725,18 @@ CREATE TABLE IF NOT EXISTS downtime_events (
 );
 `);
 
+// Heal dangling links: if applications.customer_id points at a customer
+// row that no longer exists (e.g. deleted by an earlier dedup pass from
+// before that pass repointed applications too), every matching query below
+// treats a non-NULL customer_id as authoritative and never falls back to
+// re-deriving it — so a dangling reference stays broken forever instead of
+// self-healing. Reset it to NULL so it's picked back up by the same
+// backfill/matching logic as a legacy unlinked row.
+db.exec(`
+  UPDATE applications SET customer_id = NULL
+  WHERE customer_id IS NOT NULL AND customer_id NOT IN (SELECT id FROM customers)
+`);
+
 // Backfill: build a customers record for every distinct applicant that
 // isn't linked to one yet (grouped by email, or name+address, or — when
 // there's no address on file at all — name+phone, same identity rule as
