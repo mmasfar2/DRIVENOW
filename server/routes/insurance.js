@@ -76,6 +76,13 @@ router.get('/by-customer-email/:email', requireAuth, (req, res) => {
   res.json(rows);
 });
 
+// Preferred over by-customer-email — a walk-in customer can have no email
+// on file at all, so id is the only lookup guaranteed to work.
+router.get('/by-customer-id/:id', requireAuth, (req, res) => {
+  const rows = db.prepare('SELECT * FROM insurance_records WHERE customer_id = ? ORDER BY type').all(req.params.id);
+  res.json(rows);
+});
+
 router.get('/:id', requireAuth, (req, res) => {
   const row = db.prepare(`
     SELECT ir.*, c.first_name, c.last_name, c.email, c.phone

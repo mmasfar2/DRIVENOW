@@ -13,9 +13,18 @@ const router = express.Router();
 // intake time. Any query that displays a booking's customer info joins in
 // the canonical `customers` row and prefers it, so an edit to a customer's
 // name/phone/address shows up on their existing bookings instead of only
-// applying to future ones.
-const CUSTOMER_JOIN = 'LEFT JOIN customers c ON lower(c.email) = lower(a.email)';
+// applying to future ones. Matches by phone OR email — phone because it's
+// required on every booking path (email is optional on manual/walk-in
+// bookings, and customers.email can be NULL), email as a second signal.
+// Phone is stored digits-only on both sides (see normalizePhone in db.js),
+// so a plain equality check is enough without reformatting in-query.
+const CUSTOMER_JOIN = `
+  LEFT JOIN customers c ON
+    (a.phone != '' AND c.phone = a.phone)
+    OR (a.email != '' AND c.email IS NOT NULL AND lower(c.email) = lower(a.email))
+`;
 const CUSTOMER_SYNC_COLUMNS = `
+  c.id as customer_id,
   COALESCE(c.first_name, a.first_name) as first_name,
   COALESCE(c.last_name, a.last_name) as last_name,
   COALESCE(c.phone, a.phone) as phone,
@@ -57,6 +66,11 @@ router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (r
     return res.status(400).json({ error: 'ZIP code must contain exactly 5 digits' });
   }
 
+  // Stored digits-only (not however the customer happened to type it —
+  // dashes, parens, spaces) so matching the same person by phone
+  // (upsertCustomer, applications<->customers) works regardless of
+  // formatting differences between visits.
+  const normalizedPhone = phone.replace(/\D/g, '');
   const licensePath = req.files?.license?.[0]?.filename || null;
   const insurancePath = req.files?.insurance?.[0]?.filename || null;
   const assignedVehicleId = vehicle_id ? Number(vehicle_id) : null;
@@ -65,18 +79,18 @@ router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (r
     INSERT INTO applications
       (first_name, last_name, phone, email, address, city, state, zip_code, dob, occupation, use_type, license_number, license_path, insurance_path, consent_background, has_own_insurance, assigned_vehicle_id, rental_duration, notes, stage)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, 1)
-  `).run(first_name, last_name, phone, email, address || null, city || null, state || null, zip_code || null, dob || null, occupation || null, use_type || null, license_number || null, licensePath, insurancePath, has_own_insurance === 'yes' ? 1 : 0, assignedVehicleId, rental_duration || null, notes || null);
+  `).run(first_name, last_name, normalizedPhone, email, address || null, city || null, state || null, zip_code || null, dob || null, occupation || null, use_type || null, license_number || null, licensePath, insurancePath, has_own_insurance === 'yes' ? 1 : 0, assignedVehicleId, rental_duration || null, notes || null);
 
   const appId = result.lastInsertRowid;
   if (assignedVehicleId) {
     db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ? AND status = 'available'").run(assignedVehicleId);
   }
-  const customerId = upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob, license_number });
+  const customerId = upsertCustomer({ email, first_name, last_name, phone: normalizedPhone, address, city, state, zip_code, dob, license_number });
   if (has_own_insurance === 'yes' || insurancePath) {
     upsertInsuranceRecord(customerId, 'private', { document_path: insurancePath });
   }
   logActivity(appId, `New application submitted by ${first_name} ${last_name}`);
-  queueMessage(appId, 'sms', phone, "We've received your application and are currently reviewing it.");
+  queueMessage(appId, 'sms', normalizedPhone, "We've received your application and are currently reviewing it.");
 
   res.status(201).json({ id: appId, message: 'Application received' });
 });
@@ -793,6 +807,7 @@ router.get('/bookings/all', requireAuth, (req, res) => {
            a.payment_status, a.invoice_amount, a.invoice_sent_at, a.pickup_scheduled_at, a.rental_end_at, a.status, a.updated_at,
            v.id as vehicle_id, v.make, v.model, v.year, v.status as vehicle_status,
            COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.application_id = a.id), 0) as paid_total,
+           c.id as customer_id,
            COALESCE(c.first_name, a.first_name) as first_name,
            COALESCE(c.last_name, a.last_name) as last_name,
            COALESCE(c.phone, a.phone) as phone
@@ -890,6 +905,10 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
   }
 
   const bookingSource = source === 'online' ? 'manual_booking_online' : 'manual_booking_in_person';
+  // Stored digits-only, same reasoning as the public application route —
+  // matching the same person by phone shouldn't depend on how the front
+  // desk happened to type it in.
+  const normalizedPhone = phone.replace(/\D/g, '');
   const licensePath = req.files?.license?.[0]?.filename || null;
   const insurancePrivatePath = req.files?.insurance_private?.[0]?.filename || null;
   const insurancePolicyPath = req.files?.insurance_policies?.[0]?.filename || null;
@@ -902,7 +921,7 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
        dob, license_number, address, city, state, zip_code, license_path, insurance_path, insurance_private_path)
     VALUES (?, ?, ?, ?, 1, 6, 'active', ?, ?, ?, ?, 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    first_name, last_name, phone, email || '', assigned_vehicle_id, weekly_rate, total_due_at_pickup || null, total_due_at_pickup || null,
+    first_name, last_name, normalizedPhone, email || '', assigned_vehicle_id, weekly_rate, total_due_at_pickup || null, total_due_at_pickup || null,
     pickup_scheduled_at, rental_end_at, bookingSource,
     admin_fee_rate || null, travel_fee || null, insurance_fee_rate || null, processing_fee || null,
     dob || null, license_number || null, address || null, city || null, state || null, zip_code || null,
@@ -911,7 +930,7 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
 
   const appId = result.lastInsertRowid;
   db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ?").run(assigned_vehicle_id);
-  const customerId = upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob, license_number });
+  const customerId = upsertCustomer({ email, first_name, last_name, phone: normalizedPhone, address, city, state, zip_code, dob, license_number });
   if (insurancePrivatePath || insurance_carrier || insurance_policy_number || insurance_coverage_type) {
     upsertInsuranceRecord(customerId, 'private', {
       document_path: insurancePrivatePath, carrier: insurance_carrier,

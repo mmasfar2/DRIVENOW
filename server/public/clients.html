@@ -63,7 +63,7 @@ function render() {
   });
 
   document.getElementById('clients-table-body').innerHTML = filtered.length ? filtered.map(c => `
-    <tr style="cursor:pointer;" onclick="window.location.href='customer-detail.html?email=${encodeURIComponent(c.email)}'">
+    <tr style="cursor:pointer;" onclick="window.location.href='customer-detail.html?id=${c.id}'">
       <td><strong>${c.first_name} ${c.last_name}</strong>${c.blacklisted ? ' <span class="badge badge-rejected">Blacklisted</span>' : ''}</td>
       <td>${displayEmail(c.email)}</td>
       <td>${c.phone || '—'}</td>

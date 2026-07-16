@@ -326,7 +326,9 @@ let insuranceRecords = [];
 async function load() {
   booking = await api(`/api/applications/${id}/detail`);
   vehiclePhotos = booking.vehicle_id ? await api(`/api/vehicles/${booking.vehicle_id}/photos`) : [];
-  insuranceRecords = booking.email ? await api(`/api/insurance/by-customer-email/${encodeURIComponent(booking.email)}`) : [];
+  insuranceRecords = booking.customer_id
+    ? await api(`/api/insurance/by-customer-id/${booking.customer_id}`)
+    : (booking.email ? await api(`/api/insurance/by-customer-email/${encodeURIComponent(booking.email)}`) : []);
   render();
 }
 
@@ -404,7 +406,9 @@ function render() {
     <div class="rd-charge-row--balance${bal.isCredit ? ' is-credit' : ''}"><span>Balance Owed</span><span>${fmtExact(bal.amount)}</span></div>
   `;
 
-  document.getElementById('rd-cust-name').innerHTML = `<a href="customer-detail.html?email=${encodeURIComponent(booking.email)}" style="color:inherit;">${booking.first_name} ${booking.last_name}</a>`;
+  document.getElementById('rd-cust-name').innerHTML = booking.customer_id
+    ? `<a href="customer-detail.html?id=${booking.customer_id}" style="color:inherit;">${booking.first_name} ${booking.last_name}</a>`
+    : `${booking.first_name} ${booking.last_name}`;
   document.getElementById('rd-cust-email').textContent = booking.email ? displayEmail(booking.email) : '—';
   document.getElementById('rd-cust-phone').textContent = booking.phone || '—';
 
