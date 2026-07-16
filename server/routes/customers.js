@@ -5,10 +5,14 @@ const { computeCharge, computeOwed } = require('../billing');
 
 const router = express.Router();
 
-// Every booking tied to this customer, matched by email when present,
-// otherwise by name + address together (same rule as upsertCustomer in
-// db.js) — deliberately NOT by phone, since two different people (family, a
-// shared business line) can share one phone number, which would
+// Every booking tied to this customer. Primarily matched via
+// applications.customer_id — set once, directly, at booking-creation time
+// (see upsertCustomer's call sites in applications.js) — rather than
+// re-guessing the link by matching email/name/address every time this page
+// loads. Falls back to email-or-name+address only for older rows that
+// predate that column (backfilled on startup in db.js where possible).
+// Deliberately never falls back to phone alone — two different people
+// (family, a shared business line) can share one phone number, which would
 // incorrectly pull in a stranger's bookings.
 function buildProfile(customer) {
   if (!customer) return null;
@@ -20,13 +24,19 @@ function buildProfile(customer) {
            COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.application_id = a.id), 0) as paid_total
     FROM applications a
     LEFT JOIN vehicles v ON v.id = a.assigned_vehicle_id
-    WHERE (a.email != '' AND ? IS NOT NULL AND lower(a.email) = lower(?))
+    WHERE a.customer_id = ?
        OR (
-         ? != '' AND a.address IS NOT NULL AND a.address != ''
-         AND lower(trim(a.first_name)) = ? AND lower(trim(a.last_name)) = ? AND lower(trim(a.address)) = ?
+         a.customer_id IS NULL AND (
+           (a.email != '' AND ? IS NOT NULL AND lower(a.email) = lower(?))
+           OR (
+             ? != '' AND a.address IS NOT NULL AND a.address != ''
+             AND lower(trim(a.first_name)) = ? AND lower(trim(a.last_name)) = ? AND lower(trim(a.address)) = ?
+           )
+         )
        )
     ORDER BY a.created_at DESC
   `).all(
+    customer.id,
     customer.email, customer.email || '',
     (customer.address || '').trim().toLowerCase(),
     (customer.first_name || '').trim().toLowerCase(), (customer.last_name || '').trim().toLowerCase(), (customer.address || '').trim().toLowerCase()
@@ -73,7 +83,8 @@ function getProfileByEmail(email) {
   if (!customer) {
     const app = db.prepare('SELECT * FROM applications WHERE lower(email) = lower(?) ORDER BY created_at ASC LIMIT 1').get(email);
     if (!app) return null;
-    upsertCustomer(app);
+    const newCustomerId = upsertCustomer(app);
+    if (!app.customer_id) db.prepare('UPDATE applications SET customer_id = ? WHERE id = ?').run(newCustomerId, app.id);
     customer = db.prepare('SELECT * FROM customers WHERE lower(email) = lower(?)').get(email);
   }
   return buildProfile(customer);
@@ -84,16 +95,22 @@ function getProfileById(id) {
   return buildProfile(customer);
 }
 
-// Matches a booking to a customer by email when present, otherwise by
-// name + address together — same rule as upsertCustomer/CUSTOMER_JOIN, and
-// deliberately not phone (see those for why).
+// Matches a booking to a customer via applications.customer_id first
+// (same reasoning as buildProfile above), falling back to email-or-
+// name+address for older rows without it. Deliberately not phone (see
+// buildProfile/CUSTOMER_JOIN for why).
 const CUSTOMER_MATCH = `
-  (a.email != '' AND c.email IS NOT NULL AND lower(a.email) = lower(c.email))
+  a.customer_id = c.id
   OR (
-    c.address IS NOT NULL AND c.address != '' AND a.address IS NOT NULL AND a.address != ''
-    AND lower(trim(a.first_name)) = lower(trim(c.first_name))
-    AND lower(trim(a.last_name)) = lower(trim(c.last_name))
-    AND lower(trim(a.address)) = lower(trim(c.address))
+    a.customer_id IS NULL AND (
+      (a.email != '' AND c.email IS NOT NULL AND lower(a.email) = lower(c.email))
+      OR (
+        c.address IS NOT NULL AND c.address != '' AND a.address IS NOT NULL AND a.address != ''
+        AND lower(trim(a.first_name)) = lower(trim(c.first_name))
+        AND lower(trim(a.last_name)) = lower(trim(c.last_name))
+        AND lower(trim(a.address)) = lower(trim(c.address))
+      )
+    )
   )
 `;
 

@@ -13,18 +13,29 @@ const router = express.Router();
 // intake time. Any query that displays a booking's customer info joins in
 // the canonical `customers` row and prefers it, so an edit to a customer's
 // name/phone/address shows up on their existing bookings instead of only
-// applying to future ones. Matches by email when present, otherwise by name
-// + address together (same rule as upsertCustomer in db.js) — deliberately
-// NOT by phone, since two different people (family, a shared business
-// line) can share one phone number, which would incorrectly merge them.
+// applying to future ones. Primarily joins on applications.customer_id —
+// set once, directly, at booking-creation time (see upsertCustomer's call
+// sites below) — rather than re-guessing the link by matching email/name/
+// address every time it's displayed. The email-or-name+address match is
+// kept only as a fallback for older rows from before that column existed
+// (backfilled on startup in db.js, but a booking with neither an email nor
+// an address on file can't be resolved that way either). Deliberately
+// never matches by phone alone — two different people (family, a shared
+// business line) can share one phone number, which would incorrectly
+// merge them.
 const CUSTOMER_JOIN = `
   LEFT JOIN customers c ON
-    (a.email != '' AND c.email IS NOT NULL AND lower(c.email) = lower(a.email))
+    c.id = a.customer_id
     OR (
-      c.address IS NOT NULL AND c.address != '' AND a.address IS NOT NULL AND a.address != ''
-      AND lower(trim(c.first_name)) = lower(trim(a.first_name))
-      AND lower(trim(c.last_name)) = lower(trim(a.last_name))
-      AND lower(trim(c.address)) = lower(trim(a.address))
+      a.customer_id IS NULL AND (
+        (a.email != '' AND c.email IS NOT NULL AND lower(c.email) = lower(a.email))
+        OR (
+          c.address IS NOT NULL AND c.address != '' AND a.address IS NOT NULL AND a.address != ''
+          AND lower(trim(c.first_name)) = lower(trim(a.first_name))
+          AND lower(trim(c.last_name)) = lower(trim(a.last_name))
+          AND lower(trim(c.address)) = lower(trim(a.address))
+        )
+      )
     )
 `;
 const CUSTOMER_SYNC_COLUMNS = `
@@ -90,6 +101,7 @@ router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (r
     db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ? AND status = 'available'").run(assignedVehicleId);
   }
   const customerId = upsertCustomer({ email, first_name, last_name, phone: normalizedPhone, address, city, state, zip_code, dob, license_number });
+  db.prepare('UPDATE applications SET customer_id = ? WHERE id = ?').run(customerId, appId);
   if (has_own_insurance === 'yes' || insurancePath) {
     upsertInsuranceRecord(customerId, 'private', { document_path: insurancePath });
   }
@@ -271,6 +283,7 @@ router.post('/:id/insurance-quote', requireAuth, (req, res) => {
     // A quote here means DriveNow is covering this customer under its own
     // policy — reflect that in the Insurance panel right away.
     const customerId = upsertCustomer(app);
+    if (!app.customer_id) db.prepare('UPDATE applications SET customer_id = ? WHERE id = ?').run(customerId, id);
     upsertInsuranceRecord(customerId, 'our_policy', { notes: insurance_notes });
   }
   logActivity(id, `Insurance quote received: $${insurance_quote_amount}`);
@@ -887,7 +900,7 @@ const uploadManual = multer({
 
 router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
   const {
-    first_name, last_name, phone, email,
+    customer_id, first_name, last_name, phone, email,
     assigned_vehicle_id, weekly_rate, total_due_at_pickup,
     admin_fee_rate, travel_fee, insurance_fee_rate, processing_fee, security_deposit,
     pickup_scheduled_at, rental_end_at, source,
@@ -934,7 +947,27 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
 
   const appId = result.lastInsertRowid;
   db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ?").run(assigned_vehicle_id);
-  const customerId = upsertCustomer({ email, first_name, last_name, phone: normalizedPhone, address, city, state, zip_code, dob, license_number });
+  // Picking a result in the wizard's "Existing Customer" search means a
+  // human already identified who this is — use that id directly instead of
+  // re-guessing via upsertCustomer's email/name+address matching, which
+  // can't always tell two people apart from sparse info alone. Falls back
+  // to the normal matching/create path for the "New Customer" tab, or if
+  // the id somehow doesn't resolve to a real row.
+  const existingCustomer = customer_id ? db.prepare('SELECT id FROM customers WHERE id = ?').get(customer_id) : null;
+  let customerId;
+  if (existingCustomer) {
+    db.prepare(`
+      UPDATE customers SET
+        email = COALESCE(?, email), city = COALESCE(city, ?), state = COALESCE(state, ?),
+        zip_code = COALESCE(zip_code, ?), address = COALESCE(address, ?), dob = COALESCE(dob, ?),
+        phone = COALESCE(phone, ?), license_number = COALESCE(license_number, ?)
+      WHERE id = ?
+    `).run((email || '').trim() || null, city || null, state || null, zip_code || null, address || null, dob || null, normalizedPhone || null, license_number || null, existingCustomer.id);
+    customerId = existingCustomer.id;
+  } else {
+    customerId = upsertCustomer({ email, first_name, last_name, phone: normalizedPhone, address, city, state, zip_code, dob, license_number });
+  }
+  db.prepare('UPDATE applications SET customer_id = ? WHERE id = ?').run(customerId, appId);
   if (insurancePrivatePath || insurance_carrier || insurance_policy_number || insurance_coverage_type) {
     upsertInsuranceRecord(customerId, 'private', {
       document_path: insurancePrivatePath, carrier: insurance_carrier,

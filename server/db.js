@@ -200,6 +200,17 @@ if (!existingCols.includes('license_number')) {
 if (!existingCols.includes('license_state')) {
   db.exec('ALTER TABLE applications ADD COLUMN license_state TEXT');
 }
+if (!existingCols.includes('customer_id')) {
+  // A direct link, set once at booking-creation time (see upsertCustomer's
+  // call sites in applications.js) instead of re-guessing which customer a
+  // booking belongs to by matching email/name/address every time it's
+  // displayed. Guessing at read time meant a booking with neither an email
+  // nor an address on file (common on a quick walk-in) could never be
+  // found again even though a customer record for it definitely exists —
+  // this is set once, right when we actually know the answer, and never
+  // needs to be re-derived.
+  db.exec('ALTER TABLE applications ADD COLUMN customer_id INTEGER REFERENCES customers(id)');
+}
 if (!existingCols.includes('rental_end_at')) {
   db.exec('ALTER TABLE applications ADD COLUMN rental_end_at TEXT');
 }
@@ -686,21 +697,48 @@ CREATE TABLE IF NOT EXISTS downtime_events (
 );
 `);
 
-// Backfill: build a customers record for every distinct applicant already
-// in applications (grouped by email-or-name+address, same identity rule as
-// upsertCustomer — not email alone), so existing leads/bookings get a
-// profile retroactively. Routed through upsertCustomer itself rather than a
-// separate raw INSERT so it can't drift out of sync with — or undo — the
-// dedup above by recreating a row upsertCustomer would have recognized as
-// an existing customer.
+// Backfill: build a customers record for every distinct applicant that
+// isn't linked to one yet (grouped by email-or-name+address, same identity
+// rule as upsertCustomer — not email alone), so legacy leads/bookings that
+// predate the customer_id column get a profile retroactively. Scoped to
+// customer_id IS NULL — every application created since customer_id shipped
+// already got linked directly at creation time, so re-running upsertCustomer
+// on those rows on every startup would just mint a fresh duplicate customer
+// for anyone with no email and no address on file (a booking's own name+
+// address matching can't find itself when both are blank).
 const distinctApplicants = db.prepare(`
   SELECT first_name, last_name, phone, email, address, dob, MIN(created_at) as first_seen
   FROM applications
+  WHERE customer_id IS NULL
   GROUP BY COALESCE(NULLIF(lower(email), ''), lower(trim(first_name)) || '|' || lower(trim(last_name)) || '|' || lower(trim(address)))
 `).all();
 for (const a of distinctApplicants) {
   upsertCustomer(a);
 }
+
+// Backfill: link every existing application directly to its customer via
+// the same email-or-name+address matching rule, so the direct customer_id
+// link (added above) isn't only populated for bookings created after this
+// shipped. Only touches rows still missing it. A booking with neither an
+// email nor an address on file can't be resolved this way either — same
+// underlying limitation as everywhere else that used to guess this at read
+// time — but leaving those as NULL keeps them fixable by hand later
+// instead of this silently overwriting a manual assignment on every
+// startup.
+db.exec(`
+  UPDATE applications SET customer_id = (
+    SELECT c.id FROM customers c
+    WHERE (applications.email != '' AND c.email IS NOT NULL AND lower(c.email) = lower(applications.email))
+       OR (
+         c.address IS NOT NULL AND c.address != '' AND applications.address IS NOT NULL AND applications.address != ''
+         AND lower(trim(c.first_name)) = lower(trim(applications.first_name))
+         AND lower(trim(c.last_name)) = lower(trim(applications.last_name))
+         AND lower(trim(c.address)) = lower(trim(applications.address))
+       )
+    LIMIT 1
+  )
+  WHERE customer_id IS NULL
+`);
 
 // Backfill: fill in any missing contact details on existing customer records
 // from their most recent application, now that the apply form sends city/state/dob.
@@ -753,7 +791,7 @@ function upsertCustomer({ email, first_name, last_name, phone, address, city, st
   const lastKey = normalizeText(last_name);
   const addressKey = normalizeText(address);
   const hasNameAddress = !!(firstKey && lastKey && addressKey);
-  if (!realEmail && !hasNameAddress) return; // nothing reliable to identify this person by
+  if (!first_name && !last_name) return; // no name at all — nothing to register
 
   let existing = realEmail
     ? db.prepare('SELECT id, email FROM customers WHERE lower(email) = lower(?)').get(realEmail)
