@@ -838,11 +838,17 @@ router.get('/bookings/all', requireAuth, (req, res) => {
 });
 
 // ── AUTHED: Search existing customers by name/phone/email (for manual booking) ──
+// Searches the deduped `customers` table, not raw applications — picking a
+// result here has to land on the one canonical record for that person, or
+// selecting "Existing Customer" for a repeat renter whose email varies
+// slightly across past bookings (typo, etc.) would carry over the wrong
+// email and upsertCustomer (below) would create a brand new duplicate
+// customer instead of reusing the real one.
 router.get('/customers/search', requireAuth, (req, res) => {
   const term = `%${(req.query.q || '').toLowerCase()}%`;
   const rows = db.prepare(`
     SELECT id, first_name, last_name, phone, email, license_number, address, dob
-    FROM applications
+    FROM customers
     WHERE lower(first_name) LIKE ? OR lower(last_name) LIKE ? OR lower(email) LIKE ? OR lower(phone) LIKE ?
     ORDER BY created_at DESC LIMIT 10
   `).all(term, term, term, term);

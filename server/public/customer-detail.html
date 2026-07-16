@@ -117,7 +117,7 @@ async function load() {
 function render() {
   document.getElementById('cd-name').textContent = `${customer.first_name} ${customer.last_name}`;
   document.getElementById('cd-avatar').textContent = `${(customer.first_name || '?')[0]}${(customer.last_name || '?')[0]}`.toUpperCase();
-  document.getElementById('cd-email').textContent = customer.email;
+  document.getElementById('cd-email').textContent = displayEmail(customer.email);
   document.getElementById('cd-phone').textContent = customer.phone || '—';
   document.getElementById('cd-meta').textContent = `Customer since ${fmtDate(customer.created_at)} · Lead #${String(customer.leadId || 0).padStart(3, '0')}`;
   document.getElementById('cd-new-badge').style.display = customer.isNew ? '' : 'none';
@@ -131,7 +131,7 @@ function render() {
   document.getElementById('cd-outstanding').textContent = fmtExact(customer.stats.outstanding);
 
   document.getElementById('cd-contact-view').innerHTML = `
-    <div class="info-row"><div class="info-row__label">Email</div><div class="info-row__val">${customer.email}</div></div>
+    <div class="info-row"><div class="info-row__label">Email</div><div class="info-row__val">${displayEmail(customer.email)}</div></div>
     <div class="info-row"><div class="info-row__label">Phone</div><div class="info-row__val">${customer.phone || '—'}</div></div>
     <div class="info-row"><div class="info-row__label">Address</div><div class="info-row__val">${customer.address || '—'}</div></div>
     <div class="info-row"><div class="info-row__label">City</div><div class="info-row__val">${customer.city || '—'}</div></div>

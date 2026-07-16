@@ -237,6 +237,15 @@ function fmtExact(n) {
   return sign + '$' + Math.abs(num).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// customers.email is NOT NULL, so a walk-in booking with no email on file
+// gets a deterministic placeholder (walkin-<phone>@no-email.drivenow, see
+// upsertCustomer in db.js) instead of silently never becoming a client at
+// all. Never show that placeholder string to a human — display this instead
+// wherever a customer's email is shown.
+function displayEmail(email) {
+  return /^walkin-\d+@no-email\.drivenow$/i.test(email || '') ? 'No email on file' : email;
+}
+
 // DriveNow operates out of Charlotte, NC — every timestamp shown here is
 // pinned to Eastern time explicitly, rather than whatever timezone the
 // viewer's own device happens to be set to, so a booking made from a phone
