@@ -1670,7 +1670,11 @@ function initNewReservationModal() {
       <div id="f-customer-body"></div>
     `;
     document.getElementById('f-mode-existing').addEventListener('click', () => { form.customer_mode = 'existing'; renderStep(); });
-    document.getElementById('f-mode-new').addEventListener('click', () => { form.customer_mode = 'new'; renderStep(); });
+    // Switching to "New" after having picked someone in "Existing" shouldn't
+    // silently keep that stale customer_id around — a booking meant for a
+    // fresh customer must go through the normal matching logic, not get
+    // wrongly linked to whoever was previously selected.
+    document.getElementById('f-mode-new').addEventListener('click', () => { form.customer_mode = 'new'; form.customer_id = null; renderStep(); });
 
     const customerBody = document.getElementById('f-customer-body');
     if (form.customer_mode === 'existing') {
@@ -1705,7 +1709,14 @@ function initNewReservationModal() {
       document.querySelectorAll('.resv-customer-result').forEach(el => {
         el.addEventListener('click', () => {
           const c = customerResults.find(x => x.id === Number(el.dataset.id));
-          Object.assign(form, { first_name: c.first_name, last_name: c.last_name, phone: c.phone, email: c.email });
+          // Picking a result here means a human already identified this as
+          // the same customer — carry the id straight through so the
+          // backend can link this booking to them directly instead of
+          // re-guessing from whatever contact info ends up on the form.
+          Object.assign(form, {
+            customer_id: c.id, first_name: c.first_name, last_name: c.last_name, phone: c.phone, email: c.email,
+            address: c.address || '', dob: c.dob || '', license_number: c.license_number || '',
+          });
           renderStep();
         });
       });
@@ -1923,7 +1934,7 @@ function initNewReservationModal() {
       const fd = new FormData();
       ['source', 'pickup_scheduled_at', 'rental_end_at', 'assigned_vehicle_id', 'weekly_rate',
        'total_due_at_pickup', 'admin_fee_rate', 'travel_fee', 'insurance_fee_rate', 'processing_fee', 'security_deposit',
-       'first_name', 'last_name', 'phone', 'email', 'dob', 'license_number', 'address',
+       'customer_id', 'first_name', 'last_name', 'phone', 'email', 'dob', 'license_number', 'address',
        'city', 'state', 'zip_code', 'insurance_carrier', 'insurance_policy_number', 'insurance_coverage_type']
         .forEach(k => fd.append(k, form[k] ?? ''));
       if (form.license_file) fd.append('license', form.license_file);
