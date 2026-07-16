@@ -5,11 +5,11 @@ const { computeCharge, computeOwed } = require('../billing');
 
 const router = express.Router();
 
-// Every booking tied to this customer, matched by phone OR email — phone
-// because it's required on every booking path (email is optional on
-// manual/walk-in bookings, and customers.email can now be NULL), email as a
-// second signal. Phone is stored digits-only on both sides (see
-// normalizePhone in db.js).
+// Every booking tied to this customer, matched by email when present,
+// otherwise by name + address together (same rule as upsertCustomer in
+// db.js) — deliberately NOT by phone, since two different people (family, a
+// shared business line) can share one phone number, which would
+// incorrectly pull in a stranger's bookings.
 function buildProfile(customer) {
   if (!customer) return null;
   const bookings = db.prepare(`
@@ -20,10 +20,17 @@ function buildProfile(customer) {
            COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.application_id = a.id), 0) as paid_total
     FROM applications a
     LEFT JOIN vehicles v ON v.id = a.assigned_vehicle_id
-    WHERE (a.phone != '' AND a.phone = ?)
-       OR (a.email != '' AND ? IS NOT NULL AND lower(a.email) = lower(?))
+    WHERE (a.email != '' AND ? IS NOT NULL AND lower(a.email) = lower(?))
+       OR (
+         ? != '' AND a.address IS NOT NULL AND a.address != ''
+         AND lower(trim(a.first_name)) = ? AND lower(trim(a.last_name)) = ? AND lower(trim(a.address)) = ?
+       )
     ORDER BY a.created_at DESC
-  `).all(customer.phone || '', customer.email, customer.email || '').map(b => {
+  `).all(
+    customer.email, customer.email || '',
+    (customer.address || '').trim().toLowerCase(),
+    (customer.first_name || '').trim().toLowerCase(), (customer.last_name || '').trim().toLowerCase(), (customer.address || '').trim().toLowerCase()
+  ).map(b => {
     const charge = computeCharge(b);
     const owed = computeOwed(b, b.paid_total);
     let stageLabel;
@@ -77,12 +84,25 @@ function getProfileById(id) {
   return buildProfile(customer);
 }
 
+// Matches a booking to a customer by email when present, otherwise by
+// name + address together — same rule as upsertCustomer/CUSTOMER_JOIN, and
+// deliberately not phone (see those for why).
+const CUSTOMER_MATCH = `
+  (a.email != '' AND c.email IS NOT NULL AND lower(a.email) = lower(c.email))
+  OR (
+    c.address IS NOT NULL AND c.address != '' AND a.address IS NOT NULL AND a.address != ''
+    AND lower(trim(a.first_name)) = lower(trim(c.first_name))
+    AND lower(trim(a.last_name)) = lower(trim(c.last_name))
+    AND lower(trim(a.address)) = lower(trim(c.address))
+  )
+`;
+
 router.get('/', requireAuth, (req, res) => {
   const customers = db.prepare(`
     SELECT c.id, c.first_name, c.last_name, c.email, c.phone, c.blacklisted,
-      (SELECT COUNT(*) FROM applications a WHERE (a.phone != '' AND a.phone = c.phone) OR (a.email != '' AND c.email IS NOT NULL AND lower(a.email) = lower(c.email))) as total_bookings,
-      (SELECT COUNT(*) FROM applications a JOIN vehicles v ON v.id = a.assigned_vehicle_id WHERE ((a.phone != '' AND a.phone = c.phone) OR (a.email != '' AND c.email IS NOT NULL AND lower(a.email) = lower(c.email))) AND a.status = 'active' AND v.status = 'rented') as active_rentals,
-      (SELECT COALESCE(SUM(p.amount), 0) FROM payments p JOIN applications a ON a.id = p.application_id WHERE (a.phone != '' AND a.phone = c.phone) OR (a.email != '' AND c.email IS NOT NULL AND lower(a.email) = lower(c.email))) as total_spent
+      (SELECT COUNT(*) FROM applications a WHERE ${CUSTOMER_MATCH}) as total_bookings,
+      (SELECT COUNT(*) FROM applications a JOIN vehicles v ON v.id = a.assigned_vehicle_id WHERE (${CUSTOMER_MATCH}) AND a.status = 'active' AND v.status = 'rented') as active_rentals,
+      (SELECT COALESCE(SUM(p.amount), 0) FROM payments p JOIN applications a ON a.id = p.application_id WHERE ${CUSTOMER_MATCH}) as total_spent
     FROM customers c
     ORDER BY c.last_name, c.first_name
   `).all().map(c => ({ ...c, status: c.active_rentals > 0 ? 'current' : 'previous' }));

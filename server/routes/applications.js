@@ -13,15 +13,19 @@ const router = express.Router();
 // intake time. Any query that displays a booking's customer info joins in
 // the canonical `customers` row and prefers it, so an edit to a customer's
 // name/phone/address shows up on their existing bookings instead of only
-// applying to future ones. Matches by phone OR email — phone because it's
-// required on every booking path (email is optional on manual/walk-in
-// bookings, and customers.email can be NULL), email as a second signal.
-// Phone is stored digits-only on both sides (see normalizePhone in db.js),
-// so a plain equality check is enough without reformatting in-query.
+// applying to future ones. Matches by email when present, otherwise by name
+// + address together (same rule as upsertCustomer in db.js) — deliberately
+// NOT by phone, since two different people (family, a shared business
+// line) can share one phone number, which would incorrectly merge them.
 const CUSTOMER_JOIN = `
   LEFT JOIN customers c ON
-    (a.phone != '' AND c.phone = a.phone)
-    OR (a.email != '' AND c.email IS NOT NULL AND lower(c.email) = lower(a.email))
+    (a.email != '' AND c.email IS NOT NULL AND lower(c.email) = lower(a.email))
+    OR (
+      c.address IS NOT NULL AND c.address != '' AND a.address IS NOT NULL AND a.address != ''
+      AND lower(trim(c.first_name)) = lower(trim(a.first_name))
+      AND lower(trim(c.last_name)) = lower(trim(a.last_name))
+      AND lower(trim(c.address)) = lower(trim(a.address))
+    )
 `;
 const CUSTOMER_SYNC_COLUMNS = `
   c.id as customer_id,
