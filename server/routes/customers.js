@@ -32,6 +32,12 @@ function buildProfile(customer) {
              ? != '' AND a.address IS NOT NULL AND a.address != ''
              AND lower(trim(a.first_name)) = ? AND lower(trim(a.last_name)) = ? AND lower(trim(a.address)) = ?
            )
+           OR (
+             (? = '') AND (a.address IS NULL OR trim(a.address) = '')
+             AND lower(trim(a.first_name)) = ? AND lower(trim(a.last_name)) = ?
+             AND ? != '' AND a.phone IS NOT NULL AND a.phone != ''
+             AND replace(replace(replace(replace(replace(a.phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') = ?
+           )
          )
        )
     ORDER BY a.created_at DESC
@@ -39,7 +45,10 @@ function buildProfile(customer) {
     customer.id,
     customer.email, customer.email || '',
     (customer.address || '').trim().toLowerCase(),
-    (customer.first_name || '').trim().toLowerCase(), (customer.last_name || '').trim().toLowerCase(), (customer.address || '').trim().toLowerCase()
+    (customer.first_name || '').trim().toLowerCase(), (customer.last_name || '').trim().toLowerCase(), (customer.address || '').trim().toLowerCase(),
+    (customer.address || '').trim().toLowerCase(),
+    (customer.first_name || '').trim().toLowerCase(), (customer.last_name || '').trim().toLowerCase(),
+    (customer.phone || '').replace(/\D/g, ''), (customer.phone || '').replace(/\D/g, '')
   ).map(b => {
     const charge = computeCharge(b);
     const owed = computeOwed(b, b.paid_total);
@@ -97,8 +106,9 @@ function getProfileById(id) {
 
 // Matches a booking to a customer via applications.customer_id first
 // (same reasoning as buildProfile above), falling back to email-or-
-// name+address for older rows without it. Deliberately not phone (see
-// buildProfile/CUSTOMER_JOIN for why).
+// name+address for older rows without it, then name+phone when there's no
+// address on file at all (see buildProfile/CUSTOMER_JOIN for why that's
+// safe). Deliberately not phone alone.
 const CUSTOMER_MATCH = `
   a.customer_id = c.id
   OR (
@@ -109,6 +119,14 @@ const CUSTOMER_MATCH = `
         AND lower(trim(a.first_name)) = lower(trim(c.first_name))
         AND lower(trim(a.last_name)) = lower(trim(c.last_name))
         AND lower(trim(a.address)) = lower(trim(c.address))
+      )
+      OR (
+        (c.address IS NULL OR trim(c.address) = '') AND (a.address IS NULL OR trim(a.address) = '')
+        AND lower(trim(a.first_name)) = lower(trim(c.first_name))
+        AND lower(trim(a.last_name)) = lower(trim(c.last_name))
+        AND c.phone IS NOT NULL AND c.phone != '' AND a.phone IS NOT NULL AND a.phone != ''
+        AND replace(replace(replace(replace(replace(c.phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') =
+            replace(replace(replace(replace(replace(a.phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '')
       )
     )
   )

@@ -18,11 +18,13 @@ const router = express.Router();
 // sites below) — rather than re-guessing the link by matching email/name/
 // address every time it's displayed. The email-or-name+address match is
 // kept only as a fallback for older rows from before that column existed
-// (backfilled on startup in db.js, but a booking with neither an email nor
-// an address on file can't be resolved that way either). Deliberately
-// never matches by phone alone — two different people (family, a shared
-// business line) can share one phone number, which would incorrectly
-// merge them.
+// (backfilled on startup in db.js). When there's no address on file at all,
+// falls back further to name+phone — two different people essentially never
+// share both an exact full name and a phone number, so this is as safe as
+// name+address while covering bare-minimum walk-ins address matching can't.
+// Deliberately never matches by phone alone without a name match too — two
+// different people (family, a shared business line) can share one phone
+// number, which would incorrectly merge them.
 const CUSTOMER_JOIN = `
   LEFT JOIN customers c ON
     c.id = a.customer_id
@@ -34,6 +36,14 @@ const CUSTOMER_JOIN = `
           AND lower(trim(c.first_name)) = lower(trim(a.first_name))
           AND lower(trim(c.last_name)) = lower(trim(a.last_name))
           AND lower(trim(c.address)) = lower(trim(a.address))
+        )
+        OR (
+          (c.address IS NULL OR trim(c.address) = '') AND (a.address IS NULL OR trim(a.address) = '')
+          AND lower(trim(c.first_name)) = lower(trim(a.first_name))
+          AND lower(trim(c.last_name)) = lower(trim(a.last_name))
+          AND c.phone IS NOT NULL AND c.phone != '' AND a.phone IS NOT NULL AND a.phone != ''
+          AND replace(replace(replace(replace(replace(c.phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') =
+              replace(replace(replace(replace(replace(a.phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '')
         )
       )
     )

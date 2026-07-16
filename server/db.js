@@ -565,27 +565,22 @@ db.exec(`
 `);
 
 // One-time cleanup: consolidate existing customer records that share the
-// same name AND address into one — likely genuine duplicates from before
+// same identity into one — likely genuine duplicates from before
 // upsertCustomer matched this way (e.g. the same walk-in registered twice
 // under slightly different emails, or with none at all, on separate
-// visits). Requires both name and address to match, not phone — two
-// different people sharing a phone number (family, a shared business line)
-// would almost never also share a full address, so this avoids merging
-// them. Keeps whichever record already has an email (oldest, if more than
-// one does), re-points customer_tags/insurance_records to that survivor,
-// fills in any fields it's missing from the others via COALESCE, then
-// removes the redundant rows. Safe to leave running on every startup —
-// once a name+address resolves to a single row, its group no longer has
-// anything to merge, so this is a no-op after the first pass.
-{
-  const dupeGroups = db.prepare(`
-    SELECT lower(trim(first_name)) as fn, lower(trim(last_name)) as ln, lower(trim(address)) as addr
-    FROM customers
-    WHERE first_name IS NOT NULL AND first_name != '' AND last_name IS NOT NULL AND last_name != ''
-      AND address IS NOT NULL AND address != ''
-    GROUP BY fn, ln, addr
-    HAVING COUNT(*) > 1
-  `).all();
+// visits). Two passes: name+address (both non-blank), then — for records
+// with no address on file at all — name+phone, which is just as safe a
+// signal since two different people essentially never share both an exact
+// full name and a phone number. Keeps whichever record already has an
+// email (oldest, if more than one does), re-points customer_tags,
+// insurance_records, AND any application already directly linked via
+// customer_id to that survivor (skipping this would leave those bookings
+// pointing at a row that's about to be deleted, silently dropping them off
+// the customer's profile), fills in any fields the survivor is missing via
+// COALESCE, then removes the redundant rows. Safe to leave running on every
+// startup — once a group resolves to a single row, it has nothing left to
+// merge, so this is a no-op after the first pass.
+function mergeCustomerDuplicates(groups, findGroupRows) {
   const updateSurvivor = db.prepare(`
     UPDATE customers SET
       email = COALESCE(email, ?), phone = COALESCE(phone, ?),
@@ -594,12 +589,8 @@ db.exec(`
       insurance_company = COALESCE(insurance_company, ?), insurance_policy_number = COALESCE(insurance_policy_number, ?)
     WHERE id = ?
   `);
-  for (const g of dupeGroups) {
-    const rows = db.prepare(`
-      SELECT * FROM customers
-      WHERE lower(trim(first_name)) = ? AND lower(trim(last_name)) = ? AND lower(trim(address)) = ?
-      ORDER BY (email IS NULL), created_at ASC
-    `).all(g.fn, g.ln, g.addr);
+  for (const g of groups) {
+    const rows = findGroupRows(g);
     const [survivor, ...duplicates] = rows;
     for (const dup of duplicates) {
       updateSurvivor.run(
@@ -609,10 +600,47 @@ db.exec(`
       );
       db.prepare('UPDATE customer_tags SET customer_id = ? WHERE customer_id = ?').run(survivor.id, dup.id);
       db.prepare('UPDATE insurance_records SET customer_id = ? WHERE customer_id = ?').run(survivor.id, dup.id);
+      db.prepare('UPDATE applications SET customer_id = ? WHERE customer_id = ?').run(survivor.id, dup.id);
       db.prepare('DELETE FROM customers WHERE id = ?').run(dup.id);
     }
   }
 }
+
+mergeCustomerDuplicates(
+  db.prepare(`
+    SELECT lower(trim(first_name)) as fn, lower(trim(last_name)) as ln, lower(trim(address)) as addr
+    FROM customers
+    WHERE first_name IS NOT NULL AND first_name != '' AND last_name IS NOT NULL AND last_name != ''
+      AND address IS NOT NULL AND address != ''
+    GROUP BY fn, ln, addr
+    HAVING COUNT(*) > 1
+  `).all(),
+  (g) => db.prepare(`
+    SELECT * FROM customers
+    WHERE lower(trim(first_name)) = ? AND lower(trim(last_name)) = ? AND lower(trim(address)) = ?
+    ORDER BY (email IS NULL), created_at ASC
+  `).all(g.fn, g.ln, g.addr)
+);
+
+mergeCustomerDuplicates(
+  db.prepare(`
+    SELECT lower(trim(first_name)) as fn, lower(trim(last_name)) as ln,
+           replace(replace(replace(replace(replace(phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') as ph
+    FROM customers
+    WHERE first_name IS NOT NULL AND first_name != '' AND last_name IS NOT NULL AND last_name != ''
+      AND (address IS NULL OR trim(address) = '')
+      AND phone IS NOT NULL AND phone != ''
+    GROUP BY fn, ln, ph
+    HAVING COUNT(*) > 1
+  `).all(),
+  (g) => db.prepare(`
+    SELECT * FROM customers
+    WHERE lower(trim(first_name)) = ? AND lower(trim(last_name)) = ?
+      AND (address IS NULL OR trim(address) = '')
+      AND replace(replace(replace(replace(replace(phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') = ?
+    ORDER BY (email IS NULL), created_at ASC
+  `).all(g.fn, g.ln, g.ph)
+);
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS insurance_records (
@@ -698,33 +726,36 @@ CREATE TABLE IF NOT EXISTS downtime_events (
 `);
 
 // Backfill: build a customers record for every distinct applicant that
-// isn't linked to one yet (grouped by email-or-name+address, same identity
-// rule as upsertCustomer — not email alone), so legacy leads/bookings that
-// predate the customer_id column get a profile retroactively. Scoped to
-// customer_id IS NULL — every application created since customer_id shipped
-// already got linked directly at creation time, so re-running upsertCustomer
-// on those rows on every startup would just mint a fresh duplicate customer
-// for anyone with no email and no address on file (a booking's own name+
-// address matching can't find itself when both are blank).
+// isn't linked to one yet (grouped by email, or name+address, or — when
+// there's no address on file at all — name+phone, same identity rule as
+// upsertCustomer), so legacy leads/bookings that predate the customer_id
+// column get a profile retroactively. Scoped to customer_id IS NULL — every
+// application created since customer_id shipped already got linked directly
+// at creation time, so re-running upsertCustomer on those rows on every
+// startup would just mint a fresh duplicate customer for anyone with no
+// email and no address on file.
 const distinctApplicants = db.prepare(`
   SELECT first_name, last_name, phone, email, address, dob, MIN(created_at) as first_seen
   FROM applications
   WHERE customer_id IS NULL
-  GROUP BY COALESCE(NULLIF(lower(email), ''), lower(trim(first_name)) || '|' || lower(trim(last_name)) || '|' || lower(trim(address)))
+  GROUP BY COALESCE(
+    NULLIF(lower(email), ''),
+    CASE WHEN address IS NOT NULL AND trim(address) != ''
+         THEN lower(trim(first_name)) || '|' || lower(trim(last_name)) || '|addr|' || lower(trim(address))
+         ELSE lower(trim(first_name)) || '|' || lower(trim(last_name)) || '|ph|' ||
+              replace(replace(replace(replace(replace(phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '')
+    END
+  )
 `).all();
 for (const a of distinctApplicants) {
   upsertCustomer(a);
 }
 
 // Backfill: link every existing application directly to its customer via
-// the same email-or-name+address matching rule, so the direct customer_id
-// link (added above) isn't only populated for bookings created after this
-// shipped. Only touches rows still missing it. A booking with neither an
-// email nor an address on file can't be resolved this way either — same
-// underlying limitation as everywhere else that used to guess this at read
-// time — but leaving those as NULL keeps them fixable by hand later
-// instead of this silently overwriting a manual assignment on every
-// startup.
+// the same email, or name+address, or — when there's no address on file at
+// all — name+phone matching rule, so the direct customer_id link (added
+// above) isn't only populated for bookings created after this shipped.
+// Only touches rows still missing it.
 db.exec(`
   UPDATE applications SET customer_id = (
     SELECT c.id FROM customers c
@@ -734,6 +765,14 @@ db.exec(`
          AND lower(trim(c.first_name)) = lower(trim(applications.first_name))
          AND lower(trim(c.last_name)) = lower(trim(applications.last_name))
          AND lower(trim(c.address)) = lower(trim(applications.address))
+       )
+       OR (
+         (c.address IS NULL OR trim(c.address) = '') AND (applications.address IS NULL OR trim(applications.address) = '')
+         AND lower(trim(c.first_name)) = lower(trim(applications.first_name))
+         AND lower(trim(c.last_name)) = lower(trim(applications.last_name))
+         AND c.phone IS NOT NULL AND c.phone != '' AND applications.phone IS NOT NULL AND applications.phone != ''
+         AND replace(replace(replace(replace(replace(c.phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') =
+             replace(replace(replace(replace(replace(applications.phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '')
        )
     LIMIT 1
   )
@@ -779,18 +818,22 @@ function normalizeText(s) {
 
 // Matches by email when given (customers.email is nullable — a walk-in with
 // no email at all just gets a NULL one instead of silently never being
-// registered as a client), otherwise by name + address together. Phone is
-// deliberately NOT used to match — two different people (family, a shared
-// business line) can share one phone number, and matching on it would merge
-// their bookings/billing together. Name + address needs both parts to line
-// up, which two different people sharing the same home would essentially
-// never do at the same time as sharing the exact same name.
+// registered as a client), otherwise by name + address together. Phone
+// alone is deliberately NOT used to match — two different people (family, a
+// shared business line) can share one phone number, and matching on it
+// would merge their bookings/billing together. But when there's no address
+// on file at all (a common bare-minimum walk-in entry), name + phone
+// together is the fallback: two different people sharing both an exact full
+// name AND a phone number essentially never happens, so this is as safe as
+// name + address while still covering the case address can't.
 function upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob, license_number }) {
   const realEmail = (email || '').trim();
   const firstKey = normalizeText(first_name);
   const lastKey = normalizeText(last_name);
   const addressKey = normalizeText(address);
+  const phoneKey = normalizePhone(phone);
   const hasNameAddress = !!(firstKey && lastKey && addressKey);
+  const hasNamePhone = !!(firstKey && lastKey && phoneKey);
   if (!first_name && !last_name) return; // no name at all — nothing to register
 
   let existing = realEmail
@@ -801,6 +844,14 @@ function upsertCustomer({ email, first_name, last_name, phone, address, city, st
       SELECT id, email FROM customers
       WHERE lower(trim(first_name)) = ? AND lower(trim(last_name)) = ? AND lower(trim(address)) = ?
     `).get(firstKey, lastKey, addressKey);
+  }
+  if (!existing && hasNamePhone) {
+    existing = db.prepare(`
+      SELECT id, email FROM customers
+      WHERE lower(trim(first_name)) = ? AND lower(trim(last_name)) = ?
+        AND (address IS NULL OR trim(address) = '')
+        AND replace(replace(replace(replace(replace(phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') = ?
+    `).get(firstKey, lastKey, phoneKey);
   }
   const finalEmail = realEmail || (existing ? existing.email : null);
 
