@@ -538,10 +538,12 @@ if (emailColInfo && emailColInfo.notnull) {
 // convert them back now that the column actually allows it.
 db.prepare("UPDATE customers SET email = NULL WHERE email LIKE 'walkin-%@no-email.drivenow'").run();
 
-// One-time backfill: strip punctuation/spacing from existing phone numbers
-// so matching the same person by phone (upsertCustomer, the applications<->
-// customers join) works on old data too, not just numbers entered going
-// forward. Cheap to re-run — already-clean digits-only values are a no-op.
+// One-time backfill: strip punctuation/spacing from existing phone numbers.
+// Phone is no longer used to match/dedupe customers (two different people —
+// family, a shared business line — can share one phone number, which made
+// phone-based matching merge them together), but it's still worth keeping
+// clean for display and contact purposes. Cheap to re-run — already-clean
+// digits-only values are a no-op.
 db.exec(`
   UPDATE customers SET phone = replace(replace(replace(replace(replace(phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '')
   WHERE phone IS NOT NULL AND phone GLOB '*[^0-9]*'
@@ -551,34 +553,46 @@ db.exec(`
   WHERE phone IS NOT NULL AND phone GLOB '*[^0-9]*'
 `);
 
-// One-time cleanup: consolidate existing customer records that share a
-// phone number into one — likely genuine duplicates from before
-// upsertCustomer matched by phone (e.g. the same walk-in registered twice
+// One-time cleanup: consolidate existing customer records that share the
+// same name AND address into one — likely genuine duplicates from before
+// upsertCustomer matched this way (e.g. the same walk-in registered twice
 // under slightly different emails, or with none at all, on separate
-// visits). Keeps whichever record already has an email (oldest, if more
-// than one does), re-points customer_tags/insurance_records to that
-// survivor, fills in any fields it's missing from the others via COALESCE,
-// then removes the redundant rows. Safe to leave running on every
-// startup — once a phone number resolves to a single row, its group no
-// longer has anything to merge, so this is a no-op after the first pass.
+// visits). Requires both name and address to match, not phone — two
+// different people sharing a phone number (family, a shared business line)
+// would almost never also share a full address, so this avoids merging
+// them. Keeps whichever record already has an email (oldest, if more than
+// one does), re-points customer_tags/insurance_records to that survivor,
+// fills in any fields it's missing from the others via COALESCE, then
+// removes the redundant rows. Safe to leave running on every startup —
+// once a name+address resolves to a single row, its group no longer has
+// anything to merge, so this is a no-op after the first pass.
 {
   const dupeGroups = db.prepare(`
-    SELECT phone FROM customers WHERE phone IS NOT NULL AND phone != '' GROUP BY phone HAVING COUNT(*) > 1
+    SELECT lower(trim(first_name)) as fn, lower(trim(last_name)) as ln, lower(trim(address)) as addr
+    FROM customers
+    WHERE first_name IS NOT NULL AND first_name != '' AND last_name IS NOT NULL AND last_name != ''
+      AND address IS NOT NULL AND address != ''
+    GROUP BY fn, ln, addr
+    HAVING COUNT(*) > 1
   `).all();
   const updateSurvivor = db.prepare(`
     UPDATE customers SET
-      email = COALESCE(email, ?), first_name = COALESCE(first_name, ?), last_name = COALESCE(last_name, ?),
-      address = COALESCE(address, ?), city = COALESCE(city, ?), state = COALESCE(state, ?),
+      email = COALESCE(email, ?), phone = COALESCE(phone, ?),
+      city = COALESCE(city, ?), state = COALESCE(state, ?),
       zip_code = COALESCE(zip_code, ?), dob = COALESCE(dob, ?), license_number = COALESCE(license_number, ?),
       insurance_company = COALESCE(insurance_company, ?), insurance_policy_number = COALESCE(insurance_policy_number, ?)
     WHERE id = ?
   `);
   for (const g of dupeGroups) {
-    const rows = db.prepare('SELECT * FROM customers WHERE phone = ? ORDER BY (email IS NULL), created_at ASC').all(g.phone);
+    const rows = db.prepare(`
+      SELECT * FROM customers
+      WHERE lower(trim(first_name)) = ? AND lower(trim(last_name)) = ? AND lower(trim(address)) = ?
+      ORDER BY (email IS NULL), created_at ASC
+    `).all(g.fn, g.ln, g.addr);
     const [survivor, ...duplicates] = rows;
     for (const dup of duplicates) {
       updateSurvivor.run(
-        dup.email, dup.first_name, dup.last_name, dup.address, dup.city, dup.state,
+        dup.email, dup.phone, dup.city, dup.state,
         dup.zip_code, dup.dob, dup.license_number, dup.insurance_company, dup.insurance_policy_number,
         survivor.id
       );
@@ -673,16 +687,16 @@ CREATE TABLE IF NOT EXISTS downtime_events (
 `);
 
 // Backfill: build a customers record for every distinct applicant already
-// in applications (grouped by phone-or-email, same identity rule as
+// in applications (grouped by email-or-name+address, same identity rule as
 // upsertCustomer — not email alone), so existing leads/bookings get a
 // profile retroactively. Routed through upsertCustomer itself rather than a
 // separate raw INSERT so it can't drift out of sync with — or undo — the
-// phone-based dedup above by recreating a row upsertCustomer would have
-// recognized as an existing customer.
+// dedup above by recreating a row upsertCustomer would have recognized as
+// an existing customer.
 const distinctApplicants = db.prepare(`
   SELECT first_name, last_name, phone, email, address, dob, MIN(created_at) as first_seen
   FROM applications
-  GROUP BY COALESCE(NULLIF(phone, ''), lower(email))
+  GROUP BY COALESCE(NULLIF(lower(email), ''), lower(trim(first_name)) || '|' || lower(trim(last_name)) || '|' || lower(trim(address)))
 `).all();
 for (const a of distinctApplicants) {
   upsertCustomer(a);
@@ -713,33 +727,42 @@ for (const c of customersMissingDetails) {
   updateCustomerDetails.run(app.city || null, app.state || null, app.dob || null, app.address || null, app.phone || null, app.zip_code || null, c.id);
 }
 
-// Digits only — phone is the one field required on every booking path
-// (public application and manual/walk-in booking alike), unlike email
-// (optional on manual bookings) or license number, so it's the most
-// reliable identity key available. Stripping punctuation/spacing means
-// "(555) 123-4567", "555-123-4567", and "5551234567" all match as the same
-// person instead of silently being treated as different customers because
-// of formatting alone.
+// Digits only — kept clean for display/contact purposes, but not used to
+// match/dedupe customers (see upsertCustomer below): two different people
+// can share one phone number (family, a shared business line), which would
+// wrongly merge them.
 function normalizePhone(phone) {
   return (phone || '').replace(/\D/g, '');
 }
 
-// Matches primarily by phone, falling back to email — phone because it's
-// universally required, email because a phone can occasionally be re-used
-// (a shared household line) and a matching email is stronger evidence of
-// the same specific person. customers.email is nullable (see migration
-// above), so a walk-in with no email at all just gets a NULL one instead of
-// silently never being registered as a client.
+function normalizeText(s) {
+  return (s || '').trim().toLowerCase();
+}
+
+// Matches by email when given (customers.email is nullable — a walk-in with
+// no email at all just gets a NULL one instead of silently never being
+// registered as a client), otherwise by name + address together. Phone is
+// deliberately NOT used to match — two different people (family, a shared
+// business line) can share one phone number, and matching on it would merge
+// their bookings/billing together. Name + address needs both parts to line
+// up, which two different people sharing the same home would essentially
+// never do at the same time as sharing the exact same name.
 function upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob, license_number }) {
   const realEmail = (email || '').trim();
-  const normalizedPhone = normalizePhone(phone);
-  if (!realEmail && !normalizedPhone) return; // nothing to identify this person by at all
+  const firstKey = normalizeText(first_name);
+  const lastKey = normalizeText(last_name);
+  const addressKey = normalizeText(address);
+  const hasNameAddress = !!(firstKey && lastKey && addressKey);
+  if (!realEmail && !hasNameAddress) return; // nothing reliable to identify this person by
 
-  let existing = normalizedPhone
-    ? db.prepare("SELECT id, email FROM customers WHERE replace(replace(replace(replace(phone, '-', ''), '(', ''), ')', ''), ' ', '') = ?").get(normalizedPhone)
+  let existing = realEmail
+    ? db.prepare('SELECT id, email FROM customers WHERE lower(email) = lower(?)').get(realEmail)
     : null;
-  if (!existing && realEmail) {
-    existing = db.prepare('SELECT id, email FROM customers WHERE lower(email) = lower(?)').get(realEmail);
+  if (!existing && hasNameAddress) {
+    existing = db.prepare(`
+      SELECT id, email FROM customers
+      WHERE lower(trim(first_name)) = ? AND lower(trim(last_name)) = ? AND lower(trim(address)) = ?
+    `).get(firstKey, lastKey, addressKey);
   }
   const finalEmail = realEmail || (existing ? existing.email : null);
 
