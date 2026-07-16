@@ -532,6 +532,12 @@ if (emailColInfo && emailColInfo.notnull) {
   const cols = db.prepare("PRAGMA table_info(customers)").all().map(c => c.name).join(', ');
   db.pragma('foreign_keys = OFF');
   try {
+    // A previous deploy may have crashed mid-rebuild (before the FK fix
+    // below existed) and left customers_new sitting on disk half-migrated
+    // — CREATE TABLE would then fail with "table already exists" forever
+    // after, since the original customers table (still NOT NULL) never got
+    // swapped out. Clear any such leftover before starting fresh.
+    db.exec('DROP TABLE IF EXISTS customers_new');
     db.exec(`
       CREATE TABLE customers_new (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
