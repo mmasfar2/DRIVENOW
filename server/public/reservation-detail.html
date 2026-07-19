@@ -205,7 +205,7 @@
 <div id="add-deposit-overlay" class="simple-modal-overlay" style="display:none;">
   <div class="simple-modal">
     <div class="simple-modal__header">
-      <div class="simple-modal__title">Collect Security Deposit</div>
+      <div class="simple-modal__title" id="ad-modal-title">Collect Security Deposit</div>
       <button class="simple-modal__close" id="add-deposit-close">&times;</button>
     </div>
     <div class="simple-modal__body">
@@ -226,6 +226,7 @@
         </div>
       </div>
       <div style="font-size:0.8rem;color:#666;margin-bottom:14px;">Held as a refundable liability — it will not count toward rental revenue.</div>
+      <div id="ad-resolved-warning" style="display:none;font-size:0.8rem;color:#c62828;margin-bottom:14px;">Changing the amount on an already-resolved deposit will reset it back to Held, since the refund/forfeit split no longer adds up — you'll need to resolve it again.</div>
       <button class="btn btn-block" id="ad-submit">Save Deposit</button>
     </div>
   </div>
@@ -518,7 +519,11 @@ function renderDepositLog() {
         <td>${depositStatusBadge(d)}</td>
         <td style="text-align:right;">${d.refunded_amount ? fmtExact(d.refunded_amount) : '—'}</td>
         <td style="text-align:right;">${d.forfeited_amount ? fmtExact(d.forfeited_amount) : '—'}</td>
-        <td>${d.status === 'held' ? `<button class="btn btn-outline resolve-deposit-btn" data-id="${d.id}" style="padding:4px 10px;font-size:0.72rem;">Resolve</button>` : ''}</td>
+        <td style="text-align:right;white-space:nowrap;">
+          ${d.status === 'held' ? `<button class="btn btn-outline resolve-deposit-btn" data-id="${d.id}" style="padding:4px 10px;font-size:0.72rem;">Resolve</button>` : ''}
+          <button class="btn btn-outline edit-deposit-btn" data-id="${d.id}" style="padding:4px 10px;font-size:0.72rem;">Edit</button>
+          <button class="btn btn-outline delete-deposit-btn" data-id="${d.id}" style="padding:4px 10px;font-size:0.72rem;color:#c62828;border-color:#c62828;">Remove</button>
+        </td>
       </tr>
     `).join('')
     : `<tr><td colspan="7" style="text-align:center;color:#888;padding:24px;">No security deposit collected yet.</td></tr>`;
@@ -529,6 +534,18 @@ function renderDepositLog() {
       openResolveDepositModal(Number(btn.dataset.id));
     });
   });
+  body.querySelectorAll('.edit-deposit-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openAddDepositModal(Number(btn.dataset.id));
+    });
+  });
+  body.querySelectorAll('.delete-deposit-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteDeposit(Number(btn.dataset.id));
+    });
+  });
   // Double-click a deposit row (held or already resolved) to open the same
   // modal for making adjustments — the Resolve button above only appears
   // while a deposit is still held, but a resolved split can still need a
@@ -536,6 +553,13 @@ function renderDepositLog() {
   body.querySelectorAll('.deposit-row').forEach(row => {
     row.addEventListener('dblclick', () => openResolveDepositModal(Number(row.dataset.id)));
   });
+}
+
+async function deleteDeposit(depositId) {
+  if (!confirm('Remove this security deposit? You can undo this from the Undo button at the top of the page.')) return;
+  await api(`/api/applications/${id}/deposits/${depositId}`, { method: 'DELETE' });
+  await load();
+  refreshUndoButton();
 }
 
 function initFinCal() {
@@ -1059,14 +1083,26 @@ function updateDepositFeePreview() {
   document.getElementById('ad-total-amount').textContent = fmtExact(amount + fee);
 }
 
-document.getElementById('rd-add-deposit-btn').addEventListener('click', () => {
-  document.getElementById('ad-date').value = todayStr();
-  document.getElementById('ad-amount').value = '';
-  document.getElementById('ad-method').value = 'cash';
-  document.getElementById('ad-fee-rate').value = DEFAULT_CARD_FEE_RATE;
+// null = adding a new deposit; a deposit id = editing that row in place.
+let editingDepositId = null;
+
+function openAddDepositModal(depositId) {
+  editingDepositId = depositId;
+  const deposit = depositId != null ? booking.deposits.find(d => d.id === depositId) : null;
+  document.getElementById('ad-modal-title').textContent = deposit ? 'Edit Security Deposit' : 'Collect Security Deposit';
+  document.getElementById('ad-submit').textContent = deposit ? 'Save Changes' : 'Save Deposit';
+  document.getElementById('ad-date').value = deposit ? deposit.collected_at.slice(0, 10) : todayStr();
+  document.getElementById('ad-amount').value = deposit ? deposit.amount : '';
+  document.getElementById('ad-method').value = deposit ? deposit.method : 'cash';
+  document.getElementById('ad-fee-rate').value = (deposit && deposit.processing_fee && deposit.amount)
+    ? Math.round((deposit.processing_fee / deposit.amount) * 1000) / 10
+    : DEFAULT_CARD_FEE_RATE;
+  document.getElementById('ad-resolved-warning').style.display = (deposit && deposit.status === 'resolved') ? '' : 'none';
   updateDepositFeePreview();
   document.getElementById('add-deposit-overlay').style.display = 'flex';
-});
+}
+
+document.getElementById('rd-add-deposit-btn').addEventListener('click', () => openAddDepositModal(null));
 document.getElementById('add-deposit-close').addEventListener('click', () => {
   document.getElementById('add-deposit-overlay').style.display = 'none';
 });
@@ -1083,7 +1119,13 @@ document.getElementById('ad-submit').addEventListener('click', async () => {
   if (!amount || Number(amount) <= 0) { alert('Enter a valid amount'); return; }
   const rate = Number(document.getElementById('ad-fee-rate').value) || 0;
   const processing_fee = method === 'card' ? Math.round(Number(amount) * (rate / 100) * 100) / 100 : 0;
-  await api(`/api/applications/${id}/deposits`, { method: 'POST', body: JSON.stringify({ amount, collected_at, method, processing_fee }) });
+  const body = JSON.stringify({ amount, collected_at, method, processing_fee });
+  if (editingDepositId != null) {
+    await api(`/api/applications/${id}/deposits/${editingDepositId}`, { method: 'PUT', body });
+    refreshUndoButton();
+  } else {
+    await api(`/api/applications/${id}/deposits`, { method: 'POST', body });
+  }
   document.getElementById('add-deposit-overlay').style.display = 'none';
   await load();
 });
