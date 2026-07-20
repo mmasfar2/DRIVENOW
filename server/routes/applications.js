@@ -831,20 +831,21 @@ router.delete('/:id', requireAuth, (req, res) => {
   // their customer profile and insurance records get cleaned up with it.
   // Leads are untouched either way, since Leads reads straight from the
   // applications table and never touches customers/insurance_records.
+  // Checked via application.customer_id — the direct link, not email —
+  // since most walk-ins have no email at all, and an email-based check
+  // could undercount a customer's other bookings (missing ones linked via
+  // customer_id with a different or blank email) and wrongly delete a
+  // profile still tied to another real booking.
   let customer = null;
   let insuranceRecords = [];
-  if (application.email) {
-    customer = db.prepare('SELECT * FROM customers WHERE lower(email) = lower(?)').get(application.email);
-    if (customer) {
-      const otherBookings = db.prepare(`
-        SELECT COUNT(*) as c FROM applications
-        WHERE lower(email) = lower(?) AND id != ? AND assigned_vehicle_id IS NOT NULL
-      `).get(application.email, id).c;
-      if (otherBookings === 0) {
-        insuranceRecords = db.prepare('SELECT * FROM insurance_records WHERE customer_id = ?').all(customer.id);
-      } else {
-        customer = null; // has other bookings — leave their profile and insurance alone
-      }
+  if (application.customer_id) {
+    const otherBookings = db.prepare(`
+      SELECT COUNT(*) as c FROM applications
+      WHERE customer_id = ? AND id != ? AND assigned_vehicle_id IS NOT NULL
+    `).get(application.customer_id, id).c;
+    if (otherBookings === 0) {
+      customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(application.customer_id);
+      if (customer) insuranceRecords = db.prepare('SELECT * FROM insurance_records WHERE customer_id = ?').all(customer.id);
     }
   }
 

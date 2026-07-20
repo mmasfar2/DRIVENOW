@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, upsertCustomer } = require('../db');
+const { db, upsertCustomer, logUndo } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { computeCharge, computeOwed } = require('../billing');
 
@@ -179,6 +179,37 @@ router.patch('/:id', requireAuth, (req, res) => {
   }
   params.push(req.params.id);
   db.prepare(`UPDATE customers SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  res.json({ ok: true });
+});
+
+// Removes a client from the Clients list — for cleaning up duplicate/ghost
+// entries (a customer record with no booking history, e.g. left behind by
+// a matching edge case elsewhere). Blocked when the client has any bookings
+// on file: those bookings are real revenue/rental history, and simply
+// detaching them (customer_id back to NULL) doesn't actually stick — the
+// startup backfill that guarantees every booking has a customer would just
+// recreate a fresh profile for it on the very next restart, silently
+// undoing the deletion. Delete or reassign those bookings first.
+router.delete('/:id', requireAuth, (req, res) => {
+  const id = req.params.id;
+  const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(id);
+  if (!customer) return res.status(404).json({ error: 'Not found' });
+
+  const bookingCount = db.prepare('SELECT COUNT(*) as c FROM applications WHERE customer_id = ?').get(id).c;
+  if (bookingCount > 0) {
+    return res.status(400).json({ error: `This client has ${bookingCount} booking(s) on file — delete those first before removing the client.` });
+  }
+
+  const tags = db.prepare('SELECT * FROM customer_tags WHERE customer_id = ?').all(id);
+  const insuranceRecords = db.prepare('SELECT * FROM insurance_records WHERE customer_id = ?').all(id);
+
+  logUndo('customer_delete', `Deleted client ${customer.first_name} ${customer.last_name}`, {
+    customer, tags, insuranceRecords,
+  });
+
+  db.prepare('DELETE FROM customer_tags WHERE customer_id = ?').run(id);
+  db.prepare('DELETE FROM insurance_records WHERE customer_id = ?').run(id);
+  db.prepare('DELETE FROM customers WHERE id = ?').run(id);
   res.json({ ok: true });
 });
 

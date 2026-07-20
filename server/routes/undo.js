@@ -120,6 +120,19 @@ router.post('/', requireAuth, (req, res) => {
       WHERE id = ?
     `).run(previous.amount, previous.method, previous.processing_fee, previous.collected_at,
       previous.status, previous.refunded_amount, previous.forfeited_amount, previous.resolved_at, previous.id);
+  } else if (row.entity_type === 'customer_delete') {
+    const { customer, tags, insuranceRecords } = payload;
+    const custCols = Object.keys(customer);
+    db.prepare(`INSERT INTO customers (${custCols.join(', ')}) VALUES (${custCols.map(c => `@${c}`).join(', ')})`).run(customer);
+    const insTag = db.prepare('INSERT INTO customer_tags (id, customer_id, tag, created_at) VALUES (?, ?, ?, ?)');
+    tags.forEach(t => insTag.run(t.id, t.customer_id, t.tag, t.created_at));
+    if (insuranceRecords.length) {
+      const insIns = db.prepare(`
+        INSERT INTO insurance_records (id, customer_id, type, carrier, protection_type, policy_number, document_path, last_verified_at, next_payment_date, notes, status, created_at, updated_at)
+        VALUES (@id, @customer_id, @type, @carrier, @protection_type, @policy_number, @document_path, @last_verified_at, @next_payment_date, @notes, @status, @created_at, @updated_at)
+      `);
+      insuranceRecords.forEach(r => insIns.run(r));
+    }
   } else if (row.entity_type === 'insurance_delete') {
     const { record } = payload;
     db.prepare(`
