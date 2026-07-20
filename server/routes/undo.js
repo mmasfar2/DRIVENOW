@@ -106,6 +106,20 @@ router.post('/', requireAuth, (req, res) => {
     } else if (currentExpense) {
       db.prepare('DELETE FROM business_expenses WHERE id = ?').run(currentExpense.id);
     }
+  } else if (row.entity_type === 'deposit_delete') {
+    const { deposit } = payload;
+    db.prepare(`
+      INSERT INTO deposits (id, application_id, amount, method, processing_fee, status, collected_at, refunded_amount, forfeited_amount, resolved_at, notes, created_at)
+      VALUES (@id, @application_id, @amount, @method, @processing_fee, @status, @collected_at, @refunded_amount, @forfeited_amount, @resolved_at, @notes, @created_at)
+    `).run(deposit);
+  } else if (row.entity_type === 'deposit_edit') {
+    const { previous } = payload;
+    db.prepare(`
+      UPDATE deposits SET amount = ?, method = ?, processing_fee = ?, collected_at = ?,
+        status = ?, refunded_amount = ?, forfeited_amount = ?, resolved_at = ?
+      WHERE id = ?
+    `).run(previous.amount, previous.method, previous.processing_fee, previous.collected_at,
+      previous.status, previous.refunded_amount, previous.forfeited_amount, previous.resolved_at, previous.id);
   } else if (row.entity_type === 'insurance_delete') {
     const { record } = payload;
     db.prepare(`

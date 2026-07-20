@@ -507,6 +507,53 @@ router.post('/:id/deposits', requireAuth, (req, res) => {
   res.status(201).json({ ok: true });
 });
 
+router.put('/:id/deposits/:depositId', requireAuth, (req, res) => {
+  const { amount, collected_at, method, processing_fee } = req.body;
+  const id = req.params.id;
+  const existing = db.prepare('SELECT * FROM deposits WHERE id = ? AND application_id = ?').get(req.params.depositId, id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+  if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'A valid amount is required' });
+
+  const depositMethod = method === 'card' ? 'card' : 'cash';
+  const fee = depositMethod === 'card' ? Math.max(0, Number(processing_fee) || 0) : 0;
+  const collectedAt = collected_at || existing.collected_at;
+  // Changing the amount on an already-resolved deposit can leave its
+  // refund/forfeit split no longer adding up to the new total (and a stale
+  // forfeited amount still counted as revenue for a number that no longer
+  // exists) — reset it back to held so it has to be resolved again, rather
+  // than silently leaving a mismatched split. Editing collected_at/method
+  // alone doesn't touch the split.
+  const amountChanged = Math.round(Number(amount) * 100) !== Math.round(Number(existing.amount) * 100);
+  const staysResolved = existing.status === 'resolved' && !amountChanged;
+
+  logUndo('deposit_edit', `Edited a security deposit on reservation #${id}`, { previous: existing });
+  db.prepare(`
+    UPDATE deposits SET amount = ?, method = ?, processing_fee = ?, collected_at = ?,
+      status = ?, refunded_amount = ?, forfeited_amount = ?, resolved_at = ?
+    WHERE id = ?
+  `).run(
+    amount, depositMethod, fee, collectedAt,
+    staysResolved ? 'resolved' : 'held',
+    staysResolved ? existing.refunded_amount : 0,
+    staysResolved ? existing.forfeited_amount : 0,
+    staysResolved ? existing.resolved_at : null,
+    existing.id
+  );
+  logActivity(id, `Security deposit edited — now $${amount} (${depositMethod}${fee ? `, +$${fee} processing fee` : ''})${!staysResolved && existing.status === 'resolved' ? ', resolution reset — needs to be resolved again' : ''}`);
+  res.json({ ok: true });
+});
+
+router.delete('/:id/deposits/:depositId', requireAuth, (req, res) => {
+  const id = req.params.id;
+  const existing = db.prepare('SELECT * FROM deposits WHERE id = ? AND application_id = ?').get(req.params.depositId, id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+
+  logUndo('deposit_delete', `Deleted a security deposit on reservation #${id}`, { deposit: existing });
+  db.prepare('DELETE FROM deposits WHERE id = ?').run(existing.id);
+  logActivity(id, `Security deposit of $${existing.amount} deleted`);
+  res.json({ ok: true });
+});
+
 router.post('/:id/deposits/:depositId/resolve', requireAuth, (req, res) => {
   const { refund_amount, forfeit_amount, resolved_at, notes } = req.body;
   const id = req.params.id;
