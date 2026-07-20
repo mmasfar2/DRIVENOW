@@ -243,7 +243,8 @@ function fmtExact(n) {
 // all. Never show that placeholder string to a human — display this instead
 // wherever a customer's email is shown.
 function displayEmail(email) {
-  return /^walkin-\d+@no-email\.drivenow$/i.test(email || '') ? 'No email on file' : email;
+  if (!email || /^walkin-\d+@no-email\.drivenow$/i.test(email)) return 'No email on file';
+  return email;
 }
 
 // DriveNow operates out of Charlotte, NC — every timestamp shown here is

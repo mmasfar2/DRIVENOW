@@ -9,11 +9,14 @@ const router = express.Router();
 // applications.customer_id — set once, directly, at booking-creation time
 // (see upsertCustomer's call sites in applications.js) — rather than
 // re-guessing the link by matching email/name/address every time this page
-// loads. Falls back to email-or-name+address only for older rows that
-// predate that column (backfilled on startup in db.js where possible).
-// Deliberately never falls back to phone alone — two different people
-// (family, a shared business line) can share one phone number, which would
-// incorrectly pull in a stranger's bookings.
+// loads. Falls back to email-or-name+address for older rows that predate
+// that column (backfilled on startup in db.js where possible), then
+// name+phone — not restricted to "no address on either side", since a
+// customer with an address on file from a different visit than this booking
+// is still the same person. Deliberately never falls back to phone alone
+// without a name match too — two different people (family, a shared
+// business line) can share one phone number, which would incorrectly pull
+// in a stranger's bookings.
 function buildProfile(customer) {
   if (!customer) return null;
   const bookings = db.prepare(`
@@ -33,8 +36,7 @@ function buildProfile(customer) {
              AND lower(trim(a.first_name)) = ? AND lower(trim(a.last_name)) = ? AND lower(trim(a.address)) = ?
            )
            OR (
-             (? = '') AND (a.address IS NULL OR trim(a.address) = '')
-             AND lower(trim(a.first_name)) = ? AND lower(trim(a.last_name)) = ?
+             lower(trim(a.first_name)) = ? AND lower(trim(a.last_name)) = ?
              AND ? != '' AND a.phone IS NOT NULL AND a.phone != ''
              AND replace(replace(replace(replace(replace(a.phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') = ?
            )
@@ -46,7 +48,6 @@ function buildProfile(customer) {
     customer.email, customer.email || '',
     (customer.address || '').trim().toLowerCase(),
     (customer.first_name || '').trim().toLowerCase(), (customer.last_name || '').trim().toLowerCase(), (customer.address || '').trim().toLowerCase(),
-    (customer.address || '').trim().toLowerCase(),
     (customer.first_name || '').trim().toLowerCase(), (customer.last_name || '').trim().toLowerCase(),
     (customer.phone || '').replace(/\D/g, ''), (customer.phone || '').replace(/\D/g, '')
   ).map(b => {
@@ -106,9 +107,9 @@ function getProfileById(id) {
 
 // Matches a booking to a customer via applications.customer_id first
 // (same reasoning as buildProfile above), falling back to email-or-
-// name+address for older rows without it, then name+phone when there's no
-// address on file at all (see buildProfile/CUSTOMER_JOIN for why that's
-// safe). Deliberately not phone alone.
+// name+address for older rows without it, then name+phone — not restricted
+// to "no address on either side" (see buildProfile/CUSTOMER_JOIN for why).
+// Deliberately not phone alone.
 const CUSTOMER_MATCH = `
   a.customer_id = c.id
   OR (
@@ -121,8 +122,7 @@ const CUSTOMER_MATCH = `
         AND lower(trim(a.address)) = lower(trim(c.address))
       )
       OR (
-        (c.address IS NULL OR trim(c.address) = '') AND (a.address IS NULL OR trim(a.address) = '')
-        AND lower(trim(a.first_name)) = lower(trim(c.first_name))
+        lower(trim(a.first_name)) = lower(trim(c.first_name))
         AND lower(trim(a.last_name)) = lower(trim(c.last_name))
         AND c.phone IS NOT NULL AND c.phone != '' AND a.phone IS NOT NULL AND a.phone != ''
         AND replace(replace(replace(replace(replace(c.phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') =
