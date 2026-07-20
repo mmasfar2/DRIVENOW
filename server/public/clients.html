@@ -38,7 +38,7 @@
     </div>
     <table style="margin-top:14px;">
       <thead>
-        <tr><th>Name</th><th>Email</th><th>Phone</th><th>Status</th><th>Total Bookings</th><th>Total Spent</th></tr>
+        <tr><th>Name</th><th>Email</th><th>Phone</th><th>Status</th><th>Total Bookings</th><th>Total Spent</th><th></th></tr>
       </thead>
       <tbody id="clients-table-body"></tbody>
     </table>
@@ -70,8 +70,28 @@ function render() {
       <td><span class="badge ${c.status === 'current' ? 'badge-active' : 'badge-completed'}">${c.status === 'current' ? 'Current Renter' : 'Previous Renter'}</span></td>
       <td>${c.total_bookings}</td>
       <td>${fmtMoney(c.total_spent)}</td>
+      <td><button class="resv-table__view delete-client-btn" data-id="${c.id}" data-name="${c.first_name} ${c.last_name}" title="Delete" style="background:none;border:none;cursor:pointer;">${icon('trash', 16)}</button></td>
     </tr>
-  `).join('') : '<tr><td colspan="6" style="text-align:center;color:#888;padding:32px;">No clients match your search.</td></tr>';
+  `).join('') : '<tr><td colspan="7" style="text-align:center;color:#888;padding:32px;">No clients match your search.</td></tr>';
+
+  document.querySelectorAll('.delete-client-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      if (!confirm(`Delete ${btn.dataset.name}? You can undo this from the Undo button at the top of the page.`)) return;
+      try {
+        await api(`/api/customers/${id}`, { method: 'DELETE' });
+      } catch (err) {
+        alert(err.message);
+        return;
+      }
+      clients = clients.filter(c => String(c.id) !== id);
+      document.getElementById('c-total-count').textContent = clients.length;
+      document.getElementById('c-current-count').textContent = clients.filter(c => c.status === 'current').length;
+      render();
+      refreshUndoButton();
+    });
+  });
 }
 
 async function load() {

@@ -18,13 +18,14 @@ const router = express.Router();
 // sites below) — rather than re-guessing the link by matching email/name/
 // address every time it's displayed. The email-or-name+address match is
 // kept only as a fallback for older rows from before that column existed
-// (backfilled on startup in db.js). When there's no address on file at all,
-// falls back further to name+phone — two different people essentially never
-// share both an exact full name and a phone number, so this is as safe as
-// name+address while covering bare-minimum walk-ins address matching can't.
-// Deliberately never matches by phone alone without a name match too — two
-// different people (family, a shared business line) can share one phone
-// number, which would incorrectly merge them.
+// (backfilled on startup in db.js), then name+phone — two different people
+// essentially never share both an exact full name and a phone number, so
+// this is as safe as name+address. Not restricted to "no address on either
+// side" — a customer who has an address on file from a different visit than
+// this booking (or who simply moved) is still the same person. Deliberately
+// never matches by phone alone without a name match too — two different
+// people (family, a shared business line) can share one phone number, which
+// would incorrectly merge them.
 const CUSTOMER_JOIN = `
   LEFT JOIN customers c ON
     c.id = a.customer_id
@@ -38,8 +39,7 @@ const CUSTOMER_JOIN = `
           AND lower(trim(c.address)) = lower(trim(a.address))
         )
         OR (
-          (c.address IS NULL OR trim(c.address) = '') AND (a.address IS NULL OR trim(a.address) = '')
-          AND lower(trim(c.first_name)) = lower(trim(a.first_name))
+          lower(trim(c.first_name)) = lower(trim(a.first_name))
           AND lower(trim(c.last_name)) = lower(trim(a.last_name))
           AND c.phone IS NOT NULL AND c.phone != '' AND a.phone IS NOT NULL AND a.phone != ''
           AND replace(replace(replace(replace(replace(c.phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') =
@@ -831,20 +831,21 @@ router.delete('/:id', requireAuth, (req, res) => {
   // their customer profile and insurance records get cleaned up with it.
   // Leads are untouched either way, since Leads reads straight from the
   // applications table and never touches customers/insurance_records.
+  // Checked via application.customer_id — the direct link, not email —
+  // since most walk-ins have no email at all, and an email-based check
+  // could undercount a customer's other bookings (missing ones linked via
+  // customer_id with a different or blank email) and wrongly delete a
+  // profile still tied to another real booking.
   let customer = null;
   let insuranceRecords = [];
-  if (application.email) {
-    customer = db.prepare('SELECT * FROM customers WHERE lower(email) = lower(?)').get(application.email);
-    if (customer) {
-      const otherBookings = db.prepare(`
-        SELECT COUNT(*) as c FROM applications
-        WHERE lower(email) = lower(?) AND id != ? AND assigned_vehicle_id IS NOT NULL
-      `).get(application.email, id).c;
-      if (otherBookings === 0) {
-        insuranceRecords = db.prepare('SELECT * FROM insurance_records WHERE customer_id = ?').all(customer.id);
-      } else {
-        customer = null; // has other bookings — leave their profile and insurance alone
-      }
+  if (application.customer_id) {
+    const otherBookings = db.prepare(`
+      SELECT COUNT(*) as c FROM applications
+      WHERE customer_id = ? AND id != ? AND assigned_vehicle_id IS NOT NULL
+    `).get(application.customer_id, id).c;
+    if (otherBookings === 0) {
+      customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(application.customer_id);
+      if (customer) insuranceRecords = db.prepare('SELECT * FROM insurance_records WHERE customer_id = ?').all(customer.id);
     }
   }
 

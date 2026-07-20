@@ -592,10 +592,13 @@ db.exec(`
 // same identity into one — likely genuine duplicates from before
 // upsertCustomer matched this way (e.g. the same walk-in registered twice
 // under slightly different emails, or with none at all, on separate
-// visits). Two passes: name+address (both non-blank), then — for records
-// with no address on file at all — name+phone, which is just as safe a
-// signal since two different people essentially never share both an exact
-// full name and a phone number. Keeps whichever record already has an
+// visits — or one visit had an address on file and a later one didn't).
+// Two passes: name+address (both non-blank), then name+phone — not
+// restricted to records with no address on file, since a mismatch there
+// (one has an address, the other doesn't, or they simply moved) doesn't
+// make it a different person. Two different people essentially never share
+// both an exact full name and a phone number, so this is just as safe a
+// signal as name+address. Keeps whichever record already has an
 // email (oldest, if more than one does), re-points customer_tags,
 // insurance_records, AND any application already directly linked via
 // customer_id to that survivor (skipping this would leave those bookings
@@ -607,7 +610,7 @@ db.exec(`
 function mergeCustomerDuplicates(groups, findGroupRows) {
   const updateSurvivor = db.prepare(`
     UPDATE customers SET
-      email = COALESCE(email, ?), phone = COALESCE(phone, ?),
+      email = COALESCE(email, ?), phone = COALESCE(phone, ?), address = COALESCE(address, ?),
       city = COALESCE(city, ?), state = COALESCE(state, ?),
       zip_code = COALESCE(zip_code, ?), dob = COALESCE(dob, ?), license_number = COALESCE(license_number, ?),
       insurance_company = COALESCE(insurance_company, ?), insurance_policy_number = COALESCE(insurance_policy_number, ?)
@@ -618,7 +621,7 @@ function mergeCustomerDuplicates(groups, findGroupRows) {
     const [survivor, ...duplicates] = rows;
     for (const dup of duplicates) {
       updateSurvivor.run(
-        dup.email, dup.phone, dup.city, dup.state,
+        dup.email, dup.phone, dup.address, dup.city, dup.state,
         dup.zip_code, dup.dob, dup.license_number, dup.insurance_company, dup.insurance_policy_number,
         survivor.id
       );
@@ -652,7 +655,6 @@ mergeCustomerDuplicates(
            replace(replace(replace(replace(replace(phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') as ph
     FROM customers
     WHERE first_name IS NOT NULL AND first_name != '' AND last_name IS NOT NULL AND last_name != ''
-      AND (address IS NULL OR trim(address) = '')
       AND phone IS NOT NULL AND phone != ''
     GROUP BY fn, ln, ph
     HAVING COUNT(*) > 1
@@ -660,7 +662,6 @@ mergeCustomerDuplicates(
   (g) => db.prepare(`
     SELECT * FROM customers
     WHERE lower(trim(first_name)) = ? AND lower(trim(last_name)) = ?
-      AND (address IS NULL OR trim(address) = '')
       AND replace(replace(replace(replace(replace(phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') = ?
     ORDER BY (email IS NULL), created_at ASC
   `).all(g.fn, g.ln, g.ph)
@@ -788,10 +789,10 @@ for (const a of distinctApplicants) {
 }
 
 // Backfill: link every existing application directly to its customer via
-// the same email, or name+address, or — when there's no address on file at
-// all — name+phone matching rule, so the direct customer_id link (added
-// above) isn't only populated for bookings created after this shipped.
-// Only touches rows still missing it.
+// the same email, or name+address, or name+phone matching rule (not
+// restricted to "no address on either side" — see upsertCustomer for why),
+// so the direct customer_id link (added above) isn't only populated for
+// bookings created after this shipped. Only touches rows still missing it.
 db.exec(`
   UPDATE applications SET customer_id = (
     SELECT c.id FROM customers c
@@ -803,8 +804,7 @@ db.exec(`
          AND lower(trim(c.address)) = lower(trim(applications.address))
        )
        OR (
-         (c.address IS NULL OR trim(c.address) = '') AND (applications.address IS NULL OR trim(applications.address) = '')
-         AND lower(trim(c.first_name)) = lower(trim(applications.first_name))
+         lower(trim(c.first_name)) = lower(trim(applications.first_name))
          AND lower(trim(c.last_name)) = lower(trim(applications.last_name))
          AND c.phone IS NOT NULL AND c.phone != '' AND applications.phone IS NOT NULL AND applications.phone != ''
          AND replace(replace(replace(replace(replace(c.phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') =
@@ -854,14 +854,16 @@ function normalizeText(s) {
 
 // Matches by email when given (customers.email is nullable — a walk-in with
 // no email at all just gets a NULL one instead of silently never being
-// registered as a client), otherwise by name + address together. Phone
-// alone is deliberately NOT used to match — two different people (family, a
-// shared business line) can share one phone number, and matching on it
-// would merge their bookings/billing together. But when there's no address
-// on file at all (a common bare-minimum walk-in entry), name + phone
-// together is the fallback: two different people sharing both an exact full
-// name AND a phone number essentially never happens, so this is as safe as
-// name + address while still covering the case address can't.
+// registered as a client), otherwise by name + address together, then name +
+// phone. Phone alone is deliberately NOT used to match — two different
+// people (family, a shared business line) can share one phone number, and
+// matching on it would merge their bookings/billing together. But name +
+// phone together is a safe fallback regardless of whether either side has an
+// address on file: two different people sharing both an exact full name AND
+// a phone number essentially never happens. Not restricted to "no address on
+// either side" — a customer who had an address on file from an earlier visit
+// but not this one (or who simply moved) is still the same person, and
+// requiring both sides blank meant that exact case created a duplicate.
 function upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob, license_number }) {
   const realEmail = (email || '').trim();
   const firstKey = normalizeText(first_name);
@@ -885,7 +887,6 @@ function upsertCustomer({ email, first_name, last_name, phone, address, city, st
     existing = db.prepare(`
       SELECT id, email FROM customers
       WHERE lower(trim(first_name)) = ? AND lower(trim(last_name)) = ?
-        AND (address IS NULL OR trim(address) = '')
         AND replace(replace(replace(replace(replace(phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') = ?
     `).get(firstKey, lastKey, phoneKey);
   }
