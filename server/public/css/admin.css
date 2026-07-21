@@ -184,11 +184,11 @@ tr:hover td { background: var(--gray-light); }
 
 /* Simple modal (reusable small popup forms) */
 .simple-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.simple-modal { background: var(--white); border-radius: 10px; width: 380px; max-width: 92vw; overflow: hidden; }
-.simple-modal__header { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; border-bottom: 1px solid var(--gray-border); }
+.simple-modal { background: var(--white); border-radius: 10px; width: 380px; max-width: 92vw; max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; }
+.simple-modal__header { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; border-bottom: 1px solid var(--gray-border); flex-shrink: 0; }
 .simple-modal__title { font-weight: 800; font-size: 1.05rem; }
 .simple-modal__close { background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text-muted); line-height: 1; }
-.simple-modal__body { padding: 22px; }
+.simple-modal__body { padding: 22px; overflow-y: auto; }
 
 /* Payment log */
 .payment-log-actions { display: flex; justify-content: center; gap: 14px; margin-top: 18px; }
