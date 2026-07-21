@@ -21,6 +21,37 @@ const upload = multer({
 // coverage). This is the single place insurance documents/details live —
 // other pages (customer profile, reservation detail) read from here so
 // they can't show stale or conflicting insurance info. ──
+// Matches a booking to a customer via applications.customer_id first (the
+// direct link set at booking-creation time), falling back to email-or-
+// name+address for older rows without it, then name+phone — the same
+// matching rule CUSTOMER_JOIN/CUSTOMER_MATCH use in applications.js/
+// customers.js. Matching by email alone (the old rule here) meant a walk-in
+// with no email on file — which is most of them now that email is
+// optional — was invisible on this page no matter what: not "Currently
+// Renting", not even under "All Renters", because HAD_REAL_BOOKING_CLAUSE
+// below found no booking for them at all.
+const CUSTOMER_BOOKING_MATCH = `
+  a.customer_id = c.id
+  OR (
+    a.customer_id IS NULL AND (
+      (a.email != '' AND c.email IS NOT NULL AND lower(a.email) = lower(c.email))
+      OR (
+        c.address IS NOT NULL AND c.address != '' AND a.address IS NOT NULL AND a.address != ''
+        AND lower(trim(a.first_name)) = lower(trim(c.first_name))
+        AND lower(trim(a.last_name)) = lower(trim(c.last_name))
+        AND lower(trim(a.address)) = lower(trim(c.address))
+      )
+      OR (
+        lower(trim(a.first_name)) = lower(trim(c.first_name))
+        AND lower(trim(a.last_name)) = lower(trim(c.last_name))
+        AND c.phone IS NOT NULL AND c.phone != '' AND a.phone IS NOT NULL AND a.phone != ''
+        AND replace(replace(replace(replace(replace(c.phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') =
+            replace(replace(replace(replace(replace(a.phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '')
+      )
+    )
+  )
+`;
+
 // "Currently renting" = this customer has a booking whose vehicle is
 // actually out with them right now (picked up, not just reserved). Checking
 // only v.status = 'rented' isn't enough — a vehicle's status describes
@@ -33,7 +64,7 @@ const CURRENTLY_RENTING_SUBQUERY = `
   EXISTS (
     SELECT 1 FROM applications a
     JOIN vehicles v ON v.id = a.assigned_vehicle_id
-    WHERE lower(a.email) = lower(c.email) AND a.status = 'active' AND v.status = 'rented'
+    WHERE (${CUSTOMER_BOOKING_MATCH}) AND a.status = 'active' AND v.status = 'rented'
   ) as currently_renting
 `;
 
@@ -44,7 +75,7 @@ const CURRENTLY_RENTING_SUBQUERY = `
 const HAD_REAL_BOOKING_CLAUSE = `
   EXISTS (
     SELECT 1 FROM applications a
-    WHERE lower(a.email) = lower(c.email) AND a.assigned_vehicle_id IS NOT NULL
+    WHERE (${CUSTOMER_BOOKING_MATCH}) AND a.assigned_vehicle_id IS NOT NULL
   )
 `;
 
