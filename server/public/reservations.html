@@ -986,6 +986,13 @@ function initNewReservationModal() {
   let expandedVehicleId = null;
   let vehiclePriceEdit = false;
   let vehicleCustomDailyRate = null;
+  // Holds exactly what's been typed into the price input (e.g. "41." or
+  // "41.5") while it's being edited — every other way of changing the rate
+  // (+/-, quick-delta buttons) re-renders from the parsed number, which
+  // would otherwise strip a trailing decimal point/zero the moment it's
+  // typed, since Number("41.") === 41. Reset to null (falls back to the
+  // parsed number) whenever the rate changes some other way.
+  let vehiclePriceInputRaw = null;
   let calMonth = null;
   // Admin/Insurance Fee boxes show the typed per-day rate while focused (so
   // typing isn't disrupted by reformatting) and the computed extended total
@@ -1427,7 +1434,7 @@ function initNewReservationModal() {
           </div>
           <div class="resv-vprice-input-row">
             <button class="btn btn-sm btn-outline" id="vprice-minus" type="button">&minus;</button>
-            <div class="resv-vprice-input">$<input type="text" inputmode="decimal" id="vprice-input" value="${activeDailyRate}"></div>
+            <div class="resv-vprice-input">$<input type="text" inputmode="decimal" id="vprice-input" value="${vehiclePriceInputRaw != null ? vehiclePriceInputRaw : activeDailyRate}"></div>
             <button class="btn btn-sm btn-outline" id="vprice-plus" type="button">+</button>
           </div>
           <div class="resv-vprice-quick">
@@ -1543,6 +1550,7 @@ function initNewReservationModal() {
         expandedVehicleId = v.id;
         vehiclePriceEdit = false;
         vehicleCustomDailyRate = null;
+        vehiclePriceInputRaw = null;
         renderStep();
       });
     });
@@ -1560,6 +1568,7 @@ function initNewReservationModal() {
         expandedVehicleId = null;
         vehiclePriceEdit = false;
         vehicleCustomDailyRate = null;
+        vehiclePriceInputRaw = null;
         renderStep();
       });
       const changeBtn = document.getElementById('vprice-change');
@@ -1574,6 +1583,7 @@ function initNewReservationModal() {
         expandedVehicleId = null;
         vehiclePriceEdit = false;
         vehicleCustomDailyRate = null;
+        vehiclePriceInputRaw = null;
         renderStep();
       });
       const backBtn = document.getElementById('vprice-back');
@@ -1581,6 +1591,7 @@ function initNewReservationModal() {
         e.preventDefault();
         e.stopPropagation();
         vehiclePriceEdit = false;
+        vehiclePriceInputRaw = null;
         renderStep();
       });
       const resetBtn = document.getElementById('vprice-reset');
@@ -1588,6 +1599,7 @@ function initNewReservationModal() {
         e.preventDefault();
         e.stopPropagation();
         vehicleCustomDailyRate = null;
+        vehiclePriceInputRaw = null;
         renderStep();
       });
       const setBtn = document.getElementById('vprice-set');
@@ -1598,6 +1610,7 @@ function initNewReservationModal() {
         expandedVehicleId = null;
         vehiclePriceEdit = false;
         vehicleCustomDailyRate = null;
+        vehiclePriceInputRaw = null;
         renderStep();
       });
       const minusBtn = document.getElementById('vprice-minus');
@@ -1605,6 +1618,7 @@ function initNewReservationModal() {
         e.stopPropagation();
         const current = vehicleCustomDailyRate != null ? vehicleCustomDailyRate : baseDailyRate;
         vehicleCustomDailyRate = Math.round((current - 1) * 100) / 100;
+        vehiclePriceInputRaw = null;
         renderStep();
       });
       const plusBtn = document.getElementById('vprice-plus');
@@ -1612,6 +1626,7 @@ function initNewReservationModal() {
         e.stopPropagation();
         const current = vehicleCustomDailyRate != null ? vehicleCustomDailyRate : baseDailyRate;
         vehicleCustomDailyRate = Math.round((current + 1) * 100) / 100;
+        vehiclePriceInputRaw = null;
         renderStep();
       });
       body.querySelectorAll('.resv-vprice-quick [data-delta]').forEach(btn => {
@@ -1619,12 +1634,14 @@ function initNewReservationModal() {
           e.stopPropagation();
           const current = vehicleCustomDailyRate != null ? vehicleCustomDailyRate : baseDailyRate;
           vehicleCustomDailyRate = Math.round((current + Number(btn.dataset.delta)) * 100) / 100;
+          vehiclePriceInputRaw = null;
           renderStep();
         });
       });
       const priceInput = document.getElementById('vprice-input');
       if (priceInput) priceInput.addEventListener('input', (e) => {
         e.stopPropagation();
+        vehiclePriceInputRaw = e.target.value;
         vehicleCustomDailyRate = Number(e.target.value) || 0;
         renderStep();
         // Same cursor-reset fix as the other live-search boxes on this page —
