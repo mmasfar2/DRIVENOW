@@ -36,6 +36,12 @@
 
     <div class="panel">
       <div class="panel-title">Insurance Details</div>
+      <div class="field"><label>Type</label>
+        <select id="ind-f-type">
+          <option value="our_policy">Our Policy</option>
+          <option value="private">Private (customer's own)</option>
+        </select>
+      </div>
       <div class="field-row">
         <div class="field"><label>Carrier</label><input id="ind-f-carrier"></div>
         <div class="field"><label>Protection Type</label><input id="ind-f-protection-type"></div>
@@ -95,6 +101,7 @@ function render() {
   document.getElementById('ind-cust-email').textContent = record.email || '—';
   document.getElementById('ind-cust-phone').textContent = record.phone || '—';
 
+  document.getElementById('ind-f-type').value = record.type;
   document.getElementById('ind-f-carrier').value = record.carrier || '';
   document.getElementById('ind-f-protection-type').value = record.protection_type || '';
   document.getElementById('ind-f-policy-number').value = record.policy_number || '';
@@ -107,18 +114,24 @@ function render() {
 }
 
 document.getElementById('ind-save-btn').addEventListener('click', async () => {
-  await api(`/api/insurance/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify({
-      carrier: document.getElementById('ind-f-carrier').value,
-      protection_type: document.getElementById('ind-f-protection-type').value,
-      policy_number: document.getElementById('ind-f-policy-number').value,
-      status: document.getElementById('ind-f-status').value,
-      last_verified_at: document.getElementById('ind-f-last-verified').value,
-      next_payment_date: document.getElementById('ind-f-next-payment').value,
-      notes: document.getElementById('ind-f-notes').value,
-    }),
-  });
+  try {
+    await api(`/api/insurance/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        type: document.getElementById('ind-f-type').value,
+        carrier: document.getElementById('ind-f-carrier').value,
+        protection_type: document.getElementById('ind-f-protection-type').value,
+        policy_number: document.getElementById('ind-f-policy-number').value,
+        status: document.getElementById('ind-f-status').value,
+        last_verified_at: document.getElementById('ind-f-last-verified').value,
+        next_payment_date: document.getElementById('ind-f-next-payment').value,
+        notes: document.getElementById('ind-f-notes').value,
+      }),
+    });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   await load();
 });
 
