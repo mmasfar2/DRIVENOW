@@ -139,6 +139,9 @@ router.post('/', requireAuth, (req, res) => {
 });
 
 router.patch('/:id', requireAuth, (req, res) => {
+  const existing = db.prepare('SELECT id, customer_id, type FROM insurance_records WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+
   const allowed = ['carrier', 'protection_type', 'policy_number', 'last_verified_at', 'next_payment_date', 'notes', 'status'];
   const updates = [];
   const params = [];
@@ -148,6 +151,26 @@ router.patch('/:id', requireAuth, (req, res) => {
       params.push(req.body[key] || null);
     }
   }
+
+  // A customer only ever has one record per type (upsertInsuranceRecord's
+  // own lookup assumes this) — switching this record's type onto one that
+  // customer already has would leave two, and the next automatic sync
+  // (from a new booking/quote) would silently pick whichever one it
+  // happens to find first. Blocked instead, with a clear message, rather
+  // than letting that ambiguity creep in.
+  if (req.body.type !== undefined) {
+    if (req.body.type !== 'private' && req.body.type !== 'our_policy') {
+      return res.status(400).json({ error: 'Invalid insurance type' });
+    }
+    if (req.body.type !== existing.type) {
+      const clash = db.prepare('SELECT id FROM insurance_records WHERE customer_id = ? AND type = ? AND id != ?')
+        .get(existing.customer_id, req.body.type, existing.id);
+      if (clash) return res.status(400).json({ error: `This customer already has a ${req.body.type === 'our_policy' ? 'Our Policy' : 'Private'} record — delete it first before switching this one.` });
+      updates.push('type = ?');
+      params.push(req.body.type);
+    }
+  }
+
   if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
   updates.push('updated_at = CURRENT_TIMESTAMP');
   params.push(req.params.id);
