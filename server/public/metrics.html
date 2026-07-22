@@ -35,6 +35,16 @@
   .report-modal__body th { position: sticky; top: 0; background: var(--white); padding: 12px 20px; }
   .report-modal__body td { padding: 11px 20px; }
   .report-results__empty { color: #888; font-size: 0.9rem; text-align: center; padding: 48px 0; }
+
+  .report-row--drillable { cursor: pointer; }
+  .report-row--drillable:hover { background: var(--gray-light); }
+  .report-row--expanded { background: var(--gray-light); }
+  .report-drilldown-row td { padding: 0 !important; background: #fafafa; border-bottom: 1px solid var(--gray-border); }
+  .report-drilldown__loading { padding: 16px 32px; color: #888; font-size: 0.82rem; }
+  .report-drilldown__table { width: 100%; font-size: 0.8rem; margin: 0; }
+  .report-drilldown__table th { position: static; background: none; padding: 8px 20px 8px 44px; color: #888; font-weight: 700; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.04em; }
+  .report-drilldown__table td { padding: 9px 20px 9px 44px; }
+  .report-drilldown__table tr:not(:last-child) td { border-bottom: 1px solid var(--gray-border); }
 </style>
 </head>
 <body>
@@ -150,6 +160,66 @@ document.getElementById('report-modal-overlay').addEventListener('click', (e) =>
   if (e.target.id === 'report-modal-overlay') closeReportModal();
 });
 
+// Per-booking breakdown shown when a Revenue by Vehicle row is expanded —
+// same shape as reports.js's /revenue_by_vehicle/:vehicleId/bookings.
+// Expense has no per-booking split (maintenance is logged against the
+// vehicle, not any one booking) so it's always 0 here; shown anyway to
+// mirror the parent table's columns.
+const BOOKING_DRILLDOWN_COLUMNS = [
+  { key: 'booking_id', label: 'Booking #' },
+  { key: 'customer', label: 'Customer' },
+  { key: 'pickup_scheduled_at', label: 'Pickup', type: 'date' },
+  { key: 'rental_end_at', label: 'Return', type: 'date' },
+  { key: 'revenue', label: 'Revenue', type: 'money' },
+  { key: 'expense', label: 'Expense', type: 'money' },
+  { key: 'business_expense', label: 'Business Expense', type: 'money' },
+  { key: 'profit', label: 'Profit', type: 'money' },
+];
+
+function drilldownCell(val, type) {
+  if (type === 'date') return val ? fmtDateOnly(val) : '—';
+  return fmtCell(val, type);
+}
+
+async function toggleVehicleBookings(row, colSpan, from, to) {
+  const existing = row.nextElementSibling;
+  if (existing && existing.classList.contains('report-drilldown-row')) {
+    existing.remove();
+    row.classList.remove('report-row--expanded');
+    return;
+  }
+  // Only one row open at a time.
+  document.querySelectorAll('.report-drilldown-row').forEach(r => r.remove());
+  document.querySelectorAll('.report-row--expanded').forEach(r => r.classList.remove('report-row--expanded'));
+
+  row.classList.add('report-row--expanded');
+  const drillRow = document.createElement('tr');
+  drillRow.className = 'report-drilldown-row';
+  const cell = document.createElement('td');
+  cell.colSpan = colSpan;
+  cell.innerHTML = '<div class="report-drilldown__loading">Loading bookings…</div>';
+  drillRow.appendChild(cell);
+  row.after(drillRow);
+
+  try {
+    const bookings = await api(`/api/reports/revenue_by_vehicle/${row.dataset.vehicleId}/bookings?from=${from}&to=${to}`);
+    if (!bookings.length) {
+      cell.innerHTML = '<div class="report-drilldown__loading">No bookings in this range.</div>';
+      return;
+    }
+    cell.innerHTML = `
+      <table class="report-drilldown__table">
+        <thead><tr>${BOOKING_DRILLDOWN_COLUMNS.map(c => `<th>${c.label}</th>`).join('')}</tr></thead>
+        <tbody>
+          ${bookings.map(b => `<tr>${BOOKING_DRILLDOWN_COLUMNS.map(c => `<td>${drilldownCell(b[c.key], c.type)}</td>`).join('')}</tr>`).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    cell.innerHTML = `<div class="report-drilldown__loading">${e.message || 'Failed to load bookings'}</div>`;
+  }
+}
+
 async function generateReport(key, label, columns) {
   const body = document.getElementById('report-modal-body');
   openReportModal(label);
@@ -163,14 +233,22 @@ async function generateReport(key, label, columns) {
       body.innerHTML = '<div class="report-results__empty">No data in this range.</div>';
       return;
     }
+    const drillable = key === 'revenue_by_vehicle';
     body.innerHTML = `
       <table>
         <thead><tr>${columns.map(c => `<th>${c.label}</th>`).join('')}</tr></thead>
         <tbody>
-          ${data.rows.map(r => `<tr>${columns.map(c => `<td>${fmtCell(r[c.key], c.type)}</td>`).join('')}</tr>`).join('')}
+          ${data.rows.map(r => `<tr${drillable ? ` class="report-row--drillable" data-vehicle-id="${r.vehicle_id}"` : ''}>${columns.map(c => `<td>${fmtCell(r[c.key], c.type)}</td>`).join('')}</tr>`).join('')}
         </tbody>
       </table>
     `;
+    if (drillable) {
+      const fromVal = fromEl ? fromEl.value : todayStr();
+      const toVal = toEl ? toEl.value : todayStr();
+      body.querySelectorAll('.report-row--drillable').forEach(row => {
+        row.addEventListener('click', () => toggleVehicleBookings(row, columns.length, fromVal, toVal));
+      });
+    }
   } catch (e) {
     body.innerHTML = `<div class="report-results__empty">${e.message || 'Failed to generate report'}</div>`;
   }

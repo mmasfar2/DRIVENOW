@@ -116,7 +116,7 @@ const REPORTS = {
         const expense = round2(expenseByVehicle.get(v.id) || 0);
         const businessExpense = round2(businessExpenseByVehicle.get(v.id) || 0);
         return {
-          vehicle: `${v.year} ${v.make} ${v.model}`, license_plate: v.license_plate || '—',
+          vehicle_id: v.id, vehicle: `${v.year} ${v.make} ${v.model}`, license_plate: v.license_plate || '—',
           bookings: entry ? entry.appIds.size : 0, revenue, expense, business_expense: businessExpense,
           profit: round2(revenue - expense - businessExpense),
         };
@@ -589,6 +589,60 @@ router.get('/:key/data', requireAuth, (req, res) => {
     return res.send(csv);
   }
   res.json({ columns: report.columns, rows });
+});
+
+// Per-booking breakdown behind a Revenue by Vehicle row — same figures,
+// same date range, just split out by the individual booking that earned
+// them instead of summed across the whole vehicle. Expense (vehicle
+// maintenance) has no natural per-booking split — a maintenance record is
+// logged against the vehicle, not tied to whichever booking happened to be
+// active at the time — so it's always 0 here; the vehicle-level Expense
+// column is the only place that cost is meaningful.
+router.get('/revenue_by_vehicle/:vehicleId/bookings', requireAuth, (req, res) => {
+  const vehicleId = Number(req.params.vehicleId);
+  const today = businessTodayStr();
+  const from = req.query.from || today;
+  const to = req.query.to || today;
+  if (from > to) return res.status(400).json({ error: '"From" date must be before "To" date' });
+
+  const revenueByApp = new Map();
+  getAccruedRevenueDays().forEach(d => {
+    if (d.vehicle_id !== vehicleId || d.date < from || d.date > to) return;
+    revenueByApp.set(d.application_id, (revenueByApp.get(d.application_id) || 0) + d.amount);
+  });
+  const businessExpenseByApp = new Map(db.prepare(`
+    SELECT p.application_id, COALESCE(SUM(be.amount), 0) as expense
+    FROM business_expenses be
+    JOIN payments p ON p.id = be.payment_id
+    WHERE be.vehicle_id = ? AND be.expense_date BETWEEN ? AND ?
+    GROUP BY p.application_id
+  `).all(vehicleId, from, to).map(r => [r.application_id, r.expense]));
+  const forfeitedByApp = new Map();
+  getForfeitedDeposits().forEach(d => {
+    if (d.vehicle_id !== vehicleId || !d.date || d.date < from || d.date > to) return;
+    forfeitedByApp.set(d.application_id, (forfeitedByApp.get(d.application_id) || 0) + Number(d.forfeited_amount));
+  });
+
+  const appIds = new Set([...revenueByApp.keys(), ...businessExpenseByApp.keys(), ...forfeitedByApp.keys()]);
+  if (!appIds.size) return res.json([]);
+  const idList = [...appIds];
+  const apps = db.prepare(`
+    SELECT id, first_name, last_name, pickup_scheduled_at, rental_end_at, status
+    FROM applications WHERE id IN (${idList.map(() => '?').join(',')})
+  `).all(...idList);
+
+  const rows = apps.map(a => {
+    const revenue = round2((revenueByApp.get(a.id) || 0) + (forfeitedByApp.get(a.id) || 0));
+    const businessExpense = round2(businessExpenseByApp.get(a.id) || 0);
+    return {
+      booking_id: a.id,
+      customer: `${a.first_name} ${a.last_name}`,
+      pickup_scheduled_at: a.pickup_scheduled_at, rental_end_at: a.rental_end_at, status: a.status,
+      revenue, expense: 0, business_expense: businessExpense,
+      profit: round2(revenue - businessExpense),
+    };
+  }).sort((a, b) => b.revenue - a.revenue);
+  res.json(rows);
 });
 
 module.exports = router;
