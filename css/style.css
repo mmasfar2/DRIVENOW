@@ -269,6 +269,13 @@ h3 { font-size: clamp(1.2rem, 2.5vw, 1.75rem); }
   padding: 6px 14px;
   border-radius: 20px;
 }
+.hero__car-graphic {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 6px;
+  padding: 16px 8px 4px;
+}
+.hero__car-graphic svg { width: 100%; height: auto; display: block; }
 
 /* ── Stats Bar ── */
 .stats-bar {
@@ -317,6 +324,33 @@ h3 { font-size: clamp(1.2rem, 2.5vw, 1.75rem); }
 .step__title { font-size: 1.2rem; font-weight: 700; margin-bottom: 12px; }
 .step__text { color: var(--text-muted); line-height: 1.7; }
 .section--dark .step__text { color: rgba(255,255,255,0.5); }
+
+/* ── Fleet Preview ── */
+.fleet-preview__grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 60px; align-items: center; }
+.fleet-preview__bullets {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+  margin-top: 28px;
+}
+.fleet-preview__bullets li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: rgba(255,255,255,0.85);
+}
+.fleet-preview__bullets li::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--white);
+  flex-shrink: 0;
+}
+.fleet-preview__skyline svg { width: 100%; height: auto; display: block; }
 
 /* ── Fleet Cards ── */
 .fleet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 28px; margin-top: 64px; }
@@ -793,6 +827,7 @@ h3 { font-size: clamp(1.2rem, 2.5vw, 1.75rem); }
   .steps { grid-template-columns: 1fr; gap: 36px; }
   .calc-wrapper { grid-template-columns: 1fr; }
   .contact-grid { grid-template-columns: 1fr; gap: 48px; }
+  .fleet-preview__grid { grid-template-columns: 1fr; gap: 40px; }
   .footer__inner { grid-template-columns: 1fr 1fr; }
   .resources-grid { grid-template-columns: 1fr 1fr; }
 }

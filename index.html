@@ -53,25 +53,29 @@
       <div class="hero__visual">
         <div class="hero__car-card">
           <div class="hero__badge">Available Now</div>
-          <div class="tag" style="border-color:rgba(255,255,255,0.2);color:rgba(255,255,255,0.5);">Featured Vehicle</div>
-          <h3 style="color:#fff;font-size:1.6rem;">Honda Accord</h3>
-          <p style="color:rgba(255,255,255,0.4);font-size:0.85rem;margin-top:6px;">2013 · Sedan · Fuel Efficient</p>
+          <div class="hero__car-graphic" aria-hidden="true">
+            <svg viewBox="0 0 400 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <ellipse cx="200" cy="140" rx="170" ry="8" fill="rgba(255,255,255,0.06)"/>
+              <path d="M35 118c-6 0-11-5-11-11 0-15 12-27 27-27h6l18-34c6-11 18-18 30-18h140c14 0 27 8 33 21l14 30c16 3 28 17 28 34v3c0 4-3 7-7 7" stroke="rgba(255,255,255,0.55)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M75 80l14-32c3-7 10-11 17-11h100c8 0 15 5 18 12l13 31" stroke="rgba(255,255,255,0.55)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M113 42h84" stroke="rgba(255,255,255,0.3)" stroke-width="3" stroke-linecap="round"/>
+              <path d="M40 118h260" stroke="rgba(255,255,255,0.55)" stroke-width="3" stroke-linecap="round"/>
+              <circle cx="105" cy="118" r="22" fill="#0a0a0a" stroke="rgba(255,255,255,0.55)" stroke-width="3"/>
+              <circle cx="105" cy="118" r="8" fill="rgba(255,255,255,0.3)"/>
+              <circle cx="285" cy="118" r="22" fill="#0a0a0a" stroke="rgba(255,255,255,0.55)" stroke-width="3"/>
+              <circle cx="285" cy="118" r="8" fill="rgba(255,255,255,0.3)"/>
+              <circle cx="330" cy="95" r="3" fill="rgba(255,255,255,0.6)"/>
+              <circle cx="58" cy="95" r="3" fill="rgba(255,255,255,0.6)"/>
+            </svg>
+          </div>
           <div class="car-stat-grid">
             <div class="car-stat">
-              <div class="car-stat__label">Weekly Rate</div>
-              <div class="car-stat__value">$380 <span>/wk</span></div>
-            </div>
-            <div class="car-stat">
-              <div class="car-stat__label">Gas MPG</div>
-              <div class="car-stat__value">32 <span>mpg</span></div>
-            </div>
-            <div class="car-stat">
               <div class="car-stat__label">App Eligible</div>
-              <div class="car-stat__value" style="font-size:1rem;">Uber · Lyft<br><span>DoorDash</span></div>
+              <div class="car-stat__value" style="font-size:0.92rem;">Uber · Lyft · DoorDash<br><span>Instacart · Amazon Flex · Walmart Spark</span></div>
             </div>
             <div class="car-stat">
               <div class="car-stat__label">Approval</div>
-              <div class="car-stat__value" style="font-size:1rem;">24–48 <span>hrs</span></div>
+              <div class="car-stat__value">Same Day</div>
             </div>
           </div>
         </div>
@@ -93,11 +97,11 @@
         <div class="stat-item__label">Avg MPG</div>
       </div>
       <div class="stat-item">
-        <div class="stat-item__number">48h</div>
+        <div class="stat-item__number">Same Day</div>
         <div class="stat-item__label">Approval Time</div>
       </div>
       <div class="stat-item">
-        <div class="stat-item__number">3</div>
+        <div class="stat-item__number">6</div>
         <div class="stat-item__label">App Platforms Eligible</div>
       </div>
     </div>
@@ -118,7 +122,7 @@
       <div class="step">
         <div class="step__num">02</div>
         <h3 class="step__title">Get Approved</h3>
-        <p class="step__text">We review your application and contact you within 24–48 hours. We'll confirm your vehicle, terms, and walk you through the rental agreement.</p>
+        <p class="step__text">We review your application and contact you the same day. We'll confirm your vehicle, terms, and walk you through the rental agreement.</p>
       </div>
       <div class="step">
         <div class="step__num">03</div>
@@ -132,12 +136,47 @@
 <!-- FLEET PREVIEW -->
 <section class="section section--dark">
   <div class="container">
-    <div class="tag">Our Fleet</div>
-    <h2>Fuel-efficient. Reliable.<br>Gig-ready.</h2>
-    <p style="color:rgba(255,255,255,0.5);margin-top:16px;max-width:500px;">Honda Accords and Camrys — the most accepted vehicles on Uber, Lyft, and DoorDash. Low on gas, easy to maintain, built to keep you earning.</p>
-    <div style="margin-top:40px;display:flex;gap:16px;flex-wrap:wrap;">
-      <a href="fleet.html" class="btn btn-white">Browse the Fleet</a>
-      <a href="resources.html" class="btn btn-outline" style="border-color:rgba(255,255,255,0.3);color:rgba(255,255,255,0.7);">Calculate Your Earnings</a>
+    <div class="fleet-preview__grid">
+      <div>
+        <div class="tag">Our Fleet</div>
+        <h2>Fuel-efficient. Reliable.<br>Gig-ready.</h2>
+        <p style="color:rgba(255,255,255,0.5);margin-top:16px;max-width:460px;">Highly reliable, maintained cars suited for everyday use.</p>
+        <ul class="fleet-preview__bullets">
+          <li>Fuel Efficient</li>
+          <li>Cool AC</li>
+          <li>Comfortable Ride</li>
+        </ul>
+        <div style="margin-top:40px;display:flex;gap:16px;flex-wrap:wrap;">
+          <a href="fleet.html" class="btn btn-white">Browse the Fleet</a>
+          <a href="resources.html" class="btn btn-outline" style="border-color:rgba(255,255,255,0.3);color:rgba(255,255,255,0.7);">Calculate Your Earnings</a>
+        </div>
+      </div>
+      <div class="fleet-preview__skyline" aria-hidden="true">
+        <svg viewBox="0 0 500 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="220" width="500" height="1" fill="rgba(255,255,255,0.15)"/>
+          <rect x="10" y="160" width="34" height="60" fill="rgba(255,255,255,0.18)"/>
+          <rect x="50" y="130" width="26" height="90" fill="rgba(255,255,255,0.22)"/>
+          <rect x="82" y="175" width="30" height="45" fill="rgba(255,255,255,0.15)"/>
+          <!-- Bank of America Corporate Center — stepped crown -->
+          <rect x="122" y="70" width="46" height="150" fill="rgba(255,255,255,0.35)"/>
+          <rect x="130" y="52" width="30" height="20" fill="rgba(255,255,255,0.35)"/>
+          <rect x="137" y="36" width="16" height="18" fill="rgba(255,255,255,0.35)"/>
+          <rect x="142" y="22" width="6" height="16" fill="rgba(255,255,255,0.35)"/>
+          <rect x="176" y="145" width="24" height="75" fill="rgba(255,255,255,0.18)"/>
+          <!-- Duke Energy Center — tapered crystalline top -->
+          <rect x="208" y="95" width="40" height="125" fill="rgba(255,255,255,0.3)"/>
+          <polygon points="208,95 228,65 248,95" fill="rgba(255,255,255,0.3)"/>
+          <rect x="256" y="150" width="22" height="70" fill="rgba(255,255,255,0.16)"/>
+          <!-- Truist Center -->
+          <rect x="286" y="80" width="38" height="140" fill="rgba(255,255,255,0.26)"/>
+          <rect x="296" y="60" width="18" height="20" fill="rgba(255,255,255,0.26)"/>
+          <rect x="332" y="165" width="26" height="55" fill="rgba(255,255,255,0.15)"/>
+          <rect x="366" y="140" width="30" height="80" fill="rgba(255,255,255,0.2)"/>
+          <rect x="404" y="178" width="24" height="42" fill="rgba(255,255,255,0.14)"/>
+          <rect x="436" y="155" width="28" height="65" fill="rgba(255,255,255,0.18)"/>
+          <rect x="470" y="190" width="20" height="30" fill="rgba(255,255,255,0.12)"/>
+        </svg>
+      </div>
     </div>
   </div>
 </section>
@@ -171,7 +210,7 @@
 <section class="cta-band">
   <div class="container">
     <h2>Ready to start earning?</h2>
-    <p>Applications take 5 minutes. Approval in 24–48 hours. Charlotte, NC.</p>
+    <p>Applications take 5 minutes. Same-day approval. Charlotte, NC.</p>
     <div class="cta-band__actions">
       <a href="fleet.html" class="btn btn-white btn-lg">Apply Now</a>
       <a href="contact.html" class="btn btn-lg" style="border-color:rgba(255,255,255,0.3);color:rgba(255,255,255,0.7);">Ask a Question</a>
