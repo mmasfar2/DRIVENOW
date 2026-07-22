@@ -270,12 +270,10 @@ h3 { font-size: clamp(1.2rem, 2.5vw, 1.75rem); }
   border-radius: 20px;
 }
 .hero__car-graphic {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.07);
   border-radius: 6px;
-  padding: 16px 8px 4px;
+  overflow: hidden;
 }
-.hero__car-graphic svg { width: 100%; height: auto; display: block; }
+.hero__car-graphic img { width: 100%; height: auto; display: block; }
 
 /* ── Stats Bar ── */
 .stats-bar {
@@ -350,7 +348,19 @@ h3 { font-size: clamp(1.2rem, 2.5vw, 1.75rem); }
   background: var(--white);
   flex-shrink: 0;
 }
-.fleet-preview__skyline svg { width: 100%; height: auto; display: block; }
+.fleet-preview__skyline { position: relative; border-radius: 6px; overflow: hidden; }
+.fleet-preview__skyline img { width: 100%; height: auto; display: block; }
+.fleet-preview__credit {
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  font-size: 0.65rem;
+  color: rgba(255,255,255,0.55);
+  background: rgba(0,0,0,0.35);
+  padding: 3px 8px;
+  border-radius: 3px;
+}
+.fleet-preview__credit a { color: rgba(255,255,255,0.75); }
 
 /* ── Fleet Cards ── */
 .fleet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 28px; margin-top: 64px; }
