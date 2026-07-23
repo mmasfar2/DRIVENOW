@@ -643,12 +643,12 @@ function renderFinCal() {
     <div class="resv-cal">
       <div class="resv-cal__summary">
         <div>
-          <div class="resv-cal__summary-label">Pickup Date</div>
+          <div class="resv-cal__summary-label">Agreement Start Date</div>
           <div class="resv-cal__summary-value">${fmtFinCalDate(finNewPickup)}</div>
         </div>
         <div>
           <div class="resv-cal__summary-label">Return Date</div>
-          <div class="resv-cal__summary-value">${fmtFinCalDate(finNewReturn)}</div>
+          <div class="resv-cal__summary-value">${finNewReturn ? fmtFinCalDate(finNewReturn) : 'Open — no return date set'}</div>
         </div>
       </div>
       <div class="resv-cal__grid">
@@ -660,7 +660,7 @@ function renderFinCal() {
       <div class="resv-cal__apply-row">
         <div class="resv-cal__total-days"><span>Duration:</span>${days !== null ? `${days} day${days === 1 ? '' : 's'}` : '—'}</div>
         <div class="resv-cal__est-amount"><span>${estimateLabel}:</span>${estimate !== null ? fmtExact(estimate) : '—'}</div>
-        <button class="resv-cal__apply-btn" id="fin-cal-apply" ${!(finNewPickup && finNewReturn) ? 'disabled' : ''}>Save Dates</button>
+        <button class="resv-cal__apply-btn" id="fin-cal-apply" ${!finNewPickup ? 'disabled' : ''}>Save Dates</button>
       </div>
     </div>
   `;
@@ -677,28 +677,31 @@ function renderFinCal() {
     el.addEventListener('click', () => {
       const dateStr = el.dataset.date;
       if (dateStr === finNewPickup) {
-        // Re-clicking pickup starts a fresh selection from here.
+        // Re-clicking pickup starts a fresh selection from here — the only
+        // way to actually move the start date is to click it directly.
         finNewPickup = dateStr;
         finNewReturn = '';
       } else if (dateStr === finNewReturn) {
         // Re-clicking return only clears the return date, leaving pickup
-        // untouched, so a new return can be picked without losing pickup.
+        // untouched, so a new return can be picked (or left open) without
+        // losing pickup.
         finNewReturn = '';
-      } else if (!finNewPickup || finNewReturn) {
+      } else if (!finNewPickup) {
         finNewPickup = dateStr;
-        finNewReturn = '';
       } else if (dateStr > finNewPickup) {
+        // Pickup stays put — any later date just becomes the new return,
+        // whether one was already set (extending/shortening) or not, so
+        // picking a return date never drags the start date along with it.
         finNewReturn = dateStr;
-      } else {
-        finNewPickup = dateStr;
-        finNewReturn = '';
       }
+      // A date before pickup, clicked without touching pickup itself, is
+      // ignored rather than silently relocating the start date.
       renderFinCal();
     });
   });
   document.getElementById('fin-cal-apply').addEventListener('click', async () => {
-    if (!finNewPickup || !finNewReturn) return;
-    await api(`/api/applications/${id}`, { method: 'PATCH', body: JSON.stringify({ pickup_scheduled_at: finNewPickup, rental_end_at: finNewReturn }) });
+    if (!finNewPickup) return;
+    await api(`/api/applications/${id}`, { method: 'PATCH', body: JSON.stringify({ pickup_scheduled_at: finNewPickup, rental_end_at: finNewReturn || null }) });
     await load();
   });
 }
