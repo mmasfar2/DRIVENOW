@@ -896,8 +896,9 @@ router.get('/bookings/all', requireAuth, (req, res) => {
   // Bucket mirrors the same Reservation/Check Out/Check In stage shown on the
   // reservation detail page, so a booking always lands in the same place
   // here as its stage control shows there — no separate/parallel status logic.
-  // The one exception: a booking that's checked out and due back today moves
-  // into Pending Check In, a subset of On Lease flagging what needs handling now.
+  // The one exception: a booking that's checked out and due back today (or
+  // whose return date has already passed without a check-in) moves into
+  // Pending Check In, a subset of On Lease flagging what needs handling now.
   const today = todayStr();
   const bookings = rows.map(r => {
     const charge = computeCharge(r);
@@ -906,7 +907,7 @@ router.get('/bookings/all', requireAuth, (req, res) => {
     if (r.status === 'completed') bucket = 'completed';
     else if (r.vehicle_status === 'rented') {
       const returnDate = r.rental_end_at ? r.rental_end_at.slice(0, 10) : null;
-      bucket = returnDate === today ? 'pending_check_in' : 'on_rental';
+      bucket = (returnDate && returnDate <= today) ? 'pending_check_in' : 'on_rental';
     }
     else bucket = 'potential_arrival';
     return { ...r, owed, bucket };
