@@ -15,6 +15,23 @@
 .rd-stage-option--active .rd-stage-option__circle { border-color: #fff; }
 .rd-stage-option--active .rd-stage-option__circle::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: #fff; }
 .rd-stage-option--disabled { opacity: 0.45; cursor: not-allowed; }
+
+.rd-return-value-wrap { display: flex; align-items: center; gap: 4px; position: relative; }
+.rd-return-arrow { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 2px; display: flex; align-items: center; }
+.rd-return-arrow:hover { color: var(--black); }
+.rd-return-menu {
+  /* Fixed and positioned in JS from the arrow's own rect, same reasoning
+     as the Reservations list dropdown: an ancestor panel can clip an
+     absolutely-positioned menu, so this escapes that entirely. */
+  position: fixed; z-index: 20;
+  background: #fff; border: 1.5px solid var(--gray-border); border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.12); overflow: hidden; min-width: 140px;
+}
+.rd-return-menu__item {
+  display: block; width: 100%; text-align: left; padding: 9px 14px; background: #fff; border: none;
+  font-family: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; color: var(--black);
+}
+.rd-return-menu__item:hover { background: var(--gray-light); }
 </style>
 </head>
 <body>
@@ -562,6 +579,11 @@ async function deleteDeposit(depositId) {
   refreshUndoButton();
 }
 
+document.addEventListener('click', () => {
+  const menu = document.getElementById('fin-cal-return-menu');
+  if (menu) menu.style.display = 'none';
+});
+
 function initFinCal() {
   finNewPickup = booking.pickup_scheduled_at ? booking.pickup_scheduled_at.slice(0, 10) : '';
   finNewReturn = booking.rental_end_at ? booking.rental_end_at.slice(0, 10) : '';
@@ -648,7 +670,17 @@ function renderFinCal() {
         </div>
         <div>
           <div class="resv-cal__summary-label">Return Date</div>
-          <div class="resv-cal__summary-value">${finNewReturn ? fmtFinCalDate(finNewReturn) : 'Open — no return date set'}</div>
+          <div class="rd-return-value-wrap">
+            <div class="resv-cal__summary-value">${finNewReturn ? fmtFinCalDate(finNewReturn) : 'Open — no return date set'}</div>
+            <button class="rd-return-arrow" id="fin-cal-return-arrow" title="Quick extend" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="rd-return-menu" id="fin-cal-return-menu" style="display:none;">
+              <button class="rd-return-menu__item" data-days="1">Extend +1 Day</button>
+              <button class="rd-return-menu__item" data-days="3">Extend +3 Days</button>
+              <button class="rd-return-menu__item" data-days="7">Extend +7 Days</button>
+            </div>
+          </div>
         </div>
       </div>
       <div class="resv-cal__grid">
@@ -672,6 +704,34 @@ function renderFinCal() {
   document.getElementById('fin-cal-next').addEventListener('click', () => {
     finCalMonth = new Date(finCalMonth.getFullYear(), finCalMonth.getMonth() + 1, 1);
     renderFinCal();
+  });
+  document.getElementById('fin-cal-return-arrow').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const menu = document.getElementById('fin-cal-return-menu');
+    const wasOpen = menu.style.display === 'block';
+    if (!wasOpen) {
+      const rect = e.currentTarget.closest('.rd-return-value-wrap').getBoundingClientRect();
+      menu.style.top = `${rect.bottom + 4}px`;
+      menu.style.left = `${rect.left}px`;
+    }
+    menu.style.display = wasOpen ? 'none' : 'block';
+  });
+  document.querySelectorAll('.rd-return-menu__item').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.getElementById('fin-cal-return-menu').style.display = 'none';
+      // Extends from whatever return date is currently staged (or pickup,
+      // for a booking that doesn't have one yet) — same one-click bump as
+      // the Reservations list, just staged here pending "Save Dates" like
+      // any other calendar click, instead of writing immediately.
+      const base = new Date((finNewReturn || finNewPickup) + 'T00:00:00');
+      base.setDate(base.getDate() + Number(btn.dataset.days));
+      finNewReturn = base.toISOString().slice(0, 10);
+      // Jump the visible month so the new return date is actually on
+      // screen, since the grid only ever shows finCalMonth + the next one.
+      finCalMonth = new Date(base.getFullYear(), base.getMonth(), 1);
+      renderFinCal();
+    });
   });
   box.querySelectorAll('.resv-cal__day[data-date]').forEach(el => {
     el.addEventListener('click', () => {
