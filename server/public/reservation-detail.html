@@ -15,6 +15,20 @@
 .rd-stage-option--active .rd-stage-option__circle { border-color: #fff; }
 .rd-stage-option--active .rd-stage-option__circle::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: #fff; }
 .rd-stage-option--disabled { opacity: 0.45; cursor: not-allowed; }
+
+.rd-return-value-wrap { display: flex; align-items: center; gap: 4px; position: relative; }
+.rd-return-arrow { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 2px; display: flex; align-items: center; }
+.rd-return-arrow:hover { color: var(--black); }
+.rd-return-menu {
+  /* Fixed and positioned in JS from the arrow's own rect, same reasoning
+     as the Reservations list dropdown: an ancestor panel can clip an
+     absolutely-positioned menu, so this escapes that entirely. */
+  position: fixed; z-index: 20; width: 260px;
+  background: #fff; border: 1.5px solid var(--gray-border); border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.12); padding: 14px;
+}
+.rd-return-menu .resv-cal__month-head { font-size: 0.85rem; }
+.rd-return-menu .resv-cal__nav { padding: 2px 6px; }
 </style>
 </head>
 <body>
@@ -305,6 +319,7 @@ const DEFAULT_CARD_FEE_RATE = 3; // % — editable per payment in the Add Paymen
 const PROCESSING_FEE_RATE = 0.0275; // 2.75% of the invoice — Invoice Adjustments' optional Processing Fee line
 let booking, paymentBreakdownItems = [];
 let finCalMonth = null, finNewPickup = '', finNewReturn = '';
+let returnPopupMonth = null;
 
 function fmtFinCalDate(dateStr) {
   if (!dateStr) return 'Select date';
@@ -562,6 +577,11 @@ async function deleteDeposit(depositId) {
   refreshUndoButton();
 }
 
+document.addEventListener('click', () => {
+  const menu = document.getElementById('fin-cal-return-menu');
+  if (menu) menu.style.display = 'none';
+});
+
 function initFinCal() {
   finNewPickup = booking.pickup_scheduled_at ? booking.pickup_scheduled_at.slice(0, 10) : '';
   finNewReturn = booking.rental_end_at ? booking.rental_end_at.slice(0, 10) : '';
@@ -643,12 +663,18 @@ function renderFinCal() {
     <div class="resv-cal">
       <div class="resv-cal__summary">
         <div>
-          <div class="resv-cal__summary-label">Pickup Date</div>
+          <div class="resv-cal__summary-label">Agreement Start Date</div>
           <div class="resv-cal__summary-value">${fmtFinCalDate(finNewPickup)}</div>
         </div>
         <div>
           <div class="resv-cal__summary-label">Return Date</div>
-          <div class="resv-cal__summary-value">${fmtFinCalDate(finNewReturn)}</div>
+          <div class="rd-return-value-wrap">
+            <div class="resv-cal__summary-value">${finNewReturn ? fmtFinCalDate(finNewReturn) : 'Open — no return date set'}</div>
+            <button class="rd-return-arrow" id="fin-cal-return-arrow" title="Quick extend" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="rd-return-menu" id="fin-cal-return-menu" style="display:none;"></div>
+          </div>
         </div>
       </div>
       <div class="resv-cal__grid">
@@ -660,7 +686,7 @@ function renderFinCal() {
       <div class="resv-cal__apply-row">
         <div class="resv-cal__total-days"><span>Duration:</span>${days !== null ? `${days} day${days === 1 ? '' : 's'}` : '—'}</div>
         <div class="resv-cal__est-amount"><span>${estimateLabel}:</span>${estimate !== null ? fmtExact(estimate) : '—'}</div>
-        <button class="resv-cal__apply-btn" id="fin-cal-apply" ${!(finNewPickup && finNewReturn) ? 'disabled' : ''}>Save Dates</button>
+        <button class="resv-cal__apply-btn" id="fin-cal-apply" ${!finNewPickup ? 'disabled' : ''}>Save Dates</button>
       </div>
     </div>
   `;
@@ -673,33 +699,108 @@ function renderFinCal() {
     finCalMonth = new Date(finCalMonth.getFullYear(), finCalMonth.getMonth() + 1, 1);
     renderFinCal();
   });
+  document.getElementById('fin-cal-return-arrow').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const menu = document.getElementById('fin-cal-return-menu');
+    const wasOpen = menu.style.display === 'block';
+    if (!wasOpen) {
+      const rect = e.currentTarget.closest('.rd-return-value-wrap').getBoundingClientRect();
+      menu.style.top = `${rect.bottom + 4}px`;
+      menu.style.left = `${rect.left}px`;
+      const anchor = finNewReturn || finNewPickup || todayStr();
+      const anchorDate = new Date(anchor + 'T00:00:00');
+      returnPopupMonth = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1);
+      renderReturnPopupCal();
+    }
+    menu.style.display = wasOpen ? 'none' : 'block';
+  });
   box.querySelectorAll('.resv-cal__day[data-date]').forEach(el => {
     el.addEventListener('click', () => {
       const dateStr = el.dataset.date;
       if (dateStr === finNewPickup) {
-        // Re-clicking pickup starts a fresh selection from here.
+        // Re-clicking pickup starts a fresh selection from here — the only
+        // way to actually move the start date is to click it directly.
         finNewPickup = dateStr;
         finNewReturn = '';
       } else if (dateStr === finNewReturn) {
         // Re-clicking return only clears the return date, leaving pickup
-        // untouched, so a new return can be picked without losing pickup.
+        // untouched, so a new return can be picked (or left open) without
+        // losing pickup.
         finNewReturn = '';
-      } else if (!finNewPickup || finNewReturn) {
+      } else if (!finNewPickup) {
         finNewPickup = dateStr;
-        finNewReturn = '';
       } else if (dateStr > finNewPickup) {
+        // Pickup stays put — any later date just becomes the new return,
+        // whether one was already set (extending/shortening) or not, so
+        // picking a return date never drags the start date along with it.
         finNewReturn = dateStr;
-      } else {
-        finNewPickup = dateStr;
-        finNewReturn = '';
       }
+      // A date before pickup, clicked without touching pickup itself, is
+      // ignored rather than silently relocating the start date.
       renderFinCal();
     });
   });
   document.getElementById('fin-cal-apply').addEventListener('click', async () => {
-    if (!finNewPickup || !finNewReturn) return;
-    await api(`/api/applications/${id}`, { method: 'PATCH', body: JSON.stringify({ pickup_scheduled_at: finNewPickup, rental_end_at: finNewReturn }) });
+    if (!finNewPickup) return;
+    await api(`/api/applications/${id}`, { method: 'PATCH', body: JSON.stringify({ pickup_scheduled_at: finNewPickup, rental_end_at: finNewReturn || null }) });
     await load();
+  });
+}
+
+// The compact single-month date-picker that pops up from the Return Date
+// arrow — a quick way to jump straight to a date without scrolling to the
+// big two-month calendar below. Pickup stays anchored here too: dates on or
+// before it are shown disabled rather than clickable, same rule as the main
+// grid.
+function renderReturnPopupCal() {
+  const menu = document.getElementById('fin-cal-return-menu');
+  const year = returnPopupMonth.getFullYear();
+  const month = returnPopupMonth.getMonth();
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < firstDow; i++) cells.push('<div class="resv-cal__day empty"></div>');
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const disabled = finNewPickup && dateStr <= finNewPickup;
+    const classes = ['resv-cal__day'];
+    if (disabled) classes.push('disabled');
+    if (dateStr === finNewReturn) classes.push('selected');
+    cells.push(`
+      <div class="${classes.join(' ')}" ${disabled ? '' : `data-date="${dateStr}"`}>
+        <div class="resv-cal__day-inner">${day}</div>
+      </div>
+    `);
+  }
+  menu.innerHTML = `
+    <div class="resv-cal__month">
+      <div class="resv-cal__month-head">
+        <button class="resv-cal__nav" id="return-popup-prev" type="button">&#8249;</button>
+        <span>${returnPopupMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+        <button class="resv-cal__nav" id="return-popup-next" type="button">&#8250;</button>
+      </div>
+      <div class="resv-cal__dow">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div>${d}</div>`).join('')}</div>
+      <div class="resv-cal__days">${cells.join('')}</div>
+    </div>
+  `;
+  document.getElementById('return-popup-prev').addEventListener('click', (e) => {
+    e.stopPropagation();
+    returnPopupMonth = new Date(returnPopupMonth.getFullYear(), returnPopupMonth.getMonth() - 1, 1);
+    renderReturnPopupCal();
+  });
+  document.getElementById('return-popup-next').addEventListener('click', (e) => {
+    e.stopPropagation();
+    returnPopupMonth = new Date(returnPopupMonth.getFullYear(), returnPopupMonth.getMonth() + 1, 1);
+    renderReturnPopupCal();
+  });
+  menu.querySelectorAll('.resv-cal__day[data-date]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      finNewReturn = el.dataset.date;
+      finCalMonth = new Date(returnPopupMonth.getFullYear(), returnPopupMonth.getMonth(), 1);
+      menu.style.display = 'none';
+      renderFinCal();
+    });
   });
 }
 
