@@ -701,6 +701,8 @@ CREATE TABLE IF NOT EXISTS claims (
   damage_reported_at TEXT DEFAULT CURRENT_TIMESTAMP,
   deductible_amount REAL,
   max_out_of_pocket REAL,
+  insurance_payout REAL,
+  payout_date TEXT,
   vehicle_location TEXT,
   mark_vehicle_inactive INTEGER NOT NULL DEFAULT 0,
   next_task TEXT,
@@ -719,6 +721,12 @@ if (!claimCols.includes('deductible_amount')) {
 }
 if (!claimCols.includes('max_out_of_pocket')) {
   db.exec('ALTER TABLE claims ADD COLUMN max_out_of_pocket REAL');
+}
+if (!claimCols.includes('insurance_payout')) {
+  db.exec('ALTER TABLE claims ADD COLUMN insurance_payout REAL');
+}
+if (!claimCols.includes('payout_date')) {
+  db.exec('ALTER TABLE claims ADD COLUMN payout_date TEXT');
 }
 if (!claimCols.includes('vehicle_location')) {
   db.exec('ALTER TABLE claims ADD COLUMN vehicle_location TEXT');

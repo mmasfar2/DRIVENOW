@@ -59,7 +59,7 @@ function computeVehicleDays(from, to) {
 const REPORTS = {
   revenue_by_vehicle: {
     category: 'revenue', label: 'Revenue by Vehicle',
-    description: 'The car\'s daily rate, travel fee, and admin fee, accrued day-by-day across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged. Plus any deposit amounts forfeited against that vehicle, counted as of the booking\'s return date. Expense is maintenance cost only (tolls excluded — a pass-through cost recovered from the customer, not money actually lost); Business Expense is any business expense attributed to that specific vehicle (e.g. Swipe card-processing fees traced back to its bookings) — shown as its own column. Profit is Revenue less both.',
+    description: 'The car\'s daily rate, travel fee, and admin fee, accrued day-by-day across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged. Plus any deposit amounts forfeited against that vehicle, counted as of the booking\'s return date, and any insurance claim payout for that vehicle, counted as of its payout date. Expense is maintenance cost (tolls excluded — a pass-through cost recovered from the customer, not money actually lost) plus any claim deductible paid on that vehicle, counted as of the date the damage was reported; Business Expense is any business expense attributed to that specific vehicle (e.g. Swipe card-processing fees traced back to its bookings) — shown as its own column. Profit is Revenue less both.',
     hasDateRange: true,
     columns: [
       { key: 'vehicle', label: 'Vehicle' },
@@ -94,6 +94,24 @@ const REPORTS = {
           AND NOT (COALESCE(category, '') = 'toll' OR lower(COALESCE(description, '')) LIKE '%toll%')
         GROUP BY vehicle_id
       `).all(from, to).map(r => [r.vehicle_id, r.expense]));
+      // A claim's deductible is money actually paid out on that vehicle —
+      // counted as of the date the damage was reported, same as maintenance
+      // is dated to when it was performed.
+      const deductibleByVehicle = new Map(db.prepare(`
+        SELECT vehicle_id, COALESCE(SUM(deductible_amount), 0) as expense
+        FROM claims
+        WHERE deductible_amount IS NOT NULL AND substr(damage_reported_at, 1, 10) BETWEEN ? AND ?
+        GROUP BY vehicle_id
+      `).all(from, to).map(r => [r.vehicle_id, r.expense]));
+      // An insurance payout is money the vehicle actually earned back —
+      // counted as of its payout date (when the insurer paid out), not the
+      // date the claim was originally filed.
+      const payoutByVehicle = new Map(db.prepare(`
+        SELECT vehicle_id, COALESCE(SUM(insurance_payout), 0) as payout
+        FROM claims
+        WHERE insurance_payout IS NOT NULL AND payout_date IS NOT NULL AND substr(payout_date, 1, 10) BETWEEN ? AND ?
+        GROUP BY vehicle_id
+      `).all(from, to).map(r => [r.vehicle_id, r.payout]));
       // Business expenses attributed to a specific vehicle (currently just
       // Swipe card-processing fees traced through payment -> application ->
       // assigned_vehicle_id) — kept as its own column rather than folded
@@ -112,8 +130,8 @@ const REPORTS = {
       });
       return vehicles.map(v => {
         const entry = byVehicle.get(v.id);
-        const revenue = round2((entry ? entry.revenue : 0) + (forfeitedByVehicle.get(v.id) || 0));
-        const expense = round2(expenseByVehicle.get(v.id) || 0);
+        const revenue = round2((entry ? entry.revenue : 0) + (forfeitedByVehicle.get(v.id) || 0) + (payoutByVehicle.get(v.id) || 0));
+        const expense = round2((expenseByVehicle.get(v.id) || 0) + (deductibleByVehicle.get(v.id) || 0));
         const businessExpense = round2(businessExpenseByVehicle.get(v.id) || 0);
         return {
           vehicle_id: v.id, vehicle: `${v.year} ${v.make} ${v.model}`, license_plate: v.license_plate || '—',
@@ -126,7 +144,7 @@ const REPORTS = {
 
   revenue_by_time_period: {
     category: 'revenue', label: 'Revenue by Time Period',
-    description: 'Total revenue across every vehicle for the selected range — the car\'s daily rate, travel fee, and admin fee, accrued on the actual calendar days of the rental (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue), not the day a payment against it happened to be logged. Plus any security deposit amounts forfeited in range. Less maintenance expense logged in range (tolls excluded — a pass-through cost recovered from the customer) and general business expenses (card processing fees absorbed, subscriptions, etc.) logged in range — the only report that also counts non-vehicle overhead against profit, since this one represents the whole business, not one car.',
+    description: 'Total revenue across every vehicle for the selected range — the car\'s daily rate, travel fee, and admin fee, accrued on the actual calendar days of the rental (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue), not the day a payment against it happened to be logged. Plus any security deposit amounts forfeited in range and any insurance claim payouts dated in range. Less maintenance expense logged in range (tolls excluded — a pass-through cost recovered from the customer), claim deductibles dated in range, and general business expenses (card processing fees absorbed, subscriptions, etc.) logged in range — the only report that also counts non-vehicle overhead against profit, since this one represents the whole business, not one car.',
     hasDateRange: true,
     columns: [
       { key: 'period', label: 'Period' },
@@ -142,6 +160,10 @@ const REPORTS = {
       const forfeited = getForfeitedDeposits()
         .filter(d => d.date && d.date >= from && d.date <= to)
         .reduce((sum, d) => sum + Number(d.forfeited_amount), 0);
+      const insurancePayout = db.prepare(`
+        SELECT COALESCE(SUM(insurance_payout), 0) as total FROM claims
+        WHERE insurance_payout IS NOT NULL AND payout_date IS NOT NULL AND substr(payout_date, 1, 10) BETWEEN ? AND ?
+      `).get(from, to).total;
       // Tolls excluded — a pass-through cost recovered from the customer,
       // not money actually lost. COALESCE first (see expenseByVehicle above
       // for why) so a NULL category doesn't silently drop the whole row.
@@ -149,6 +171,10 @@ const REPORTS = {
         SELECT COALESCE(SUM(cost), 0) as total FROM vehicle_maintenance
         WHERE substr(performed_at, 1, 10) BETWEEN ? AND ?
           AND NOT (COALESCE(category, '') = 'toll' OR lower(COALESCE(description, '')) LIKE '%toll%')
+      `).get(from, to).total;
+      const claimDeductible = db.prepare(`
+        SELECT COALESCE(SUM(deductible_amount), 0) as total FROM claims
+        WHERE deductible_amount IS NOT NULL AND substr(damage_reported_at, 1, 10) BETWEEN ? AND ?
       `).get(from, to).total;
       const businessExpense = db.prepare(`
         SELECT COALESCE(SUM(amount), 0) as total FROM business_expenses
@@ -162,8 +188,8 @@ const REPORTS = {
         SELECT COALESCE(SUM(processing_fee), 0) as total FROM payments
         WHERE substr(paid_at, 1, 10) BETWEEN ? AND ?
       `).get(from, to).total;
-      const totalRevenue = round2(revenue + forfeited);
-      const totalExpense = round2(vehicleExpense + businessExpense);
+      const totalRevenue = round2(revenue + forfeited + insurancePayout);
+      const totalExpense = round2(vehicleExpense + claimDeductible + businessExpense);
       return [{
         period: `${from} – ${to}`,
         revenue: totalRevenue, expense: totalExpense, profit: round2(totalRevenue - totalExpense),
