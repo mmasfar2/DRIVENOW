@@ -306,6 +306,16 @@ function filePreviewHtml(filePath, linkText) {
   `;
 }
 
+// Chrome (and other browsers) can restore a page from the back/forward
+// cache when you navigate back to it — instantly, without re-running this
+// page's load() — so an edit just saved on a detail page (e.g. changing an
+// insurance record's status) wouldn't show up after clicking back to the
+// list until a manual refresh. Forcing a real reload on a bfcache restore
+// keeps every list page showing what's actually in the database.
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) location.reload();
+});
+
 async function api(path, options = {}) {
   const res = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
