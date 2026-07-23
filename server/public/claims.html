@@ -197,6 +197,7 @@ function resetClaimForm() {
     vehicle_id: null, status: 'initial_claim', detailed_status: '', incident_type: '',
     external_reference_id: '', event_source: '', damage_notes: '', insurance_record_id: '', assigned_to: '',
     damage_reported_at: todayStr(), deductible_amount: '', max_out_of_pocket: '',
+    insurance_payout: '', payout_date: '',
     vehicle_location: '', mark_vehicle_inactive: false,
   };
 }
@@ -272,6 +273,10 @@ function renderClaimStep() {
         <div class="field"><label>Deductible Amount</label><input type="number" id="cf-deductible" step="0.01" placeholder="$" value="${claimForm.deductible_amount}"></div>
         <div class="field"><label>Max Out of Pocket</label><input type="number" id="cf-max-oop" step="0.01" placeholder="$" value="${claimForm.max_out_of_pocket}"></div>
       </div>
+      <div class="field-row">
+        <div class="field"><label>Insurance Payout</label><input type="number" id="cf-payout" step="0.01" placeholder="$" value="${claimForm.insurance_payout}"></div>
+        <div class="field"><label>Payout Date</label><input type="date" id="cf-payout-date" value="${claimForm.payout_date}"></div>
+      </div>
       <div class="field"><label>Current Vehicle Location</label><input id="cf-location" placeholder="e.g. With renter, Body shop…" value="${claimForm.vehicle_location}"></div>
       <div class="claim-toggle-row">
         <div>
@@ -301,6 +306,8 @@ function renderClaimStep() {
       claimForm.damage_notes = document.getElementById('cf-notes').value;
       claimForm.deductible_amount = document.getElementById('cf-deductible').value;
       claimForm.max_out_of_pocket = document.getElementById('cf-max-oop').value;
+      claimForm.insurance_payout = document.getElementById('cf-payout').value;
+      claimForm.payout_date = document.getElementById('cf-payout-date').value;
       claimForm.vehicle_location = document.getElementById('cf-location').value;
       claimForm.mark_vehicle_inactive = document.getElementById('cf-mark-inactive').checked;
       if (!claimForm.incident_type) { alert('Claim Incident Type is required'); return; }

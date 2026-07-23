@@ -56,6 +56,10 @@
         <div class="field"><label>Deductible Amount</label><input type="number" id="cld-f-deductible" step="0.01"></div>
         <div class="field"><label>Max Out of Pocket</label><input type="number" id="cld-f-max-oop" step="0.01"></div>
       </div>
+      <div class="field-row">
+        <div class="field"><label>Insurance Payout</label><input type="number" id="cld-f-payout" step="0.01"></div>
+        <div class="field"><label>Payout Date</label><input type="date" id="cld-f-payout-date"></div>
+      </div>
       <div class="field"><label>Next Task</label><input id="cld-f-next-task" placeholder="e.g. Follow up with adjuster"></div>
       <div class="field"><label>Damage Notes</label><textarea id="cld-f-notes" rows="4"></textarea></div>
       <div class="info-row" id="cld-inactive-row" style="display:none;"><div class="info-row__label">Vehicle marked inactive</div><div class="info-row__val">Yes — set back to Available when this claim closes</div></div>
@@ -122,6 +126,8 @@ function render() {
   document.getElementById('cld-f-location').value = claim.vehicle_location || '';
   document.getElementById('cld-f-deductible').value = claim.deductible_amount ?? '';
   document.getElementById('cld-f-max-oop').value = claim.max_out_of_pocket ?? '';
+  document.getElementById('cld-f-payout').value = claim.insurance_payout ?? '';
+  document.getElementById('cld-f-payout-date').value = claim.payout_date ? claim.payout_date.slice(0, 10) : '';
   document.getElementById('cld-inactive-row').style.display = claim.mark_vehicle_inactive ? '' : 'none';
 }
 
@@ -142,6 +148,8 @@ document.getElementById('cld-save-btn').addEventListener('click', async () => {
       vehicle_location: document.getElementById('cld-f-location').value,
       deductible_amount: document.getElementById('cld-f-deductible').value,
       max_out_of_pocket: document.getElementById('cld-f-max-oop').value,
+      insurance_payout: document.getElementById('cld-f-payout').value,
+      payout_date: document.getElementById('cld-f-payout-date').value,
     }),
   });
   await load();

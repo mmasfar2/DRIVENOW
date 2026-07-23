@@ -32,7 +32,7 @@ router.post('/', requireAuth, (req, res) => {
     vehicle_id, application_id, insurance_record_id, assigned_to,
     status, detailed_status, incident_type, external_reference_id,
     event_source, damage_notes, damage_reported_at, next_task,
-    deductible_amount, max_out_of_pocket, vehicle_location, mark_vehicle_inactive,
+    deductible_amount, max_out_of_pocket, insurance_payout, payout_date, vehicle_location, mark_vehicle_inactive,
   } = req.body;
 
   if (!vehicle_id) return res.status(400).json({ error: 'A vehicle is required' });
@@ -46,14 +46,15 @@ router.post('/', requireAuth, (req, res) => {
     INSERT INTO claims
       (vehicle_id, application_id, insurance_record_id, assigned_to, status, detailed_status,
        incident_type, external_reference_id, event_source, damage_notes, damage_reported_at, next_task,
-       deductible_amount, max_out_of_pocket, vehicle_location, mark_vehicle_inactive)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       deductible_amount, max_out_of_pocket, insurance_payout, payout_date, vehicle_location, mark_vehicle_inactive)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     vehicle_id, application_id || null, insurance_record_id || null, assigned_to || null,
     status || 'initial_claim', detailed_status || null, incident_type,
     external_reference_id || null, event_source || null, damage_notes || null,
     damage_reported_at, next_task || null,
-    deductible_amount || null, max_out_of_pocket || null, vehicle_location || null, markInactive
+    deductible_amount || null, max_out_of_pocket || null, insurance_payout || null, payout_date || null,
+    vehicle_location || null, markInactive
   );
 
   if (markInactive) {
@@ -72,7 +73,8 @@ router.patch('/:id', requireAuth, (req, res) => {
   const allowed = [
     'application_id', 'insurance_record_id', 'assigned_to', 'status', 'detailed_status',
     'incident_type', 'external_reference_id', 'event_source', 'damage_notes',
-    'damage_reported_at', 'next_task', 'deductible_amount', 'max_out_of_pocket', 'vehicle_location',
+    'damage_reported_at', 'next_task', 'deductible_amount', 'max_out_of_pocket',
+    'insurance_payout', 'payout_date', 'vehicle_location',
   ];
   const updates = [];
   const params = [];
