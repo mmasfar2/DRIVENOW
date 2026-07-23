@@ -351,15 +351,22 @@
 .resv-return-arrow { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 2px; display: flex; align-items: center; }
 .resv-return-arrow:hover { color: var(--black); }
 .resv-return-menu {
-  position: absolute; top: calc(100% + 4px); left: 0; z-index: 20;
+  /* Fixed (not absolute) and positioned in JS from the arrow button's own
+     rect — the table wrapper scrolls horizontally (overflow-x: auto), which
+     per the CSS spec silently forces overflow-y to auto too, clipping any
+     absolutely-positioned dropdown taller than the visible row. Fixed
+     positioning escapes that ancestor entirely. */
+  position: fixed; z-index: 20;
   background: #fff; border: 1.5px solid var(--gray-border); border-radius: 6px;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.12); overflow: hidden; min-width: 120px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.12); overflow: hidden; min-width: 140px;
 }
 .resv-return-menu__item {
   display: block; width: 100%; text-align: left; padding: 9px 14px; background: #fff; border: none;
   font-family: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; color: var(--black);
 }
 .resv-return-menu__item:hover { background: var(--gray-light); }
+.resv-return-menu__item:disabled { opacity: 0.5; cursor: default; pointer-events: none; }
+.resv-return-menu__item--choose { border-top: 1px solid var(--gray-border); color: var(--text-muted); }
 
 .resv-approval-arrow { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 2px; display: flex; align-items: center; margin: 0 auto; }
 .resv-approval-arrow:hover { color: var(--black); }
@@ -541,7 +548,10 @@ function renderList() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
             <div class="resv-return-menu" id="return-menu-${b.id}" style="display:none;">
-              <button class="resv-return-menu__item" data-id="${b.id}">Extend</button>
+              <button class="resv-return-menu__item resv-return-menu__item--quick" data-id="${b.id}" data-days="1">Extend +1 Day</button>
+              <button class="resv-return-menu__item resv-return-menu__item--quick" data-id="${b.id}" data-days="3">Extend +3 Days</button>
+              <button class="resv-return-menu__item resv-return-menu__item--quick" data-id="${b.id}" data-days="7">Extend +7 Days</button>
+              <button class="resv-return-menu__item resv-return-menu__item--choose" data-id="${b.id}">Choose Date…</button>
             </div>
           </div>
         </td>
@@ -564,10 +574,22 @@ function renderList() {
       const menu = document.getElementById(`return-menu-${id}`);
       const wasOpen = menu.style.display === 'block';
       document.querySelectorAll('.resv-return-menu').forEach(m => { m.style.display = 'none'; });
+      if (!wasOpen) {
+        const rect = btn.closest('.resv-return-wrap').getBoundingClientRect();
+        menu.style.top = `${rect.bottom + 4}px`;
+        menu.style.left = `${rect.left}px`;
+      }
       menu.style.display = wasOpen ? 'none' : 'block';
     });
   });
-  document.querySelectorAll('.resv-return-menu__item').forEach(btn => {
+  document.querySelectorAll('.resv-return-menu__item--quick').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.resv-return-menu').forEach(m => { m.style.display = 'none'; });
+      quickExtend(Number(btn.dataset.id), Number(btn.dataset.days));
+    });
+  });
+  document.querySelectorAll('.resv-return-menu__item--choose').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       document.querySelectorAll('.resv-return-menu').forEach(m => { m.style.display = 'none'; });
@@ -606,6 +628,24 @@ async function reloadBookings() {
 document.addEventListener('click', () => {
   document.querySelectorAll('.resv-return-menu').forEach(m => { m.style.display = 'none'; });
 });
+
+// Most extensions are quick, day-at-a-time bumps against tomorrow's return
+// date — the full calendar modal (below) is overkill for that, so these
+// buttons apply the new date directly from the dropdown, no modal required.
+async function quickExtend(bookingId, days) {
+  const booking = bookings.find(b => b.id === bookingId);
+  if (!booking || !booking.rental_end_at) return;
+  const newReturn = new Date(booking.rental_end_at + 'T00:00:00');
+  newReturn.setDate(newReturn.getDate() + days);
+  const newReturnStr = newReturn.toISOString().slice(0, 10);
+  try {
+    await api(`/api/applications/${bookingId}`, { method: 'PATCH', body: JSON.stringify({ rental_end_at: newReturnStr }) });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  await reloadBookings();
+}
 
 let extendBooking = null;
 let extendCalMonth = null;
