@@ -32,13 +32,7 @@ const SIDEBAR_LINKS = [
   { key: 'claims', label: 'Claims', href: 'claims.html' },
   { key: 'metrics', label: 'Reports', href: 'metrics.html' },
   { key: 'clients', label: 'Clients', href: 'clients.html' },
-  {
-    key: 'insurance', label: 'Insurance',
-    children: [
-      { key: 'insurance-our-policies', label: 'Our Policies', href: 'insurance.html?section=our_policies' },
-      { key: 'insurance-private', label: 'Private', href: 'insurance.html?section=private' },
-    ],
-  },
+  { key: 'insurance', label: 'Insurance', href: 'insurance.html' },
   { key: 'mysite', label: 'My Site', href: 'https://mmasfar2.github.io/drivenow/', external: true },
 ];
 

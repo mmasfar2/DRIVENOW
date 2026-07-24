@@ -23,6 +23,11 @@
           <option value="renting">Currently Renting</option>
           <option value="all">All Renters</option>
         </select>
+        <select id="ins-type-filter" style="font-family:inherit;font-weight:700;font-size:0.95rem;border:1.5px solid var(--gray-border);border-radius:4px;padding:9px 10px;background:#fff;">
+          <option value="">All Types</option>
+          <option value="our_policy">Our Policies</option>
+          <option value="private">Private</option>
+        </select>
         <input id="ins-search" placeholder="Search by customer name or email…" style="flex:1;min-width:220px;padding:10px 14px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;">
       </div>
       <button class="btn" id="ins-add-btn">Add Insurance Record</button>
@@ -48,6 +53,12 @@
       <div class="field"><label>Customer</label>
         <select id="ai-customer"><option value="">Select a customer…</option></select>
       </div>
+      <div class="field"><label>Type</label>
+        <select id="ai-type">
+          <option value="our_policy">Our Policy</option>
+          <option value="private">Private (customer's own)</option>
+        </select>
+      </div>
       <div class="field"><label>Carrier</label><input id="ai-carrier" placeholder="e.g. Progressive, GEICO…"></div>
       <div class="field"><label>Protection Type</label><input id="ai-protection-type" placeholder="e.g. Full Coverage, Liability Only…"></div>
       <div class="field"><label>Policy Number</label><input id="ai-policy-number"></div>
@@ -70,16 +81,13 @@
 
 <script src="js/admin-common.js"></script>
 <script>
-const TYPE_LABELS = { our_policy: 'Our Policies', private: 'Private' };
+const TYPE_LABELS = { our_policy: 'Our Policy', private: 'Private' };
+const TYPE_BADGE = { our_policy: 'badge-reserved', private: 'badge-available' };
 const STATUS_BADGE = { Active: 'badge-available', 'Pending Cancellation': 'badge-reserved', Inactive: 'badge-rejected' };
-const TYPE_SUBS = {
-  our_policy: 'Insurance policies DriveNow carries on behalf of customers.',
-  private: "Customers' own personal insurance policies on file.",
-};
-let section = new URLSearchParams(window.location.search).get('section') === 'private' ? 'private' : 'our_policy';
 let records = [];
 let customers = [];
 let filterMode = 'renting';
+let typeFilter = '';
 
 function fmtDateOnly(d) {
   if (!d) return '—';
@@ -92,6 +100,7 @@ function fmtDateOnly(d) {
 // always starts fresh at ascending.
 const INS_COLUMNS = [
   { key: 'customer', label: 'Customer', get: r => `${r.last_name} ${r.first_name}`.toLowerCase() },
+  { key: 'type', label: 'Type', get: r => (TYPE_LABELS[r.type] || r.type || '').toLowerCase() },
   { key: 'carrier', label: 'Carrier', get: r => (r.carrier || '').toLowerCase() },
   { key: 'protection_type', label: 'Protection Type', get: r => (r.protection_type || '').toLowerCase() },
   { key: 'status', label: 'Status', get: r => (r.status || 'Active').toLowerCase() },
@@ -126,13 +135,14 @@ function renderInsTableHead() {
 }
 
 function render() {
-  document.getElementById('ins-title').textContent = `Insurance — ${TYPE_LABELS[section]}`;
-  document.getElementById('ins-sub').textContent = TYPE_SUBS[section];
+  document.getElementById('ins-title').textContent = 'Insurance';
+  document.getElementById('ins-sub').textContent = 'Policies DriveNow carries on behalf of customers, and customers\' own policies on file.';
   renderInsTableHead();
 
   const search = document.getElementById('ins-search').value.trim().toLowerCase();
   let filtered = records.filter(r => {
     if (filterMode === 'renting' && !r.currently_renting) return false;
+    if (typeFilter && r.type !== typeFilter) return false;
     if (!search) return true;
     const haystack = `${r.first_name} ${r.last_name} ${r.email} ${r.carrier || ''}`.toLowerCase();
     return haystack.includes(search);
@@ -157,6 +167,7 @@ function render() {
   document.getElementById('ins-table-body').innerHTML = filtered.length ? filtered.map(r => `
     <tr class="ins-row" data-id="${r.id}" style="cursor:pointer;">
       <td><a href="customer-detail.html?id=${r.customer_id}" class="ins-cust-link" data-id="${r.id}">${r.first_name} ${r.last_name}</a></td>
+      <td><span class="badge ${TYPE_BADGE[r.type] || 'badge-available'}">${TYPE_LABELS[r.type] || r.type}</span></td>
       <td>${r.carrier || '—'}</td>
       <td>${r.protection_type || '—'}</td>
       <td><span class="badge ${STATUS_BADGE[r.status] || 'badge-available'}">${r.status || 'Active'}</span></td>
@@ -164,7 +175,7 @@ function render() {
       <td>${fmtDateOnly(r.next_payment_date)}</td>
       <td>${r.notes || '—'}</td>
     </tr>
-  `).join('') : `<tr><td colspan="7" style="text-align:center;color:#888;padding:32px;">No ${filterMode === 'renting' ? 'currently renting ' : ''}${TYPE_LABELS[section].toLowerCase()} insurance records${filterMode === 'renting' ? '' : ' yet'}.</td></tr>`;
+  `).join('') : `<tr><td colspan="8" style="text-align:center;color:#888;padding:32px;">No ${filterMode === 'renting' ? 'currently renting ' : ''}insurance records${filterMode === 'renting' ? '' : ' yet'}.</td></tr>`;
 
   document.querySelectorAll('.ins-row').forEach(tr => {
     tr.addEventListener('click', (e) => {
@@ -176,7 +187,7 @@ function render() {
 
 async function load() {
   [records, customers] = await Promise.all([
-    api(`/api/insurance?type=${section}`),
+    api('/api/insurance'),
     api('/api/customers'),
   ]);
   document.getElementById('ai-customer').innerHTML = '<option value="">Select a customer…</option>' +
@@ -191,9 +202,15 @@ document.getElementById('ins-mode').addEventListener('change', (e) => {
   render();
 });
 
+document.getElementById('ins-type-filter').addEventListener('change', (e) => {
+  typeFilter = e.target.value;
+  render();
+});
+
 document.getElementById('ins-add-btn').addEventListener('click', () => {
-  document.getElementById('ai-modal-title').textContent = `Add ${TYPE_LABELS[section]} Insurance Record`;
+  document.getElementById('ai-modal-title').textContent = 'Add Insurance Record';
   document.getElementById('ai-customer').value = '';
+  document.getElementById('ai-type').value = 'our_policy';
   document.getElementById('ai-carrier').value = '';
   document.getElementById('ai-protection-type').value = '';
   document.getElementById('ai-policy-number').value = '';
@@ -216,7 +233,7 @@ document.getElementById('ai-submit').addEventListener('click', async () => {
     method: 'POST',
     body: JSON.stringify({
       customer_id,
-      type: section,
+      type: document.getElementById('ai-type').value,
       carrier: document.getElementById('ai-carrier').value,
       protection_type: document.getElementById('ai-protection-type').value,
       policy_number: document.getElementById('ai-policy-number').value,
@@ -231,7 +248,7 @@ document.getElementById('ai-submit').addEventListener('click', async () => {
 });
 
 (async () => {
-  renderSidebar(section === 'private' ? 'insurance-private' : 'insurance-our-policies');
+  renderSidebar('insurance');
   await requireLogin();
   load();
 })();
