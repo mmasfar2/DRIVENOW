@@ -53,7 +53,7 @@
       <input id="r-search" type="search" name="resv-search-query" autocomplete="off" placeholder="Search by name, email, phone, or car..." style="flex:1;min-width:220px;padding:10px 14px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;">
       <span id="r-count" style="align-self:center;color:var(--text-muted);font-size:0.85rem;white-space:nowrap;"></span>
     </div>
-    <div style="overflow-x:auto;">
+    <div class="resv-table-scroll">
       <table class="resv-table">
         <thead>
           <tr>
@@ -166,19 +166,25 @@
 .resv-row__name:hover { text-decoration: underline; color: #2e7d32; }
 .resv-row__sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
 
-.resv-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+.resv-table-scroll { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 430px); min-height: 240px; }
+/* border-collapse: collapse breaks position: sticky on <th> in Chromium —
+   the header just scrolls away with everything else instead of pinning to
+   the scroll container's top. separate + zeroed border-spacing keeps the
+   same visual look (borders live on td/th, not the table) while letting
+   sticky actually work. */
+.resv-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.83rem; }
 .resv-table th {
-  text-align: left; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
-  color: var(--text-muted); padding: 12px 12px; border-bottom: 1px solid var(--gray-border); white-space: nowrap;
+  text-align: left; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-muted); padding: 8px 12px; border-bottom: 1px solid var(--gray-border); white-space: nowrap;
   position: sticky; top: 0; background: var(--white); z-index: 2;
 }
-.resv-table td { padding: 14px 12px; border-bottom: 1px solid var(--gray-border); vertical-align: middle; }
+.resv-table td { padding: 7px 12px; border-bottom: 1px solid var(--gray-border); vertical-align: middle; }
 .resv-table tbody tr:last-child td { border-bottom: none; }
 .resv-table tbody tr:hover { background: var(--gray-light); }
 .resv-table__resnum { font-weight: 700; color: var(--text-muted); }
 .resv-table__vehicle { display: flex; align-items: center; gap: 8px; }
 .resv-table__vehicle-icon {
-  width: 28px; height: 28px; border-radius: 6px; background: var(--gray-light); display: flex;
+  width: 24px; height: 24px; border-radius: 6px; background: var(--gray-light); display: flex;
   align-items: center; justify-content: center; color: var(--text-muted);
 }
 .resv-table__date { font-weight: 600; }
@@ -197,11 +203,11 @@
   background: transparent; color: #c62828; border: 1.5px solid #c62828; padding: 6px 12px; border-radius: 4px; font-size: 0.78rem; font-weight: 700; cursor: pointer;
 }
 .resv-table__unapprove-btn:hover { background: #c62828; color: #fff; }
-.resv-table__balance { margin-top: 6px; font-size: 0.82rem; font-weight: 700; }
+.resv-table__balance { margin-top: 2px; font-size: 0.8rem; font-weight: 700; }
 .resv-table__balance--due { color: #c62828; }
 .resv-table__balance--credit { color: #2e7d32; }
 .resv-table__view {
-  display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px;
   color: var(--text-muted); text-decoration: none;
 }
 .resv-table__view:hover { background: var(--gray-light); color: var(--black); }
