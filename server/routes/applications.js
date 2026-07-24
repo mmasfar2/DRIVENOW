@@ -634,6 +634,14 @@ router.post('/:id/notes', requireAuth, (req, res) => {
 // ── AUTHED: General notes / edit ──
 router.patch('/:id', requireAuth, (req, res) => {
   const allowed = ['first_name', 'last_name', 'phone', 'email', 'address', 'occupation', 'intended_use', 'pickup_scheduled_at', 'rental_end_at', 'odometer_out', 'odometer_in', 'pickup_location', 'dropoff_location'];
+  const datesChanging = req.body.rental_end_at !== undefined || req.body.pickup_scheduled_at !== undefined;
+  // Snapshotted before any update runs, so an undo has the real prior
+  // values to restore — the Rental Dates calendar's Save Dates is the only
+  // caller that ever sends these two fields together, so this only fires
+  // for an actual date correction, not every general edit this route handles.
+  const beforeDates = datesChanging
+    ? db.prepare('SELECT pickup_scheduled_at, rental_end_at, total_due_at_pickup, invoice_amount FROM applications WHERE id = ?').get(req.params.id)
+    : null;
   const updates = [];
   const params = [];
   for (const key of allowed) {
@@ -655,9 +663,12 @@ router.patch('/:id', requireAuth, (req, res) => {
   // Processing Fee, all of it) rather than a separate hand-rolled Lease
   // Rate + Sales Tax-only formula that silently went stale every time a new
   // fee type was added elsewhere.
-  if (req.body.rental_end_at !== undefined || req.body.pickup_scheduled_at !== undefined) {
+  if (datesChanging) {
     const id = req.params.id;
     const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
+    if (beforeDates) {
+      logUndo('dates_edit', `Edited the dates on reservation #${id}`, { applicationId: id, previous: beforeDates });
+    }
     if (app && app.pickup_scheduled_at && app.rental_end_at && app.weekly_rate) {
       // Null out the previously-frozen total/invoice so computeCharge falls
       // through to a fresh calculation from the new dates instead of just

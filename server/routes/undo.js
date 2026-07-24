@@ -163,6 +163,10 @@ router.post('/', requireAuth, (req, res) => {
       VALUES
         (@id, @vehicle_id, @service_type, @status, @date_reported, @clearance_eta, @vendor, @est_cost, @notes, @remove_from_availability, @created_at, @updated_at)
     `).run(record);
+  } else if (row.entity_type === 'dates_edit') {
+    const { applicationId, previous } = payload;
+    db.prepare('UPDATE applications SET pickup_scheduled_at = ?, rental_end_at = ?, total_due_at_pickup = ?, invoice_amount = ? WHERE id = ?')
+      .run(previous.pickup_scheduled_at, previous.rental_end_at, previous.total_due_at_pickup, previous.invoice_amount, applicationId);
   } else if (row.entity_type === 'business_expense_delete') {
     const { record } = payload;
     db.prepare(`
