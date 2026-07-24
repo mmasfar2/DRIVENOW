@@ -46,7 +46,10 @@
         <div class="field"><label>Carrier</label><input id="ind-f-carrier"></div>
         <div class="field"><label>Protection Type</label><input id="ind-f-protection-type"></div>
       </div>
-      <div class="field"><label>Policy Number</label><input id="ind-f-policy-number"></div>
+      <div class="field-row">
+        <div class="field"><label>Policy Number</label><input id="ind-f-policy-number"></div>
+        <div class="field"><label>Agency Contact #</label><input id="ind-f-agency-contact" placeholder="Phone number"></div>
+      </div>
       <div class="field"><label>Status</label>
         <select id="ind-f-status">
           <option value="Active">Active</option>
@@ -105,6 +108,7 @@ function render() {
   document.getElementById('ind-f-carrier').value = record.carrier || '';
   document.getElementById('ind-f-protection-type').value = record.protection_type || '';
   document.getElementById('ind-f-policy-number').value = record.policy_number || '';
+  document.getElementById('ind-f-agency-contact').value = record.agency_contact || '';
   document.getElementById('ind-f-status').value = record.status || 'Active';
   document.getElementById('ind-f-last-verified').value = record.last_verified_at ? record.last_verified_at.slice(0, 10) : '';
   document.getElementById('ind-f-next-payment').value = record.next_payment_date ? record.next_payment_date.slice(0, 10) : '';
@@ -122,6 +126,7 @@ document.getElementById('ind-save-btn').addEventListener('click', async () => {
         carrier: document.getElementById('ind-f-carrier').value,
         protection_type: document.getElementById('ind-f-protection-type').value,
         policy_number: document.getElementById('ind-f-policy-number').value,
+        agency_contact: document.getElementById('ind-f-agency-contact').value,
         status: document.getElementById('ind-f-status').value,
         last_verified_at: document.getElementById('ind-f-last-verified').value,
         next_payment_date: document.getElementById('ind-f-next-payment').value,
