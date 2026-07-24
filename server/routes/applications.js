@@ -6,6 +6,14 @@ const { UPLOADS_DIR } = require('../paths');
 const { computeCharge, computeOwed, SWIPE_FEE_RATE } = require('../billing');
 const { todayStr } = require('../timezone');
 
+// Rental payments: 'card' carries a customer-facing processing_fee surcharge,
+// 'swipe' carries an absorbed processor cut logged as a Business Expense —
+// everything else (cash, and the instant peer-to-peer apps) is treated like
+// cash, with no fee logic attached. Deposits never allow 'swipe' — a held
+// deposit isn't revenue, so the absorbed-fee-as-expense logic doesn't apply.
+const PAYMENT_METHODS = ['cash', 'card', 'swipe', 'cash_app', 'apple_pay', 'zelle'];
+const DEPOSIT_METHODS = ['cash', 'card', 'cash_app', 'apple_pay', 'zelle'];
+
 const router = express.Router();
 
 // A customer's contact info can be edited later from their profile
@@ -434,7 +442,7 @@ router.post('/:id/payments', requireAuth, (req, res) => {
   if (!app) return res.status(404).json({ error: 'Not found' });
   if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'A valid amount is required' });
 
-  const paymentMethod = method === 'card' ? 'card' : method === 'swipe' ? 'swipe' : 'cash';
+  const paymentMethod = PAYMENT_METHODS.includes(method) ? method : 'cash';
   const fee = paymentMethod === 'card' ? Math.max(0, Number(processing_fee) || 0) : 0;
   const paidAt = paid_at || todayStr();
 
@@ -455,7 +463,7 @@ router.put('/:id/payments/:paymentId', requireAuth, (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Not found' });
   if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'A valid amount is required' });
 
-  const paymentMethod = method === 'card' ? 'card' : method === 'swipe' ? 'swipe' : 'cash';
+  const paymentMethod = PAYMENT_METHODS.includes(method) ? method : 'cash';
   const fee = paymentMethod === 'card' ? Math.max(0, Number(processing_fee) || 0) : 0;
   const paidAt = paid_at || existing.paid_at;
   const linkedExpense = db.prepare('SELECT * FROM business_expenses WHERE payment_id = ?').get(existing.id);
@@ -498,7 +506,7 @@ router.post('/:id/deposits', requireAuth, (req, res) => {
   if (!app) return res.status(404).json({ error: 'Not found' });
   if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'A valid amount is required' });
 
-  const depositMethod = method === 'card' ? 'card' : 'cash';
+  const depositMethod = DEPOSIT_METHODS.includes(method) ? method : 'cash';
   const fee = depositMethod === 'card' ? Math.max(0, Number(processing_fee) || 0) : 0;
 
   db.prepare('INSERT INTO deposits (application_id, amount, method, processing_fee, collected_at) VALUES (?, ?, ?, ?, ?)')
@@ -514,7 +522,7 @@ router.put('/:id/deposits/:depositId', requireAuth, (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Not found' });
   if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'A valid amount is required' });
 
-  const depositMethod = method === 'card' ? 'card' : 'cash';
+  const depositMethod = DEPOSIT_METHODS.includes(method) ? method : 'cash';
   const fee = depositMethod === 'card' ? Math.max(0, Number(processing_fee) || 0) : 0;
   const collectedAt = collected_at || existing.collected_at;
   // Changing the amount on an already-resolved deposit can leave its

@@ -129,6 +129,9 @@ tr:hover td { background: var(--gray-light); }
 .badge-available { background: #e8f5e9; color: #2e7d32; }
 .badge-reserved { background: #fff3e0; color: #e65100; }
 .badge-rented { background: #f3e5f5; color: #6a1b9a; }
+.badge-cashapp { background: #e0f7fa; color: #00796b; }
+.badge-applepay { background: #eceff1; color: #37474f; }
+.badge-zelle { background: #e8eaf6; color: #3949ab; }
 
 .activity-item { padding: 12px 0; border-bottom: 1px solid var(--gray-border); font-size: 0.85rem; }
 .activity-item:last-child { border-bottom: none; }

@@ -191,6 +191,9 @@
           <option value="cash">Cash</option>
           <option value="card">Card</option>
           <option value="swipe">Payment through Swipe</option>
+          <option value="cash_app">Cash App</option>
+          <option value="apple_pay">Apple Pay</option>
+          <option value="zelle">Zelle</option>
         </select>
       </div>
       <div class="field" id="ap-fee-field" style="display:none;">
@@ -229,6 +232,9 @@
         <select id="ad-method">
           <option value="cash">Cash</option>
           <option value="card">Card</option>
+          <option value="cash_app">Cash App</option>
+          <option value="apple_pay">Apple Pay</option>
+          <option value="zelle">Zelle</option>
         </select>
       </div>
       <div class="field" id="ad-fee-field" style="display:none;">
@@ -480,13 +486,25 @@ document.getElementById('rd-note-save').addEventListener('click', async () => {
   renderNotes();
 });
 
+const PAYMENT_METHOD_BADGES = {
+  card: ['badge-reserved', 'Card'],
+  swipe: ['badge-rented', 'Swipe'],
+  cash_app: ['badge-cashapp', 'Cash App'],
+  apple_pay: ['badge-applepay', 'Apple Pay'],
+  zelle: ['badge-zelle', 'Zelle'],
+};
+function paymentMethodBadge(method) {
+  const [cls, label] = PAYMENT_METHOD_BADGES[method] || ['badge-available', 'Cash'];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
 function renderPaymentLog() {
   const body = document.getElementById('rd-payment-log-body');
   body.innerHTML = booking.payments.length
     ? booking.payments.map(p => `
       <tr>
         <td>${fmtDateOnly(p.paid_at)}</td>
-        <td><span class="badge ${p.method === 'card' ? 'badge-reserved' : p.method === 'swipe' ? 'badge-rented' : 'badge-available'}">${p.method === 'card' ? 'Card' : p.method === 'swipe' ? 'Swipe' : 'Cash'}</span></td>
+        <td>${paymentMethodBadge(p.method)}</td>
         <td style="text-align:right;font-weight:600;">${fmtExact(p.amount)}</td>
         <td style="text-align:right;">${p.processing_fee ? fmtExact(p.processing_fee) : '—'}</td>
         <td style="text-align:right;white-space:nowrap;">
@@ -530,7 +548,7 @@ function renderDepositLog() {
     ? booking.deposits.map(d => `
       <tr class="deposit-row" data-id="${d.id}" style="cursor:pointer;" title="Double-click to adjust">
         <td>${fmtDateOnly(d.collected_at)}</td>
-        <td><span class="badge ${d.method === 'card' ? 'badge-reserved' : 'badge-available'}">${d.method === 'card' ? 'Card' : 'Cash'}</span></td>
+        <td>${paymentMethodBadge(d.method)}</td>
         <td style="text-align:right;font-weight:600;">${fmtExact(d.amount)}</td>
         <td>${depositStatusBadge(d)}</td>
         <td style="text-align:right;">${d.refunded_amount ? fmtExact(d.refunded_amount) : '—'}</td>
