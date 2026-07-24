@@ -144,7 +144,7 @@ document.getElementById('ind-delete-btn').addEventListener('click', async () => 
   if (!confirm('Delete this insurance record? You can undo this from the Undo button at the top of the page.')) return;
   await api(`/api/insurance/${id}`, { method: 'DELETE' });
   refreshUndoButton();
-  window.location.href = `insurance.html?section=${record.type}`;
+  window.location.href = 'insurance.html';
 });
 
 document.getElementById('ind-doc-upload-btn').addEventListener('click', async () => {

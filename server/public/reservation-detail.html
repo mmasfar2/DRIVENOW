@@ -359,7 +359,7 @@ function renderInsurance() {
         <div class="info-row__val">${r.carrier || 'No carrier on file'}${r.protection_type ? ` · ${r.protection_type}` : ''} →</div>
       </a>
     `).join('')
-    : `<p class="rd-empty">No insurance on file for this customer — <a href="insurance.html?section=our_policies">add a record →</a></p>`;
+    : `<p class="rd-empty">No insurance on file for this customer — <a href="insurance.html">add a record →</a></p>`;
 }
 
 function renderVehiclePhotos() {
