@@ -268,21 +268,6 @@ function fmtDate(d) {
 }
 
 // For calendar-date-only values (pickup/return dates, DOB, deposit collected
-// date) — these are a plain YYYY-MM-DD label, not an instant in time, so
-// formatting them by routing through a timezone-aware Date object (as
-// fmtDate does) risks landing on the day before or after depending on both
-// the stored offset and the viewer's location. Parsing the digits directly
-// sidesteps timezones altogether — the displayed date always matches the
-// stored date, for every viewer, everywhere.
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-function fmtDateOnly(d) {
-  if (!d) return '—';
-  const [y, m, day] = d.slice(0, 10).split('-').map(Number);
-  if (!y || !m || !day) return '—';
-  return `${MONTHS[m - 1]} ${day}, ${y}`;
-}
-
-// For calendar-date-only values (pickup/return dates, DOB, deposit collected
 // date) — never a timestamp. `new Date('2026-06-15')` parses as UTC midnight,
 // so formatting it with the viewer's local timezone (as fmtDate does) can
 // display the day *before* what's actually stored whenever the browser is
