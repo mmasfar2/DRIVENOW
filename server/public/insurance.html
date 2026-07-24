@@ -51,6 +51,7 @@
       <div class="field"><label>Carrier</label><input id="ai-carrier" placeholder="e.g. Progressive, GEICO…"></div>
       <div class="field"><label>Protection Type</label><input id="ai-protection-type" placeholder="e.g. Full Coverage, Liability Only…"></div>
       <div class="field"><label>Policy Number</label><input id="ai-policy-number"></div>
+      <div class="field"><label>Agency Contact #</label><input id="ai-agency-contact" placeholder="Phone number"></div>
       <div class="field"><label>Status</label>
         <select id="ai-status">
           <option value="Active">Active</option>
@@ -140,6 +141,7 @@ document.getElementById('ins-add-btn').addEventListener('click', () => {
   document.getElementById('ai-carrier').value = '';
   document.getElementById('ai-protection-type').value = '';
   document.getElementById('ai-policy-number').value = '';
+  document.getElementById('ai-agency-contact').value = '';
   document.getElementById('ai-status').value = 'Active';
   document.getElementById('ai-last-verified').value = '';
   document.getElementById('ai-next-payment').value = '';
@@ -162,6 +164,7 @@ document.getElementById('ai-submit').addEventListener('click', async () => {
       carrier: document.getElementById('ai-carrier').value,
       protection_type: document.getElementById('ai-protection-type').value,
       policy_number: document.getElementById('ai-policy-number').value,
+      agency_contact: document.getElementById('ai-agency-contact').value,
       status: document.getElementById('ai-status').value,
       last_verified_at: document.getElementById('ai-last-verified').value,
       next_payment_date: document.getElementById('ai-next-payment').value,

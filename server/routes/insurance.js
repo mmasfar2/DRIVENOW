@@ -125,16 +125,16 @@ router.get('/:id', requireAuth, (req, res) => {
 });
 
 router.post('/', requireAuth, (req, res) => {
-  const { customer_id, type, carrier, protection_type, policy_number, last_verified_at, next_payment_date, notes, status } = req.body;
+  const { customer_id, type, carrier, protection_type, policy_number, agency_contact, last_verified_at, next_payment_date, notes, status } = req.body;
   if (!customer_id) return res.status(400).json({ error: 'A customer is required' });
   if (type !== 'private' && type !== 'our_policy') return res.status(400).json({ error: 'Invalid insurance type' });
   const customer = db.prepare('SELECT id FROM customers WHERE id = ?').get(customer_id);
   if (!customer) return res.status(404).json({ error: 'Customer not found' });
 
   const result = db.prepare(`
-    INSERT INTO insurance_records (customer_id, type, carrier, protection_type, policy_number, last_verified_at, next_payment_date, notes, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(customer_id, type, carrier || null, protection_type || null, policy_number || null, last_verified_at || null, next_payment_date || null, notes || null, status || 'Active');
+    INSERT INTO insurance_records (customer_id, type, carrier, protection_type, policy_number, agency_contact, last_verified_at, next_payment_date, notes, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(customer_id, type, carrier || null, protection_type || null, policy_number || null, agency_contact || null, last_verified_at || null, next_payment_date || null, notes || null, status || 'Active');
   res.status(201).json({ id: result.lastInsertRowid });
 });
 
@@ -142,7 +142,7 @@ router.patch('/:id', requireAuth, (req, res) => {
   const existing = db.prepare('SELECT id, customer_id, type FROM insurance_records WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
 
-  const allowed = ['carrier', 'protection_type', 'policy_number', 'last_verified_at', 'next_payment_date', 'notes', 'status'];
+  const allowed = ['carrier', 'protection_type', 'policy_number', 'agency_contact', 'last_verified_at', 'next_payment_date', 'notes', 'status'];
   const updates = [];
   const params = [];
   for (const key of allowed) {

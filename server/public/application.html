@@ -83,7 +83,7 @@ async function load() {
 function renderPaymentLog() {
   const body = document.getElementById('payment-log-body');
   body.innerHTML = payments.length
-    ? payments.map(p => `<tr><td>${fmtDate(p.paid_at)}</td><td style="text-align:right;font-weight:600;">${fmtMoney(p.amount)}</td></tr>`).join('')
+    ? payments.map(p => `<tr><td>${fmtDateOnly(p.paid_at)}</td><td style="text-align:right;font-weight:600;">${fmtMoney(p.amount)}</td></tr>`).join('')
     : `<tr><td colspan="2" style="text-align:center;color:#888;padding:24px;">No payments recorded yet.</td></tr>`;
 }
 

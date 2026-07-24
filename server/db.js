@@ -675,6 +675,7 @@ CREATE TABLE IF NOT EXISTS insurance_records (
   carrier TEXT,
   protection_type TEXT,
   policy_number TEXT,
+  agency_contact TEXT,
   document_path TEXT,
   last_verified_at TEXT,
   next_payment_date TEXT,
@@ -738,6 +739,9 @@ if (!claimCols.includes('mark_vehicle_inactive')) {
 const insuranceCols = db.prepare("PRAGMA table_info(insurance_records)").all().map(c => c.name);
 if (!insuranceCols.includes('status')) {
   db.exec("ALTER TABLE insurance_records ADD COLUMN status TEXT NOT NULL DEFAULT 'Active'");
+}
+if (!insuranceCols.includes('agency_contact')) {
+  db.exec('ALTER TABLE insurance_records ADD COLUMN agency_contact TEXT');
 }
 
 db.exec(`
