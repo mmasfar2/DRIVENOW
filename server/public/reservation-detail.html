@@ -320,6 +320,7 @@ const PROCESSING_FEE_RATE = 0.0275; // 2.75% of the invoice — Invoice Adjustme
 let booking, paymentBreakdownItems = [];
 let finCalMonth = null, finNewPickup = '', finNewReturn = '';
 let returnPopupMonth = null;
+let pickupPopupMonth = null;
 
 function fmtFinCalDate(dateStr) {
   if (!dateStr) return 'Select date';
@@ -578,8 +579,7 @@ async function deleteDeposit(depositId) {
 }
 
 document.addEventListener('click', () => {
-  const menu = document.getElementById('fin-cal-return-menu');
-  if (menu) menu.style.display = 'none';
+  document.querySelectorAll('.rd-return-menu').forEach(menu => { menu.style.display = 'none'; });
 });
 
 function initFinCal() {
@@ -664,7 +664,13 @@ function renderFinCal() {
       <div class="resv-cal__summary">
         <div>
           <div class="resv-cal__summary-label">Agreement Start Date</div>
-          <div class="resv-cal__summary-value">${fmtFinCalDate(finNewPickup)}</div>
+          <div class="rd-return-value-wrap">
+            <div class="resv-cal__summary-value">${fmtFinCalDate(finNewPickup)}</div>
+            <button class="rd-return-arrow" id="fin-cal-pickup-arrow" title="Change start date" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="rd-return-menu" id="fin-cal-pickup-menu" style="display:none;"></div>
+          </div>
         </div>
         <div>
           <div class="resv-cal__summary-label">Return Date</div>
@@ -703,6 +709,7 @@ function renderFinCal() {
     e.stopPropagation();
     const menu = document.getElementById('fin-cal-return-menu');
     const wasOpen = menu.style.display === 'block';
+    document.querySelectorAll('.rd-return-menu').forEach(m => { m.style.display = 'none'; });
     if (!wasOpen) {
       const rect = e.currentTarget.closest('.rd-return-value-wrap').getBoundingClientRect();
       menu.style.top = `${rect.bottom + 4}px`;
@@ -711,6 +718,22 @@ function renderFinCal() {
       const anchorDate = new Date(anchor + 'T00:00:00');
       returnPopupMonth = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1);
       renderReturnPopupCal();
+    }
+    menu.style.display = wasOpen ? 'none' : 'block';
+  });
+  document.getElementById('fin-cal-pickup-arrow').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const menu = document.getElementById('fin-cal-pickup-menu');
+    const wasOpen = menu.style.display === 'block';
+    document.querySelectorAll('.rd-return-menu').forEach(m => { m.style.display = 'none'; });
+    if (!wasOpen) {
+      const rect = e.currentTarget.closest('.rd-return-value-wrap').getBoundingClientRect();
+      menu.style.top = `${rect.bottom + 4}px`;
+      menu.style.left = `${rect.left}px`;
+      const anchor = finNewPickup || todayStr();
+      const anchorDate = new Date(anchor + 'T00:00:00');
+      pickupPopupMonth = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1);
+      renderPickupPopupCal();
     }
     menu.style.display = wasOpen ? 'none' : 'block';
   });
@@ -798,6 +821,62 @@ function renderReturnPopupCal() {
       e.stopPropagation();
       finNewReturn = el.dataset.date;
       finCalMonth = new Date(returnPopupMonth.getFullYear(), returnPopupMonth.getMonth(), 1);
+      menu.style.display = 'none';
+      renderFinCal();
+    });
+  });
+}
+
+// Same compact date-picker as the Return Date one, for correcting the
+// Agreement Start Date. Any date is pickable here (no disabled range) —
+// picking one clears the currently staged return date, same as clicking
+// the pickup cell directly on the main calendar does, since a stale return
+// date from before the correction may no longer make sense.
+function renderPickupPopupCal() {
+  const menu = document.getElementById('fin-cal-pickup-menu');
+  const year = pickupPopupMonth.getFullYear();
+  const month = pickupPopupMonth.getMonth();
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < firstDow; i++) cells.push('<div class="resv-cal__day empty"></div>');
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const classes = ['resv-cal__day'];
+    if (dateStr === finNewPickup) classes.push('selected');
+    cells.push(`
+      <div class="${classes.join(' ')}" data-date="${dateStr}">
+        <div class="resv-cal__day-inner">${day}</div>
+      </div>
+    `);
+  }
+  menu.innerHTML = `
+    <div class="resv-cal__month">
+      <div class="resv-cal__month-head">
+        <button class="resv-cal__nav" id="pickup-popup-prev" type="button">&#8249;</button>
+        <span>${pickupPopupMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+        <button class="resv-cal__nav" id="pickup-popup-next" type="button">&#8250;</button>
+      </div>
+      <div class="resv-cal__dow">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div>${d}</div>`).join('')}</div>
+      <div class="resv-cal__days">${cells.join('')}</div>
+    </div>
+  `;
+  document.getElementById('pickup-popup-prev').addEventListener('click', (e) => {
+    e.stopPropagation();
+    pickupPopupMonth = new Date(pickupPopupMonth.getFullYear(), pickupPopupMonth.getMonth() - 1, 1);
+    renderPickupPopupCal();
+  });
+  document.getElementById('pickup-popup-next').addEventListener('click', (e) => {
+    e.stopPropagation();
+    pickupPopupMonth = new Date(pickupPopupMonth.getFullYear(), pickupPopupMonth.getMonth() + 1, 1);
+    renderPickupPopupCal();
+  });
+  menu.querySelectorAll('.resv-cal__day[data-date]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      finNewPickup = el.dataset.date;
+      finNewReturn = '';
+      finCalMonth = new Date(pickupPopupMonth.getFullYear(), pickupPopupMonth.getMonth(), 1);
       menu.style.display = 'none';
       renderFinCal();
     });
