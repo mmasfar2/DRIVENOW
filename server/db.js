@@ -1131,6 +1131,52 @@ function getAccruedRevenueDays() {
   return days;
 }
 
+// A swipe-payment's card-processing fee (the business_expenses row
+// syncSwipeExpense in applications.js creates, joined back via payment_id)
+// spread across the same nights — and in the same proportion — as the
+// booking's own revenue, rather than dated to a single day. The fee isn't
+// earned night by night any more than a subscription bill is, but treating
+// it as the cost of collecting that booking's revenue matches it to the
+// same nights Revenue itself is spread across. That also sidesteps the
+// previous "frontier" approach's real problem: that date wasn't tied to
+// anything meaningful about the fee (just wherever a FIFO walk of payments
+// happened to run out), and re-dated *every* fee on a booking the moment a
+// new payment came in — including ones from long-settled payments.
+function getAccruedCardFeeDays() {
+  const feesByApp = new Map(db.prepare(`
+    SELECT p.application_id, COALESCE(SUM(be.amount), 0) as fee
+    FROM business_expenses be
+    JOIN payments p ON p.id = be.payment_id
+    GROUP BY p.application_id
+  `).all().map(r => [r.application_id, r.fee]));
+  if (!feesByApp.size) return [];
+
+  const revenueDays = getAccruedRevenueDays().filter(d => feesByApp.has(d.application_id) && d.amount > 0);
+  const revenueByApp = new Map();
+  revenueDays.forEach(d => {
+    revenueByApp.set(d.application_id, (revenueByApp.get(d.application_id) || 0) + d.amount);
+  });
+  let lastIndexByApp = new Map();
+  revenueDays.forEach((d, i) => lastIndexByApp.set(d.application_id, i));
+
+  // Independently rounding each day's proportional share can drift a cent
+  // or two from the fee's actual stored total across enough days — fold
+  // whatever's left into the booking's last day instead, same as
+  // getAccruedRevenueDays does for its own leftover cents.
+  const remainingByApp = new Map(feesByApp);
+  return revenueDays.map((d, i) => {
+    const isLast = lastIndexByApp.get(d.application_id) === i;
+    if (isLast) {
+      return { application_id: d.application_id, vehicle_id: d.vehicle_id, date: d.date, amount: Math.round(remainingByApp.get(d.application_id) * 100) / 100 };
+    }
+    const totalFee = feesByApp.get(d.application_id);
+    const totalRevenue = revenueByApp.get(d.application_id);
+    const amount = totalRevenue > 0 ? Math.round((totalFee * (d.amount / totalRevenue)) * 100) / 100 : 0;
+    remainingByApp.set(d.application_id, remainingByApp.get(d.application_id) - amount);
+    return { application_id: d.application_id, vehicle_id: d.vehicle_id, date: d.date, amount };
+  });
+}
+
 function logActivity(applicationId, message) {
   db.prepare('INSERT INTO activity_log (application_id, message) VALUES (?, ?)').run(applicationId, message);
 }
@@ -1140,4 +1186,4 @@ function queueMessage(applicationId, channel, to, body) {
     .run(applicationId, channel, to, body);
 }
 
-module.exports = { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo, getForfeitedDeposits, getAccruedRevenueDays };
+module.exports = { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo, getForfeitedDeposits, getAccruedRevenueDays, getAccruedCardFeeDays };
