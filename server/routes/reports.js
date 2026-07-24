@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, getForfeitedDeposits, getAccruedRevenueDays } = require('../db');
+const { db, getForfeitedDeposits, getAccruedRevenueDays, getAccruedCardFeeDays } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { SALES_TAX_RATE, HIGHWAY_TAX_RATE, computeCharge, computeOwed } = require('../billing');
 const { todayStr: businessTodayStr } = require('../timezone');
@@ -59,7 +59,7 @@ function computeVehicleDays(from, to) {
 const REPORTS = {
   revenue_by_vehicle: {
     category: 'revenue', label: 'Revenue by Vehicle',
-    description: 'The car\'s daily rate, travel fee, and admin fee, accrued day-by-day across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged. Plus any deposit amounts forfeited against that vehicle, counted as of the booking\'s return date, and any insurance claim payout for that vehicle, counted as of its payout date. Expense is maintenance cost (tolls excluded — a pass-through cost recovered from the customer, not money actually lost) plus any claim deductible paid on that vehicle, counted as of the date the damage was reported; Business Expense is any business expense attributed to that specific vehicle (e.g. Swipe card-processing fees traced back to its bookings) — shown as its own column. Profit is Revenue less both.',
+    description: 'The car\'s daily rate, travel fee, and admin fee, accrued day-by-day across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged. Plus any deposit amounts forfeited against that vehicle, counted as of the booking\'s return date, and any insurance claim payout for that vehicle, counted as of its payout date. Expense is maintenance cost (tolls excluded — a pass-through cost recovered from the customer, not money actually lost) plus any claim deductible paid on that vehicle, counted as of the date the damage was reported; Business Expense is Swipe card-processing fees attributed to that vehicle\'s bookings, spread across the same nights (and in the same proportion) as the revenue they\'re tied to rather than a single logged date — shown as its own column. Profit is Revenue less both.',
     hasDateRange: true,
     columns: [
       { key: 'vehicle', label: 'Vehicle' },
@@ -113,16 +113,15 @@ const REPORTS = {
         GROUP BY vehicle_id
       `).all(from, to).map(r => [r.vehicle_id, r.payout]));
       // Business expenses attributed to a specific vehicle (currently just
-      // Swipe card-processing fees traced through payment -> application ->
-      // assigned_vehicle_id) — kept as its own column rather than folded
-      // into Expense, so maintenance cost and absorbed business cost stay
-      // distinguishable at a glance.
-      const businessExpenseByVehicle = new Map(db.prepare(`
-        SELECT vehicle_id, COALESCE(SUM(amount), 0) as expense
-        FROM business_expenses
-        WHERE vehicle_id IS NOT NULL AND expense_date BETWEEN ? AND ?
-        GROUP BY vehicle_id
-      `).all(from, to).map(r => [r.vehicle_id, r.expense]));
+      // Swipe card-processing fees, spread across the same nights as the
+      // booking's revenue via getAccruedCardFeeDays — see db.js) — kept as
+      // its own column rather than folded into Expense, so maintenance cost
+      // and absorbed business cost stay distinguishable at a glance.
+      const businessExpenseByVehicle = new Map();
+      getAccruedCardFeeDays().forEach(d => {
+        if (d.date < from || d.date > to) return;
+        businessExpenseByVehicle.set(d.vehicle_id, (businessExpenseByVehicle.get(d.vehicle_id) || 0) + d.amount);
+      });
       const forfeitedByVehicle = new Map();
       getForfeitedDeposits().forEach(d => {
         if (!d.date || d.date < from || d.date > to) return;
@@ -144,7 +143,7 @@ const REPORTS = {
 
   revenue_by_time_period: {
     category: 'revenue', label: 'Revenue by Time Period',
-    description: 'Total revenue across every vehicle for the selected range — the car\'s daily rate, travel fee, and admin fee, accrued on the actual calendar days of the rental (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue), not the day a payment against it happened to be logged. Plus any security deposit amounts forfeited in range and any insurance claim payouts dated in range. Less maintenance expense logged in range (tolls excluded — a pass-through cost recovered from the customer), claim deductibles dated in range, and general business expenses (card processing fees absorbed, subscriptions, etc.) logged in range — the only report that also counts non-vehicle overhead against profit, since this one represents the whole business, not one car.',
+    description: 'Total revenue across every vehicle for the selected range — the car\'s daily rate, travel fee, and admin fee, accrued on the actual calendar days of the rental (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue), not the day a payment against it happened to be logged. Plus any security deposit amounts forfeited in range and any insurance claim payouts dated in range. Less maintenance expense logged in range (tolls excluded — a pass-through cost recovered from the customer), claim deductibles dated in range, general business expenses (subscriptions, absorbed fees entered by hand, etc.) logged in range, and Swipe card-processing fees spread across the same nights as the revenue they\'re tied to — the only report that also counts non-vehicle overhead against profit, since this one represents the whole business, not one car.',
     hasDateRange: true,
     columns: [
       { key: 'period', label: 'Period' },
@@ -176,10 +175,19 @@ const REPORTS = {
         SELECT COALESCE(SUM(deductible_amount), 0) as total FROM claims
         WHERE deductible_amount IS NOT NULL AND substr(damage_reported_at, 1, 10) BETWEEN ? AND ?
       `).get(from, to).total;
-      const businessExpense = db.prepare(`
+      // General overhead (subscriptions, absorbed fees entered by hand, etc.)
+      // is dated by its own expense_date as before; Swipe card-processing
+      // fees (payment_id set) are excluded here and pulled in separately
+      // below via getAccruedCardFeeDays, spread across the same nights as
+      // the booking's revenue instead of a single logged date.
+      const generalBusinessExpense = db.prepare(`
         SELECT COALESCE(SUM(amount), 0) as total FROM business_expenses
-        WHERE expense_date BETWEEN ? AND ?
+        WHERE payment_id IS NULL AND expense_date BETWEEN ? AND ?
       `).get(from, to).total;
+      const cardFeeExpense = getAccruedCardFeeDays()
+        .filter(d => d.date >= from && d.date <= to)
+        .reduce((sum, d) => sum + d.amount, 0);
+      const businessExpense = generalBusinessExpense + cardFeeExpense;
       // Card processing fees (a card payment's own surcharge) are a
       // separate, informational figure tied to when the payment actually
       // happened — not part of revenue-eligible amounts, just still shown
@@ -636,13 +644,11 @@ router.get('/revenue_by_vehicle/:vehicleId/bookings', requireAuth, (req, res) =>
     if (d.vehicle_id !== vehicleId || d.date < from || d.date > to) return;
     revenueByApp.set(d.application_id, (revenueByApp.get(d.application_id) || 0) + d.amount);
   });
-  const businessExpenseByApp = new Map(db.prepare(`
-    SELECT p.application_id, COALESCE(SUM(be.amount), 0) as expense
-    FROM business_expenses be
-    JOIN payments p ON p.id = be.payment_id
-    WHERE be.vehicle_id = ? AND be.expense_date BETWEEN ? AND ?
-    GROUP BY p.application_id
-  `).all(vehicleId, from, to).map(r => [r.application_id, r.expense]));
+  const businessExpenseByApp = new Map();
+  getAccruedCardFeeDays().forEach(d => {
+    if (d.vehicle_id !== vehicleId || d.date < from || d.date > to) return;
+    businessExpenseByApp.set(d.application_id, (businessExpenseByApp.get(d.application_id) || 0) + d.amount);
+  });
   const forfeitedByApp = new Map();
   getForfeitedDeposits().forEach(d => {
     if (d.vehicle_id !== vehicleId || !d.date || d.date < from || d.date > to) return;
