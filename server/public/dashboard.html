@@ -179,7 +179,7 @@ function monthLabel(ym) {
     ? ov.pendingBookingsList.map(p => `
         <div class="list-item">
           <div>${p.first_name} ${p.last_name}<div class="list-item__sub">Stage ${p.stage} of 8</div></div>
-          <div>${p.pickup_scheduled_at ? fmtDate(p.pickup_scheduled_at) : '—'}</div>
+          <div>${p.pickup_scheduled_at ? fmtDateOnly(p.pickup_scheduled_at) : '—'}</div>
         </div>
       `).join('')
     : `<div class="empty-state">${icon('clock', 32)}<span>No pending bookings right now</span></div>`;

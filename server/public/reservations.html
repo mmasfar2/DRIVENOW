@@ -1883,8 +1883,8 @@ function initNewReservationModal() {
           </div>
         </div>
         <div class="resv-review-panel__body">
-          <div class="resv-review-row"><span>Pickup</span><span>${fmtDate(form.pickup_scheduled_at)}</span></div>
-          <div class="resv-review-row"><span>Return</span><span>${fmtDate(form.rental_end_at)}</span></div>
+          <div class="resv-review-row"><span>Pickup</span><span>${fmtDateOnly(form.pickup_scheduled_at)}</span></div>
+          <div class="resv-review-row"><span>Return</span><span>${fmtDateOnly(form.rental_end_at)}</span></div>
           <div class="resv-review-row"><span>Duration</span><span>${days} days</span></div>
           <div class="resv-review-row"><span>Vehicle</span><span>${v ? `${v.year} ${v.make} ${v.model}` : '—'}</span></div>
           <div class="resv-review-row"><span>Customer</span><span>${form.first_name} ${form.last_name}</span></div>

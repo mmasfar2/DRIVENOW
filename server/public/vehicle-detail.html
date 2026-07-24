@@ -286,8 +286,8 @@ function renderBookingsTable() {
   body.innerHTML = bookings.length ? bookings.map(b => `
     <tr>
       <td>${b.applicant}</td>
-      <td>${b.pickup ? fmtDate(b.pickup) : '—'}</td>
-      <td>${b.dropoff ? fmtDate(b.dropoff) : '—'}</td>
+      <td>${b.pickup ? fmtDateOnly(b.pickup) : '—'}</td>
+      <td>${b.dropoff ? fmtDateOnly(b.dropoff) : '—'}</td>
       <td>${b.days || '—'}</td>
       <td>${fmtExact(b.revenue)}</td>
       <td>${fmtExact(b.outstanding)}</td>

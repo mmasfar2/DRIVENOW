@@ -179,7 +179,7 @@ function render() {
     <div class="info-row"><div class="info-row__label">City</div><div class="info-row__val">${customer.city || '—'}</div></div>
     <div class="info-row"><div class="info-row__label">State</div><div class="info-row__val">${customer.state || '—'}</div></div>
     <div class="info-row"><div class="info-row__label">ZIP Code</div><div class="info-row__val">${customer.zip_code || '—'}</div></div>
-    <div class="info-row"><div class="info-row__label">Date of Birth</div><div class="info-row__val">${customer.dob ? fmtDate(customer.dob) : '—'}</div></div>
+    <div class="info-row"><div class="info-row__label">Date of Birth</div><div class="info-row__val">${customer.dob ? fmtDateOnly(customer.dob) : '—'}</div></div>
     <div class="info-row"><div class="info-row__label">License Number</div><div class="info-row__val">${customer.license_number || '—'}</div></div>
   `;
 
