@@ -22,6 +22,11 @@
   .vd-stat-card__value { font-size: 1.4rem; font-weight: 800; margin-bottom: 4px; }
   .vd-stat-card__edit { display: flex; gap: 6px; align-items: center; }
   .vd-stat-card__edit input { padding: 6px 8px; border: 1.5px solid #e0e0e0; border-radius: 4px; font-family: inherit; width: 100%; }
+  .photo-thumb { width: 90px; height: 70px; object-fit: cover; border-radius: 4px; cursor: pointer; }
+  .photo-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+  .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; z-index: 100; cursor: zoom-out; }
+  .lightbox.open { display: flex; }
+  .lightbox img { max-width: 90vw; max-height: 90vh; border-radius: 6px; }
 </style>
 </head>
 <body>
@@ -204,6 +209,8 @@
 </div>
 </div>
 
+<div class="lightbox" id="lightbox" onclick="closeLightbox()"><img id="lightbox-img" src=""></div>
+
 <script src="js/admin-common.js"></script>
 <script>
 const id = new URLSearchParams(window.location.search).get('id');
@@ -290,14 +297,39 @@ function renderMaintenanceTable() {
   const body = document.getElementById('vd-maint-table-body');
   const records = vehicle.maintenance || [];
   body.innerHTML = records.length ? records.map(m => `
-    <tr>
+    <tr class="row-link" onclick="toggleMaintDetails(${m.id})">
       <td>${m.description}</td>
       <td>${m.category || '—'}</td>
       <td>${m.cost ? fmtMoney(m.cost) : '—'}</td>
       <td>${m.performed_at || '—'}</td>
-      <td><button class="btn btn-sm btn-outline" onclick="deleteMaintenance(${m.id})">Delete</button></td>
+      <td><button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); deleteMaintenance(${m.id})">Delete</button></td>
     </tr>
+    <tr id="maint-details-${m.id}" style="display:none;"><td colspan="5" style="background:var(--gray-light);"><div id="maint-details-content-${m.id}"></div></td></tr>
   `).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:24px;">No maintenance records yet.</td></tr>';
+}
+
+async function toggleMaintDetails(id) {
+  const row = document.getElementById(`maint-details-${id}`);
+  const isOpen = row.style.display !== 'none';
+  if (isOpen) { row.style.display = 'none'; return; }
+
+  const full = await api(`/api/maintenance/${id}`);
+  document.getElementById(`maint-details-content-${id}`).innerHTML = `
+    ${full.odometer_at_service ? `<div style="margin-bottom:10px;"><strong>Odometer at Service:</strong> ${Number(full.odometer_at_service).toLocaleString()} mi</div>` : ''}
+    ${full.notes ? `<div style="margin-bottom:10px;"><strong>Notes:</strong> ${full.notes}</div>` : ''}
+    <div class="photo-row">
+      ${full.photos.length ? full.photos.map(p => `<img class="photo-thumb" src="/uploads/${p.photo_path}" onclick="openLightbox('/uploads/${p.photo_path}')">`).join('') : '<span style="color:#888;font-size:0.85rem;">No photos attached.</span>'}
+    </div>
+  `;
+  row.style.display = 'table-row';
+}
+
+function openLightbox(src) {
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
 }
 
 function renderExpenseTable() {
