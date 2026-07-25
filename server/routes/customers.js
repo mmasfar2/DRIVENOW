@@ -70,6 +70,7 @@ function buildProfile(customer) {
 
   const tags = db.prepare('SELECT * FROM customer_tags WHERE customer_id = ? ORDER BY created_at ASC').all(customer.id);
   const insuranceRecords = db.prepare('SELECT * FROM insurance_records WHERE customer_id = ? ORDER BY type').all(customer.id);
+  const notes = db.prepare('SELECT * FROM customer_notes WHERE customer_id = ? ORDER BY created_at DESC').all(customer.id);
 
   return {
     ...customer,
@@ -85,6 +86,7 @@ function buildProfile(customer) {
     bookings,
     insurance_records: insuranceRecords,
     tags,
+    notes,
   };
 }
 
@@ -180,6 +182,22 @@ router.patch('/:id', requireAuth, (req, res) => {
   params.push(req.params.id);
   db.prepare(`UPDATE customers SET ${updates.join(', ')} WHERE id = ?`).run(...params);
   res.json({ ok: true });
+});
+
+// ── Customer notes (internal, VA/owner only) — a running timestamped log,
+// same shape as applications.js's booking_notes ──
+router.get('/:id/notes', requireAuth, (req, res) => {
+  const rows = db.prepare('SELECT * FROM customer_notes WHERE customer_id = ? ORDER BY created_at DESC').all(req.params.id);
+  res.json(rows);
+});
+
+router.post('/:id/notes', requireAuth, (req, res) => {
+  const { note } = req.body;
+  if (!note || !note.trim()) return res.status(400).json({ error: 'Note text is required' });
+  const customer = db.prepare('SELECT id FROM customers WHERE id = ?').get(req.params.id);
+  if (!customer) return res.status(404).json({ error: 'Not found' });
+  db.prepare('INSERT INTO customer_notes (customer_id, note) VALUES (?, ?)').run(req.params.id, note.trim());
+  res.status(201).json({ ok: true });
 });
 
 // Removes a client from the Clients list — for cleaning up duplicate/ghost

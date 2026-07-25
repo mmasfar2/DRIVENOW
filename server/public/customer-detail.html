@@ -111,8 +111,11 @@
 
       <div class="panel" style="margin-top:24px;box-shadow:none;border-style:dashed;">
         <div class="panel-title">Internal Notes</div>
-        <textarea id="cd-notes" rows="4" placeholder="Private notes visible only to your team…" style="width:100%;"></textarea>
-        <button class="btn btn-sm" id="cd-notes-save" style="margin-top:8px;">Save Note</button>
+        <textarea id="cd-notes" rows="3" placeholder="Private notes visible only to your team…" style="width:100%;"></textarea>
+        <div style="display:flex;justify-content:flex-end;margin:8px 0 16px;">
+          <button class="btn btn-sm" id="cd-notes-save">Save Note</button>
+        </div>
+        <div id="cd-notes-list"></div>
       </div>
 
       <div class="panel" style="margin-top:24px;box-shadow:none;border-style:dashed;">
@@ -237,8 +240,7 @@ function render() {
   `;
 
   renderTags();
-
-  document.getElementById('cd-notes').value = customer.internal_notes || '';
+  renderNotes();
 
   document.getElementById('cd-booking-count').textContent = `${customer.bookings.length} booking${customer.bookings.length === 1 ? '' : 's'}`;
   document.getElementById('cd-bookings').innerHTML = customer.bookings.length
@@ -256,6 +258,13 @@ function render() {
       </a>
     `).join('')
     : '<p class="rd-empty">No bookings yet</p>';
+}
+
+function renderNotes() {
+  const box = document.getElementById('cd-notes-list');
+  box.innerHTML = customer.notes.length
+    ? customer.notes.map(n => `<div class="rd-note">${n.note}<div class="rd-note__time">${fmtDate(n.created_at)}</div></div>`).join('')
+    : '<p class="rd-empty" style="padding:0;">No notes yet</p>';
 }
 
 function renderTags() {
@@ -293,16 +302,18 @@ document.getElementById('cd-tag-input').addEventListener('keydown', async (e) =>
 });
 
 document.getElementById('cd-notes-save').addEventListener('click', async () => {
-  const btn = document.getElementById('cd-notes-save');
+  const input = document.getElementById('cd-notes');
+  const val = input.value;
+  if (!val.trim()) return;
   try {
-    await api(`/api/customers/${customer.id}`, { method: 'PATCH', body: JSON.stringify({ internal_notes: document.getElementById('cd-notes').value }) });
+    await api(`/api/customers/${customer.id}/notes`, { method: 'POST', body: JSON.stringify({ note: val }) });
   } catch (err) {
     alert(err.message);
     return;
   }
-  const original = btn.textContent;
-  btn.textContent = 'Saved';
-  setTimeout(() => { btn.textContent = original; }, 1500);
+  input.value = '';
+  customer.notes = await api(`/api/customers/${customer.id}/notes`);
+  renderNotes();
 });
 
 document.getElementById('cd-blacklist-btn').addEventListener('click', async () => {

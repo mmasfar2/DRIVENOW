@@ -479,7 +479,30 @@ CREATE TABLE IF NOT EXISTS customer_tags (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (customer_id) REFERENCES customers(id)
 );
+
+-- A running, timestamped log (same shape as booking_notes) rather than the
+-- single internal_notes field it replaces in the UI — a front desk jotting
+-- something new shouldn't overwrite whatever the last person already wrote.
+CREATE TABLE IF NOT EXISTS customer_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id INTEGER NOT NULL,
+  note TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (customer_id) REFERENCES customers(id)
+);
 `);
+
+// One-time backfill: carry any pre-existing internal_notes text into the new
+// customer_notes log as that customer's first entry, so switching the UI
+// from a single field to a list doesn't make existing notes disappear.
+// Guarded on customer_notes being completely empty so it only ever runs
+// once — after the first real note is added (backfilled or new), this
+// block becomes a permanent no-op.
+if (db.prepare('SELECT COUNT(*) as c FROM customer_notes').get().c === 0) {
+  const legacyNotes = db.prepare("SELECT id, internal_notes FROM customers WHERE internal_notes IS NOT NULL AND trim(internal_notes) != ''").all();
+  const insertLegacyNote = db.prepare('INSERT INTO customer_notes (customer_id, note) VALUES (?, ?)');
+  legacyNotes.forEach(c => insertLegacyNote.run(c.id, c.internal_notes));
+}
 
 const customerCols = db.prepare("PRAGMA table_info(customers)").all().map(c => c.name);
 if (!customerCols.includes('city')) {
