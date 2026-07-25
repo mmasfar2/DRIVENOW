@@ -353,6 +353,16 @@ const maintenanceCols = db.prepare("PRAGMA table_info(vehicle_maintenance)").all
 if (!maintenanceCols.includes('category')) {
   db.exec('ALTER TABLE vehicle_maintenance ADD COLUMN category TEXT');
 }
+if (!maintenanceCols.includes('odometer_at_service')) {
+  // The odometer reading at the moment this specific service happened —
+  // distinct from vehicles.mileage (the vehicle's latest known reading,
+  // updated independently whenever someone punches in a fresh number). The
+  // Oil Change due-in-3,000-miles countdown is meant to reset only when an
+  // actual oil change is logged, not whenever mileage happens to get
+  // updated, so it has to anchor to this snapshot rather than to whatever
+  // vehicles.mileage says right now.
+  db.exec('ALTER TABLE vehicle_maintenance ADD COLUMN odometer_at_service REAL');
+}
 
 const businessExpenseCols = db.prepare("PRAGMA table_info(business_expenses)").all().map(c => c.name);
 if (!businessExpenseCols.includes('payment_id')) {
@@ -1027,6 +1037,45 @@ if (vehicleCount === 0) {
 // around to marking it resolved in the system. Every revenue figure reads
 // from this single query so a forfeiture can't show up in one place and not
 // another.
+// The most recent Oil Change record with an odometer reading attached, per
+// vehicle — the baseline the 3,000-mile-due countdown is measured from.
+// Deliberately anchored to this snapshot rather than to vehicles.mileage
+// (which changes independently, any time someone updates the current
+// reading) so the countdown only resets when an oil change is actually
+// logged, not on an unrelated mileage update.
+function getLastOilChangeByVehicle() {
+  const rows = db.prepare(`
+    SELECT vehicle_id, odometer_at_service, performed_at
+    FROM vehicle_maintenance
+    WHERE category = 'Oil Change' AND odometer_at_service IS NOT NULL
+    ORDER BY performed_at DESC, id DESC
+  `).all();
+  const map = new Map();
+  for (const r of rows) {
+    if (!map.has(r.vehicle_id)) map.set(r.vehicle_id, r);
+  }
+  return map;
+}
+
+const OIL_CHANGE_INTERVAL_MILES = 3000;
+
+// Attaches oil-change-due status to a vehicle row — shared by both the
+// fleet list and a single vehicle's detail page so the two can never
+// disagree on whether a car is due.
+function withOilChangeStatus(vehicle, lastOilChangeByVehicle) {
+  const last = lastOilChangeByVehicle.get(vehicle.id);
+  const milesSinceOilChange = last && vehicle.mileage != null
+    ? Math.round((Number(vehicle.mileage) - Number(last.odometer_at_service)) * 10) / 10
+    : null;
+  return {
+    ...vehicle,
+    last_oil_change_mileage: last ? last.odometer_at_service : null,
+    last_oil_change_at: last ? last.performed_at : null,
+    miles_since_oil_change: milesSinceOilChange,
+    oil_change_due: milesSinceOilChange != null && milesSinceOilChange >= OIL_CHANGE_INTERVAL_MILES,
+  };
+}
+
 function getForfeitedDeposits() {
   return db.prepare(`
     SELECT d.id, d.application_id, a.assigned_vehicle_id as vehicle_id, d.forfeited_amount, a.rental_end_at
@@ -1213,4 +1262,4 @@ function queueMessage(applicationId, channel, to, body) {
     .run(applicationId, channel, to, body);
 }
 
-module.exports = { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo, getForfeitedDeposits, getAccruedRevenueDays, getAccruedCardFeeDays };
+module.exports = { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo, getForfeitedDeposits, getAccruedRevenueDays, getAccruedCardFeeDays, getLastOilChangeByVehicle, withOilChangeStatus, OIL_CHANGE_INTERVAL_MILES };

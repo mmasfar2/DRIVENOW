@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { db, logUndo, getForfeitedDeposits, getAccruedRevenueDays } = require('../db');
+const { db, logUndo, getForfeitedDeposits, getAccruedRevenueDays, getLastOilChangeByVehicle, withOilChangeStatus } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
 const { computeRevenueEligible } = require('../billing');
@@ -35,8 +35,9 @@ router.get('/public', (req, res) => {
 
 router.get('/', requireAuth, (req, res) => {
   const rows = db.prepare('SELECT * FROM vehicles ORDER BY created_at DESC').all();
+  const lastOilChangeByVehicle = getLastOilChangeByVehicle();
   const withPhotos = rows.map(v => ({
-    ...v,
+    ...withOilChangeStatus(v, lastOilChangeByVehicle),
     photos: db.prepare('SELECT * FROM vehicle_photos WHERE vehicle_id = ? ORDER BY created_at ASC').all(v.id),
   }));
   res.json(withPhotos);
@@ -123,7 +124,7 @@ router.get('/:id', requireAuth, (req, res) => {
   const lastServiced = lastServicedRow ? lastServicedRow.performed_at : null;
 
   res.json({
-    ...vehicle,
+    ...withOilChangeStatus(vehicle, getLastOilChangeByVehicle()),
     photos,
     maintenance,
     businessExpenses,

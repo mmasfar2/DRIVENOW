@@ -34,10 +34,20 @@
       <div class="field"><label>Date Performed</label><input type="date" id="m-date"></div>
     </div>
     <div class="field"><label>Description</label><input type="text" id="m-desc" placeholder="Oil change, brake pad replacement, bumper damage repair, etc."></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+      <div class="field"><label>Category</label>
+        <select id="m-category">
+          <option value="">— Select —</option>
+          <option value="Oil Change">Oil Change</option>
+          <option value="Repair">Repair</option>
+          <option value="Inspection">Inspection</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
       <div class="field"><label>Cost ($)</label><input type="number" id="m-cost" step="0.01"></div>
-      <div class="field"><label>Photos (damage records, before/after, receipts)</label><input type="file" id="m-photos" accept="image/*" multiple></div>
+      <div class="field"><label>Odometer at Service</label><input type="number" id="m-odometer" placeholder="Miles"></div>
     </div>
+    <div class="field"><label>Photos (damage records, before/after, receipts)</label><input type="file" id="m-photos" accept="image/*" multiple></div>
     <div class="field"><label>Notes</label><textarea id="m-notes" rows="2"></textarea></div>
     <button class="btn" onclick="submitMaintenance()">Log Record</button>
   </div>
@@ -130,6 +140,8 @@ async function toggleDetails(id) {
 
   const full = await api(`/api/maintenance/${id}`);
   document.getElementById(`details-content-${id}`).innerHTML = `
+    ${full.category ? `<div style="margin-bottom:10px;"><strong>Category:</strong> ${full.category}</div>` : ''}
+    ${full.odometer_at_service ? `<div style="margin-bottom:10px;"><strong>Odometer at Service:</strong> ${Number(full.odometer_at_service).toLocaleString()} mi</div>` : ''}
     ${full.notes ? `<div style="margin-bottom:10px;"><strong>Notes:</strong> ${full.notes}</div>` : ''}
     <div class="photo-row">
       ${full.photos.length ? full.photos.map(p => `<img class="photo-thumb" src="/uploads/${p.photo_path}" onclick="openLightbox('/uploads/${p.photo_path}')">`).join('') : '<span style="color:#888;font-size:0.85rem;">No photos attached.</span>'}
@@ -146,7 +158,9 @@ async function submitMaintenance() {
   const formData = new FormData();
   formData.append('vehicle_id', vehicle_id);
   formData.append('description', description);
+  formData.append('category', document.getElementById('m-category').value);
   formData.append('cost', document.getElementById('m-cost').value);
+  formData.append('odometer_at_service', document.getElementById('m-odometer').value);
   formData.append('performed_at', document.getElementById('m-date').value);
   formData.append('notes', document.getElementById('m-notes').value);
   const photos = document.getElementById('m-photos').files;
@@ -156,7 +170,9 @@ async function submitMaintenance() {
   if (!res.ok) { alert('Failed to log maintenance record'); return; }
 
   document.getElementById('m-desc').value = '';
+  document.getElementById('m-category').value = '';
   document.getElementById('m-cost').value = '';
+  document.getElementById('m-odometer').value = '';
   document.getElementById('m-date').value = '';
   document.getElementById('m-notes').value = '';
   document.getElementById('m-photos').value = '';

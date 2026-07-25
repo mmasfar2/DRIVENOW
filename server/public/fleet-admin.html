@@ -112,7 +112,7 @@ function render() {
           style="width:56px;height:40px;object-fit:cover;border-radius:4px;background:#eee;${(v.photos || [])[0] ? '' : 'visibility:hidden;'}">
       </td>
       <td style="font-size:0.75rem;color:#888;">${v.stock_number || '—'}</td>
-      <td><strong>${v.year} ${v.make} ${v.model}</strong>${v.color ? `<br><span style="color:#888;font-size:0.8rem;">${v.color}</span>` : ''}</td>
+      <td><strong>${v.year} ${v.make} ${v.model}</strong>${v.oil_change_due ? ` <span class="badge badge-rejected">Oil Change Due</span>` : ''}${v.color ? `<br><span style="color:#888;font-size:0.8rem;">${v.color}</span>` : ''}</td>
       <td>${v.license_plate || '—'}</td>
       <td>$${v.weekly_rate}/wk</td>
       <td><span style="text-transform:capitalize;">${v.status}</span></td>

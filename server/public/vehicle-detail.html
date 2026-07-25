@@ -84,9 +84,14 @@
 
   <div id="vd-panel-maintenance" style="display:none;">
     <div class="vd-stat-row">
-      <div class="vd-stat-card vd-stat-card--solo">
+      <div class="vd-stat-card">
         <div class="vd-stat-card__label">Date Last Serviced</div>
         <div class="vd-stat-card__value" id="vd-last-serviced">—</div>
+      </div>
+      <div class="vd-stat-card">
+        <div class="vd-stat-card__label">Oil Change Status</div>
+        <div class="vd-stat-card__value" id="vd-oil-change-status">—</div>
+        <div class="cd-stat-sub" id="vd-oil-change-sub"></div>
       </div>
     </div>
     <div class="vd-stat-row">
@@ -130,9 +135,10 @@
           </select>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
         <div class="field"><label>Amount ($)</label><input type="number" id="vd-m-cost" step="0.01"></div>
         <div class="field"><label>Date Performed</label><input type="date" id="vd-m-date"></div>
+        <div class="field"><label>Odometer at Service</label><input type="number" id="vd-m-odometer" placeholder="Miles"></div>
       </div>
       <button class="btn" id="vd-m-submit">Log Record</button>
     </div>
@@ -234,6 +240,7 @@ function render() {
   document.getElementById('vd-f-notes').value = vehicle.notes || '';
 
   document.getElementById('vd-last-serviced').textContent = vehicle.lastServiced || '—';
+  renderOilChangeStatus();
   document.getElementById('vd-next-service-input').value = vehicle.next_service_at ? vehicle.next_service_at.slice(0, 10) : '';
   document.getElementById('vd-mileage-input').value = vehicle.mileage ?? '';
   document.getElementById('vd-maint-total').textContent = fmtExact(vehicle.maintenanceTotal);
@@ -251,6 +258,32 @@ function render() {
   renderBookingsTable();
 
   renderInspectionPhotos();
+}
+
+// The 3,000-mile countdown is anchored to the most recent Oil Change
+// record's odometer_at_service snapshot (see withOilChangeStatus in db.js) —
+// not to vehicle.mileage's own update history — so it only resets when an
+// actual oil change gets logged.
+function renderOilChangeStatus() {
+  const valueEl = document.getElementById('vd-oil-change-status');
+  const subEl = document.getElementById('vd-oil-change-sub');
+  if (vehicle.last_oil_change_mileage == null || vehicle.miles_since_oil_change == null) {
+    valueEl.textContent = '—';
+    valueEl.style.color = '';
+    subEl.textContent = 'No oil change logged yet';
+    return;
+  }
+  const milesSince = vehicle.miles_since_oil_change;
+  const baseline = Number(vehicle.last_oil_change_mileage).toLocaleString();
+  if (vehicle.oil_change_due) {
+    valueEl.textContent = 'DUE';
+    valueEl.style.color = '#c62828';
+    subEl.textContent = `${Math.round(milesSince).toLocaleString()} mi since last change (at ${baseline} mi)`;
+  } else {
+    valueEl.textContent = 'OK';
+    valueEl.style.color = '#2e7d32';
+    subEl.textContent = `${Math.round(3000 - milesSince).toLocaleString()} mi until due (last changed at ${baseline} mi)`;
+  }
 }
 
 function renderMaintenanceTable() {
@@ -375,11 +408,12 @@ document.getElementById('vd-m-submit').addEventListener('click', async () => {
   const cost = document.getElementById('vd-m-cost').value;
   const performed_at = document.getElementById('vd-m-date').value;
   const category = document.getElementById('vd-m-category').value;
+  const odometer_at_service = document.getElementById('vd-m-odometer').value;
   if (!description) { alert('Description is required'); return; }
   try {
     await api('/api/maintenance', {
       method: 'POST',
-      body: JSON.stringify({ vehicle_id: id, description, cost, performed_at, category }),
+      body: JSON.stringify({ vehicle_id: id, description, cost, performed_at, category, odometer_at_service }),
     });
   } catch (err) {
     alert(err.message);
@@ -389,6 +423,7 @@ document.getElementById('vd-m-submit').addEventListener('click', async () => {
   document.getElementById('vd-m-cost').value = '';
   document.getElementById('vd-m-date').value = '';
   document.getElementById('vd-m-category').value = '';
+  document.getElementById('vd-m-odometer').value = '';
   await load();
 });
 

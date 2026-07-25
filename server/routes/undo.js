@@ -27,8 +27,8 @@ router.post('/', requireAuth, (req, res) => {
   } else if (row.entity_type === 'maintenance_delete') {
     const { record, photos } = payload;
     db.prepare(`
-      INSERT INTO vehicle_maintenance (id, vehicle_id, description, cost, performed_at, notes, category, created_at)
-      VALUES (@id, @vehicle_id, @description, @cost, @performed_at, @notes, @category, @created_at)
+      INSERT INTO vehicle_maintenance (id, vehicle_id, description, cost, performed_at, notes, category, odometer_at_service, created_at)
+      VALUES (@id, @vehicle_id, @description, @cost, @performed_at, @notes, @category, @odometer_at_service, @created_at)
     `).run(record);
     const insPhoto = db.prepare('INSERT INTO maintenance_photos (id, maintenance_id, photo_path, caption, created_at) VALUES (?, ?, ?, ?, ?)');
     photos.forEach(p => insPhoto.run(p.id, p.maintenance_id, p.photo_path, p.caption, p.created_at));

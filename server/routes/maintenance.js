@@ -42,14 +42,14 @@ router.get('/:id', requireAuth, (req, res) => {
 });
 
 router.post('/', requireAuth, upload.array('photos', 10), (req, res) => {
-  const { vehicle_id, description, cost, performed_at, notes, category } = req.body;
+  const { vehicle_id, description, cost, performed_at, notes, category, odometer_at_service } = req.body;
   if (!vehicle_id || !description) {
     return res.status(400).json({ error: 'Vehicle and description are required' });
   }
   const result = db.prepare(`
-    INSERT INTO vehicle_maintenance (vehicle_id, description, cost, performed_at, notes, category)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(vehicle_id, description, cost || null, performed_at || null, notes || null, category || null);
+    INSERT INTO vehicle_maintenance (vehicle_id, description, cost, performed_at, notes, category, odometer_at_service)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(vehicle_id, description, cost || null, performed_at || null, notes || null, category || null, odometer_at_service || null);
 
   const maintenanceId = result.lastInsertRowid;
   const insertPhoto = db.prepare('INSERT INTO maintenance_photos (maintenance_id, photo_path) VALUES (?, ?)');
