@@ -164,7 +164,7 @@ function renderActionPanel() {
       <div class="field"><label>Assign Vehicle</label>
         <select id="quote-vehicle">
           <option value="">— Select vehicle —</option>
-          ${vehicles.filter(v => v.status === 'available' || v.id === app.assigned_vehicle_id).map(v => `<option value="${v.id}" data-rate="${v.weekly_rate}"${v.id === app.assigned_vehicle_id ? ' selected' : ''}>${v.year} ${v.make} ${v.model} — $${v.weekly_rate}/wk${v.status !== 'available' ? ' (currently assigned to this lead)' : ''}</option>`).join('')}
+          ${vehicles.filter(v => v.status === 'available' || v.id === app.assigned_vehicle_id).map(v => `<option value="${v.id}" data-rate="${v.weekly_rate}"${v.id === app.assigned_vehicle_id ? ' selected' : ''}>${v.year} ${v.make} ${v.model}${v.license_plate ? ` (${v.license_plate})` : ''} — $${v.weekly_rate}/wk${v.status !== 'available' ? ' (currently assigned to this lead)' : ''}</option>`).join('')}
         </select>
       </div>
       <div class="field"><label>Daily Rental Rate ($)</label><input type="number" id="quote-weekly" step="0.01"></div>

@@ -217,7 +217,7 @@ function renderClaimStep() {
   if (claimStep === 1) {
     body.innerHTML = vehicles.length ? vehicles.map(v => `
       <div class="claim-vehicle-option ${claimForm.vehicle_id === v.id ? 'selected' : ''}" data-id="${v.id}">
-        <div><strong>${v.year} ${v.make} ${v.model}</strong>${v.color ? ` (${v.color})` : ''}</div>
+        <div><strong>${v.year} ${v.make} ${v.model}</strong>${v.color ? ` (${v.color})` : ''}${v.license_plate ? ` — ${v.license_plate}` : ''}</div>
         <span class="badge badge-${v.status === 'available' ? 'available' : v.status === 'reserved' ? 'reserved' : v.status === 'rented' ? 'rented' : 'rejected'}">${v.status}</span>
       </div>
     `).join('') : '<p class="rd-empty">No vehicles on file</p>';

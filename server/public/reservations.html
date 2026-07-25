@@ -1573,7 +1573,7 @@ function initNewReservationModal() {
                 <div class="resv-vehicle-card ${form.assigned_vehicle_id === v.id ? 'selected' : ''}" data-id="${v.id}">
                   <div class="resv-vehicle-card__thumb">${v.photo_path ? `<img src="/uploads/${v.photo_path}">` : icon('car', 24)}</div>
                   <div>
-                    <div class="resv-vehicle-card__name">${v.year} ${v.make} ${v.model}</div>
+                    <div class="resv-vehicle-card__name">${v.year} ${v.make} ${v.model}${v.license_plate ? ` — ${v.license_plate}` : ''}</div>
                     <div class="resv-vehicle-card__sub">${v.notes || 'No additional notes'}</div>
                   </div>
                   <div class="resv-vehicle-card__right">
@@ -1881,7 +1881,7 @@ function initNewReservationModal() {
         <div class="resv-review-row"><span>Booking Source</span><span>Online</span></div>
         <div class="resv-review-row"><span>Customer</span><span>${form.first_name} ${form.last_name}</span></div>
         <div class="resv-review-row"><span>Contact</span><span>${form.phone} · ${displayEmail(form.email) || '—'}</span></div>
-        <div class="resv-review-row"><span>Vehicle</span><span>${v ? `${v.year} ${v.make} ${v.model}` : '—'}</span></div>
+        <div class="resv-review-row"><span>Vehicle</span><span>${v ? `${v.year} ${v.make} ${v.model}${v.license_plate ? ` — ${v.license_plate}` : ''}` : '—'}</span></div>
         <div class="resv-review-row"><span>Pickup</span><span>${form.pickup_scheduled_at}</span></div>
         <div class="resv-review-row"><span>Return</span><span>${form.rental_end_at}</span></div>
         <div class="resv-review-row"><span>Weekly Rate</span><span>${fmtExact(form.weekly_rate)}</span></div>
@@ -1908,7 +1908,7 @@ function initNewReservationModal() {
           <div class="resv-review-row"><span>Pickup</span><span>${fmtDateOnly(form.pickup_scheduled_at)}</span></div>
           <div class="resv-review-row"><span>Return</span><span>${fmtDateOnly(form.rental_end_at)}</span></div>
           <div class="resv-review-row"><span>Duration</span><span>${days} days</span></div>
-          <div class="resv-review-row"><span>Vehicle</span><span>${v ? `${v.year} ${v.make} ${v.model}` : '—'}</span></div>
+          <div class="resv-review-row"><span>Vehicle</span><span>${v ? `${v.year} ${v.make} ${v.model}${v.license_plate ? ` — ${v.license_plate}` : ''}` : '—'}</span></div>
           <div class="resv-review-row"><span>Customer</span><span>${form.first_name} ${form.last_name}</span></div>
         </div>
       </div>

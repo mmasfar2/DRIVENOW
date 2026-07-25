@@ -233,7 +233,7 @@ async function load() {
 
 function resetForm() {
   document.getElementById('df-vehicle').innerHTML = '<option value="">Select a vehicle</option>' +
-    vehicles.map(v => `<option value="${v.id}">${v.year} ${v.make} ${v.model}</option>`).join('');
+    vehicles.map(v => `<option value="${v.id}">${v.year} ${v.make} ${v.model}${v.license_plate ? ` — ${v.license_plate}` : ''}</option>`).join('');
   document.getElementById('df-service-type').innerHTML = '<option value="">Select service type</option>' +
     SERVICE_TYPE_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join('');
   document.getElementById('df-status').innerHTML = Object.entries(STATUS_LABELS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');

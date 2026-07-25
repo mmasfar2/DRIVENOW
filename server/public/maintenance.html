@@ -90,7 +90,7 @@ function closeLightbox() {
 
 async function loadVehicles() {
   vehicles = await api('/api/vehicles');
-  const opts = vehicles.map(v => `<option value="${v.id}">${v.year} ${v.make} ${v.model}</option>`).join('');
+  const opts = vehicles.map(v => `<option value="${v.id}">${v.year} ${v.make} ${v.model}${v.license_plate ? ` — ${v.license_plate}` : ''}</option>`).join('');
   document.getElementById('m-vehicle').innerHTML = opts;
   document.getElementById('filter-vehicle').innerHTML = '<option value="">All Vehicles</option>' + opts;
 }
