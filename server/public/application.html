@@ -190,82 +190,137 @@ function renderActionPanel() {
 }
 
 async function advanceToScreening() {
-  await api(`/api/applications/${id}`, { method: 'PATCH', body: JSON.stringify({}) });
+  try {
+    await api(`/api/applications/${id}`, { method: 'PATCH', body: JSON.stringify({}) });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   app.stage = 2;
   render();
 }
 async function submitScreening(decision) {
-  await api(`/api/applications/${id}/screening`, { method: 'POST', body: JSON.stringify({
-    license_valid: document.getElementById('chk-license').checked,
-    age_ok: document.getElementById('chk-age').checked,
-    address_match: document.getElementById('chk-address').checked,
-    vehicle_available: document.getElementById('chk-vehicle').checked,
-    notes: document.getElementById('screening-notes').value,
-    decision,
-  })});
+  try {
+    await api(`/api/applications/${id}/screening`, { method: 'POST', body: JSON.stringify({
+      license_valid: document.getElementById('chk-license').checked,
+      age_ok: document.getElementById('chk-age').checked,
+      address_match: document.getElementById('chk-address').checked,
+      vehicle_available: document.getElementById('chk-vehicle').checked,
+      notes: document.getElementById('screening-notes').value,
+      decision,
+    })});
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   load();
 }
 async function rejectScreening() {
   const reason = prompt('Reason for rejection:');
   if (reason === null) return;
-  await api(`/api/applications/${id}/screening`, { method: 'POST', body: JSON.stringify({
-    license_valid: document.getElementById('chk-license').checked,
-    age_ok: document.getElementById('chk-age').checked,
-    address_match: document.getElementById('chk-address').checked,
-    vehicle_available: document.getElementById('chk-vehicle').checked,
-    notes: document.getElementById('screening-notes').value,
-    decision: 'reject', rejection_reason: reason,
-  })});
+  try {
+    await api(`/api/applications/${id}/screening`, { method: 'POST', body: JSON.stringify({
+      license_valid: document.getElementById('chk-license').checked,
+      age_ok: document.getElementById('chk-age').checked,
+      address_match: document.getElementById('chk-address').checked,
+      vehicle_available: document.getElementById('chk-vehicle').checked,
+      notes: document.getElementById('screening-notes').value,
+      decision: 'reject', rejection_reason: reason,
+    })});
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   load();
 }
 async function submitBackgroundCheck() {
-  await api(`/api/applications/${id}/background-check`, { method: 'POST', body: JSON.stringify({
-    background_status: document.getElementById('bg-status').value,
-    background_notes: document.getElementById('bg-notes').value,
-  })});
+  try {
+    await api(`/api/applications/${id}/background-check`, { method: 'POST', body: JSON.stringify({
+      background_status: document.getElementById('bg-status').value,
+      background_notes: document.getElementById('bg-notes').value,
+    })});
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   load();
 }
 async function submitInsuranceQuote() {
-  await api(`/api/applications/${id}/insurance-quote`, { method: 'POST', body: JSON.stringify({
-    insurance_quote_amount: document.getElementById('insurance-amount').value,
-    insurance_notes: document.getElementById('insurance-notes').value,
-  })});
+  try {
+    await api(`/api/applications/${id}/insurance-quote`, { method: 'POST', body: JSON.stringify({
+      insurance_quote_amount: document.getElementById('insurance-amount').value,
+      insurance_notes: document.getElementById('insurance-notes').value,
+    })});
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   load();
 }
 async function submitQuote() {
-  await api(`/api/applications/${id}/quote`, { method: 'POST', body: JSON.stringify({
-    assigned_vehicle_id: document.getElementById('quote-vehicle').value || null,
-    weekly_rate: document.getElementById('quote-weekly').value ? Math.round(Number(document.getElementById('quote-weekly').value) * 7 * 100) / 100 : '',
-    total_due_at_pickup: document.getElementById('quote-total').value,
-  })});
+  try {
+    await api(`/api/applications/${id}/quote`, { method: 'POST', body: JSON.stringify({
+      assigned_vehicle_id: document.getElementById('quote-vehicle').value || null,
+      weekly_rate: document.getElementById('quote-weekly').value ? Math.round(Number(document.getElementById('quote-weekly').value) * 7 * 100) / 100 : '',
+      total_due_at_pickup: document.getElementById('quote-total').value,
+    })});
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   load();
 }
 async function sendAgreement() {
-  await api(`/api/applications/${id}/agreement/send`, { method: 'POST' });
+  try {
+    await api(`/api/applications/${id}/agreement/send`, { method: 'POST' });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   load();
 }
 async function markSigned() {
-  await api(`/api/applications/${id}/agreement/signed`, { method: 'POST' });
+  try {
+    await api(`/api/applications/${id}/agreement/signed`, { method: 'POST' });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   load();
 }
 async function sendInvoice() {
-  await api(`/api/applications/${id}/invoice`, { method: 'POST', body: JSON.stringify({
-    invoice_amount: document.getElementById('invoice-amount').value,
-  })});
+  try {
+    await api(`/api/applications/${id}/invoice`, { method: 'POST', body: JSON.stringify({
+      invoice_amount: document.getElementById('invoice-amount').value,
+    })});
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   load();
 }
 async function verifyPayment() {
-  await api(`/api/applications/${id}/payment`, { method: 'POST', body: JSON.stringify({
-    payment_amount: document.getElementById('payment-amount').value,
-    pickup_scheduled_at: document.getElementById('pickup-time').value || null,
-  })});
+  try {
+    await api(`/api/applications/${id}/payment`, { method: 'POST', body: JSON.stringify({
+      payment_amount: document.getElementById('payment-amount').value,
+      pickup_scheduled_at: document.getElementById('pickup-time').value || null,
+    })});
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   load();
 }
 
 document.getElementById('pl-send-invoice-btn').addEventListener('click', async () => {
   const amount = prompt('Invoice amount ($):', app.total_due_at_pickup || app.invoice_amount || '');
   if (amount === null || !amount) return;
-  await api(`/api/applications/${id}/invoice`, { method: 'POST', body: JSON.stringify({ invoice_amount: amount }) });
+  try {
+    await api(`/api/applications/${id}/invoice`, { method: 'POST', body: JSON.stringify({ invoice_amount: amount }) });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   load();
 });
 
@@ -284,7 +339,12 @@ document.getElementById('ap-submit').addEventListener('click', async () => {
   const amount = document.getElementById('ap-amount').value;
   const paid_at = document.getElementById('ap-date').value;
   if (!amount || Number(amount) <= 0) { alert('Enter a valid amount'); return; }
-  await api(`/api/applications/${id}/payments`, { method: 'POST', body: JSON.stringify({ amount, paid_at }) });
+  try {
+    await api(`/api/applications/${id}/payments`, { method: 'POST', body: JSON.stringify({ amount, paid_at }) });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   document.getElementById('add-payment-overlay').style.display = 'none';
   payments = await api(`/api/applications/${id}/payments`);
   renderPaymentLog();

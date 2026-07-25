@@ -612,7 +612,12 @@ function renderList() {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (!confirm('Delete this reservation? This cannot be undone from here.')) return;
-      await api(`/api/applications/${btn.dataset.id}`, { method: 'DELETE' });
+      try {
+        await api(`/api/applications/${btn.dataset.id}`, { method: 'DELETE' });
+      } catch (err) {
+        alert(err.message);
+        return;
+      }
       await reloadBookings();
     });
   });
@@ -766,7 +771,12 @@ function renderExtendCalendar() {
   });
   document.getElementById('ext-cal-apply').addEventListener('click', async () => {
     if (!extendNewReturn) return;
-    await api(`/api/applications/${extendBooking.id}`, { method: 'PATCH', body: JSON.stringify({ rental_end_at: extendNewReturn }) });
+    try {
+      await api(`/api/applications/${extendBooking.id}`, { method: 'PATCH', body: JSON.stringify({ rental_end_at: extendNewReturn }) });
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
     document.getElementById('extend-modal-overlay').style.display = 'none';
     const data = await api('/api/applications/bookings/all');
     bookings = data.bookings;
@@ -929,7 +939,11 @@ document.getElementById('payment-modal-overlay').addEventListener('click', (e) =
 document.getElementById('pl-send-invoice-btn').addEventListener('click', async () => {
   const amount = prompt('Invoice amount ($):', getInvoiceTotal() || '');
   if (amount === null || !amount) return;
-  await api(`/api/applications/${paymentBooking.id}/invoice`, { method: 'POST', body: JSON.stringify({ invoice_amount: amount }) });
+  try {
+    await api(`/api/applications/${paymentBooking.id}/invoice`, { method: 'POST', body: JSON.stringify({ invoice_amount: amount }) });
+  } catch (err) {
+    alert(err.message);
+  }
 });
 
 const DEFAULT_CARD_FEE_RATE = 3; // % — editable per payment
@@ -977,7 +991,12 @@ document.getElementById('ap-submit').addEventListener('click', async () => {
   if (!amount || Number(amount) <= 0) { alert('Enter a valid amount'); return; }
   const rate = Number(document.getElementById('ap-fee-rate').value) || 0;
   const processing_fee = method === 'card' ? Math.round(Number(amount) * (rate / 100) * 100) / 100 : 0;
-  await api(`/api/applications/${paymentBooking.id}/payments`, { method: 'POST', body: JSON.stringify({ amount, paid_at, method, processing_fee }) });
+  try {
+    await api(`/api/applications/${paymentBooking.id}/payments`, { method: 'POST', body: JSON.stringify({ amount, paid_at, method, processing_fee }) });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   document.getElementById('add-payment-overlay').style.display = 'none';
   paymentLog = await api(`/api/applications/${paymentBooking.id}/payments`);
   renderPaymentLog();

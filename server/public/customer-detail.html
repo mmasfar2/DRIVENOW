@@ -265,7 +265,12 @@ function renderTags() {
     : '<p class="rd-empty" style="padding:0;">No tags yet</p>';
   box.querySelectorAll('button').forEach(btn => {
     btn.addEventListener('click', async () => {
-      await api(`/api/customers/${customer.id}/tags/${btn.dataset.id}`, { method: 'DELETE' });
+      try {
+        await api(`/api/customers/${customer.id}/tags/${btn.dataset.id}`, { method: 'DELETE' });
+      } catch (err) {
+        alert(err.message);
+        return;
+      }
       customer.tags = customer.tags.filter(t => t.id !== Number(btn.dataset.id));
       renderTags();
     });
@@ -274,7 +279,12 @@ function renderTags() {
 
 document.getElementById('cd-tag-input').addEventListener('keydown', async (e) => {
   if (e.key !== 'Enter' || !e.target.value.trim()) return;
-  await api(`/api/customers/${customer.id}/tags`, { method: 'POST', body: JSON.stringify({ tag: e.target.value.trim() }) });
+  try {
+    await api(`/api/customers/${customer.id}/tags`, { method: 'POST', body: JSON.stringify({ tag: e.target.value.trim() }) });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   e.target.value = '';
   customer = customerId
     ? await api(`/api/customers/id/${encodeURIComponent(customerId)}`)
@@ -283,11 +293,25 @@ document.getElementById('cd-tag-input').addEventListener('keydown', async (e) =>
 });
 
 document.getElementById('cd-notes-save').addEventListener('click', async () => {
-  await api(`/api/customers/${customer.id}`, { method: 'PATCH', body: JSON.stringify({ internal_notes: document.getElementById('cd-notes').value }) });
+  const btn = document.getElementById('cd-notes-save');
+  try {
+    await api(`/api/customers/${customer.id}`, { method: 'PATCH', body: JSON.stringify({ internal_notes: document.getElementById('cd-notes').value }) });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  const original = btn.textContent;
+  btn.textContent = 'Saved';
+  setTimeout(() => { btn.textContent = original; }, 1500);
 });
 
 document.getElementById('cd-blacklist-btn').addEventListener('click', async () => {
-  await api(`/api/customers/${customer.id}`, { method: 'PATCH', body: JSON.stringify({ blacklisted: customer.blacklisted ? 0 : 1 }) });
+  try {
+    await api(`/api/customers/${customer.id}`, { method: 'PATCH', body: JSON.stringify({ blacklisted: customer.blacklisted ? 0 : 1 }) });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   await load();
 });
 
@@ -310,18 +334,23 @@ document.getElementById('cd-edit-btn').addEventListener('click', () => {
 });
 
 document.getElementById('cd-save-btn').addEventListener('click', async () => {
-  await api(`/api/customers/${customer.id}`, { method: 'PATCH', body: JSON.stringify({
-    first_name: document.getElementById('cd-f-first').value,
-    last_name: document.getElementById('cd-f-last').value,
-    phone: document.getElementById('cd-f-phone').value,
-    email: document.getElementById('cd-f-email').value || null,
-    address: document.getElementById('cd-f-address').value,
-    city: document.getElementById('cd-f-city').value,
-    state: document.getElementById('cd-f-state').value,
-    zip_code: document.getElementById('cd-f-zip').value,
-    dob: document.getElementById('cd-f-dob').value || null,
-    license_number: document.getElementById('cd-f-license').value,
-  })});
+  try {
+    await api(`/api/customers/${customer.id}`, { method: 'PATCH', body: JSON.stringify({
+      first_name: document.getElementById('cd-f-first').value,
+      last_name: document.getElementById('cd-f-last').value,
+      phone: document.getElementById('cd-f-phone').value,
+      email: document.getElementById('cd-f-email').value || null,
+      address: document.getElementById('cd-f-address').value,
+      city: document.getElementById('cd-f-city').value,
+      state: document.getElementById('cd-f-state').value,
+      zip_code: document.getElementById('cd-f-zip').value,
+      dob: document.getElementById('cd-f-dob').value || null,
+      license_number: document.getElementById('cd-f-license').value,
+    })});
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   document.getElementById('cd-contact-edit').style.display = 'none';
   document.getElementById('cd-contact-view').style.display = '';
   document.getElementById('cd-edit-btn').textContent = 'Edit';
@@ -335,21 +364,26 @@ document.getElementById('add-insurance-overlay').addEventListener('click', (e) =
   if (e.target.id === 'add-insurance-overlay') e.target.style.display = 'none';
 });
 document.getElementById('ai-submit').addEventListener('click', async () => {
-  await api('/api/insurance', {
-    method: 'POST',
-    body: JSON.stringify({
-      customer_id: customer.id,
-      type: document.getElementById('ai-type').value,
-      carrier: document.getElementById('ai-carrier').value,
-      protection_type: document.getElementById('ai-protection-type').value,
-      policy_number: document.getElementById('ai-policy-number').value,
-      agency_contact: document.getElementById('ai-agency-contact').value,
-      status: document.getElementById('ai-status').value,
-      last_verified_at: document.getElementById('ai-last-verified').value,
-      next_payment_date: document.getElementById('ai-next-payment').value,
-      notes: document.getElementById('ai-notes').value,
-    }),
-  });
+  try {
+    await api('/api/insurance', {
+      method: 'POST',
+      body: JSON.stringify({
+        customer_id: customer.id,
+        type: document.getElementById('ai-type').value,
+        carrier: document.getElementById('ai-carrier').value,
+        protection_type: document.getElementById('ai-protection-type').value,
+        policy_number: document.getElementById('ai-policy-number').value,
+        agency_contact: document.getElementById('ai-agency-contact').value,
+        status: document.getElementById('ai-status').value,
+        last_verified_at: document.getElementById('ai-last-verified').value,
+        next_payment_date: document.getElementById('ai-next-payment').value,
+        notes: document.getElementById('ai-notes').value,
+      }),
+    });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   document.getElementById('add-insurance-overlay').style.display = 'none';
   await load();
 });

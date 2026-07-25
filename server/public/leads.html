@@ -106,14 +106,26 @@ async function loadLeads() {
   document.querySelectorAll('.lead-reject').forEach(btn => {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
-      await api(`/api/applications/${btn.dataset.id}/reject-lead`, { method: 'POST' });
+      try {
+        await api(`/api/applications/${btn.dataset.id}/reject-lead`, { method: 'POST' });
+      } catch (err) {
+        alert(err.message || 'Could not reject this lead.');
+        btn.disabled = false;
+        return;
+      }
       await loadLeads();
     });
   });
   document.querySelectorAll('.lead-undo').forEach(btn => {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
-      await api(`/api/applications/${btn.dataset.id}/undo-lead-decision`, { method: 'POST' });
+      try {
+        await api(`/api/applications/${btn.dataset.id}/undo-lead-decision`, { method: 'POST' });
+      } catch (err) {
+        alert(err.message || 'Could not undo this decision.');
+        btn.disabled = false;
+        return;
+      }
       await loadLeads();
     });
   });

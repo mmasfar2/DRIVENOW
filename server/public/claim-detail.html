@@ -132,32 +132,42 @@ function render() {
 }
 
 document.getElementById('cld-save-btn').addEventListener('click', async () => {
-  await api(`/api/claims/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify({
-      status: document.getElementById('cld-f-status').value,
-      detailed_status: document.getElementById('cld-f-detailed-status').value,
-      incident_type: document.getElementById('cld-f-incident-type').value,
-      damage_reported_at: document.getElementById('cld-f-reported-at').value,
-      external_reference_id: document.getElementById('cld-f-ref').value,
-      event_source: document.getElementById('cld-f-source').value,
-      insurance_record_id: document.getElementById('cld-f-insurance').value,
-      assigned_to: document.getElementById('cld-f-assigned').value,
-      next_task: document.getElementById('cld-f-next-task').value,
-      damage_notes: document.getElementById('cld-f-notes').value,
-      vehicle_location: document.getElementById('cld-f-location').value,
-      deductible_amount: document.getElementById('cld-f-deductible').value,
-      max_out_of_pocket: document.getElementById('cld-f-max-oop').value,
-      insurance_payout: document.getElementById('cld-f-payout').value,
-      payout_date: document.getElementById('cld-f-payout-date').value,
-    }),
-  });
+  try {
+    await api(`/api/claims/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        status: document.getElementById('cld-f-status').value,
+        detailed_status: document.getElementById('cld-f-detailed-status').value,
+        incident_type: document.getElementById('cld-f-incident-type').value,
+        damage_reported_at: document.getElementById('cld-f-reported-at').value,
+        external_reference_id: document.getElementById('cld-f-ref').value,
+        event_source: document.getElementById('cld-f-source').value,
+        insurance_record_id: document.getElementById('cld-f-insurance').value,
+        assigned_to: document.getElementById('cld-f-assigned').value,
+        next_task: document.getElementById('cld-f-next-task').value,
+        damage_notes: document.getElementById('cld-f-notes').value,
+        vehicle_location: document.getElementById('cld-f-location').value,
+        deductible_amount: document.getElementById('cld-f-deductible').value,
+        max_out_of_pocket: document.getElementById('cld-f-max-oop').value,
+        insurance_payout: document.getElementById('cld-f-payout').value,
+        payout_date: document.getElementById('cld-f-payout-date').value,
+      }),
+    });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   await load();
 });
 
 document.getElementById('cld-delete-btn').addEventListener('click', async () => {
   if (!confirm('Delete this claim? You can undo this from the Undo button at the top of the page.')) return;
-  await api(`/api/claims/${id}`, { method: 'DELETE' });
+  try {
+    await api(`/api/claims/${id}`, { method: 'DELETE' });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   refreshUndoButton();
   window.location.href = 'claims.html';
 });

@@ -318,40 +318,55 @@ document.querySelectorAll('.rd-tab').forEach(tab => {
 
 document.getElementById('vd-details-save').addEventListener('click', async () => {
   const rateInput = document.getElementById('vd-f-rate').value;
-  await api(`/api/vehicles/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify({
-      stock_number: document.getElementById('vd-f-stock').value,
-      license_plate: document.getElementById('vd-f-plate').value,
-      vin: document.getElementById('vd-f-vin').value,
-      make: document.getElementById('vd-f-make').value,
-      model: document.getElementById('vd-f-model').value,
-      year: document.getElementById('vd-f-year').value,
-      color: document.getElementById('vd-f-color').value,
-      vehicle_class: document.getElementById('vd-f-class').value,
-      mileage: document.getElementById('vd-f-mileage').value,
-      purchase_mileage: document.getElementById('vd-f-purchase-mileage').value,
-      purchase_date: document.getElementById('vd-f-purchase-date').value,
-      purchase_price: document.getElementById('vd-f-purchase-price').value,
-      status: document.getElementById('vd-f-status').value,
-      weekly_rate: rateInput ? Math.round(Number(rateInput) * 7 * 100) / 100 : '',
-      fuel_type: document.getElementById('vd-f-fuel').value,
-      transmission: document.getElementById('vd-f-trans').value,
-      notes: document.getElementById('vd-f-notes').value,
-    }),
-  });
+  try {
+    await api(`/api/vehicles/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        stock_number: document.getElementById('vd-f-stock').value,
+        license_plate: document.getElementById('vd-f-plate').value,
+        vin: document.getElementById('vd-f-vin').value,
+        make: document.getElementById('vd-f-make').value,
+        model: document.getElementById('vd-f-model').value,
+        year: document.getElementById('vd-f-year').value,
+        color: document.getElementById('vd-f-color').value,
+        vehicle_class: document.getElementById('vd-f-class').value,
+        mileage: document.getElementById('vd-f-mileage').value,
+        purchase_mileage: document.getElementById('vd-f-purchase-mileage').value,
+        purchase_date: document.getElementById('vd-f-purchase-date').value,
+        purchase_price: document.getElementById('vd-f-purchase-price').value,
+        status: document.getElementById('vd-f-status').value,
+        weekly_rate: rateInput ? Math.round(Number(rateInput) * 7 * 100) / 100 : '',
+        fuel_type: document.getElementById('vd-f-fuel').value,
+        transmission: document.getElementById('vd-f-trans').value,
+        notes: document.getElementById('vd-f-notes').value,
+      }),
+    });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   await load();
 });
 
 document.getElementById('vd-next-service-save').addEventListener('click', async () => {
   const next_service_at = document.getElementById('vd-next-service-input').value;
-  await api(`/api/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify({ next_service_at }) });
+  try {
+    await api(`/api/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify({ next_service_at }) });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   await load();
 });
 
 document.getElementById('vd-mileage-save').addEventListener('click', async () => {
   const mileage = document.getElementById('vd-mileage-input').value;
-  await api(`/api/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify({ mileage }) });
+  try {
+    await api(`/api/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify({ mileage }) });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   await load();
 });
 
@@ -361,10 +376,15 @@ document.getElementById('vd-m-submit').addEventListener('click', async () => {
   const performed_at = document.getElementById('vd-m-date').value;
   const category = document.getElementById('vd-m-category').value;
   if (!description) { alert('Description is required'); return; }
-  await api('/api/maintenance', {
-    method: 'POST',
-    body: JSON.stringify({ vehicle_id: id, description, cost, performed_at, category }),
-  });
+  try {
+    await api('/api/maintenance', {
+      method: 'POST',
+      body: JSON.stringify({ vehicle_id: id, description, cost, performed_at, category }),
+    });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   document.getElementById('vd-m-desc').value = '';
   document.getElementById('vd-m-cost').value = '';
   document.getElementById('vd-m-date').value = '';
@@ -374,13 +394,23 @@ document.getElementById('vd-m-submit').addEventListener('click', async () => {
 
 async function deleteMaintenance(maintId) {
   if (!confirm('Delete this maintenance record?')) return;
-  await api(`/api/maintenance/${maintId}`, { method: 'DELETE' });
+  try {
+    await api(`/api/maintenance/${maintId}`, { method: 'DELETE' });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   await load();
 }
 
 async function deletePhoto(photoId) {
   if (!confirm('Remove this photo?')) return;
-  await api(`/api/vehicles/${id}/photo/${photoId}`, { method: 'DELETE' });
+  try {
+    await api(`/api/vehicles/${id}/photo/${photoId}`, { method: 'DELETE' });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   await load();
 }
 
@@ -389,7 +419,12 @@ document.getElementById('vd-inspection-upload-btn').addEventListener('click', as
   if (!input.files.length) { alert('Choose at least one photo'); return; }
   const formData = new FormData();
   Array.from(input.files).forEach(f => formData.append('photos', f));
-  await fetch(`/api/vehicles/${id}/photo`, { method: 'POST', body: formData });
+  const res = await fetch(`/api/vehicles/${id}/photo`, { method: 'POST', body: formData });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(data.error || 'Upload failed');
+    return;
+  }
   input.value = '';
   await load();
 });

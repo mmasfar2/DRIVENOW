@@ -131,25 +131,35 @@ function render() {
 }
 
 document.getElementById('dtd-save-btn').addEventListener('click', async () => {
-  await api(`/api/downtime/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify({
-      service_type: document.getElementById('dtd-f-service-type').value,
-      status: document.getElementById('dtd-f-status').value,
-      date_reported: document.getElementById('dtd-f-date-reported').value,
-      clearance_eta: document.getElementById('dtd-f-clearance-eta').value,
-      vendor: document.getElementById('dtd-f-vendor').value,
-      est_cost: document.getElementById('dtd-f-est-cost').value,
-      notes: document.getElementById('dtd-f-notes').value,
-      remove_from_availability: document.getElementById('dtd-f-remove-availability').checked,
-    }),
-  });
+  try {
+    await api(`/api/downtime/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        service_type: document.getElementById('dtd-f-service-type').value,
+        status: document.getElementById('dtd-f-status').value,
+        date_reported: document.getElementById('dtd-f-date-reported').value,
+        clearance_eta: document.getElementById('dtd-f-clearance-eta').value,
+        vendor: document.getElementById('dtd-f-vendor').value,
+        est_cost: document.getElementById('dtd-f-est-cost').value,
+        notes: document.getElementById('dtd-f-notes').value,
+        remove_from_availability: document.getElementById('dtd-f-remove-availability').checked,
+      }),
+    });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   await load();
 });
 
 document.getElementById('dtd-delete-btn').addEventListener('click', async () => {
   if (!confirm('Delete this downtime record? You can undo this from the Undo button at the top of the page.')) return;
-  await api(`/api/downtime/${id}`, { method: 'DELETE' });
+  try {
+    await api(`/api/downtime/${id}`, { method: 'DELETE' });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   refreshUndoButton();
   window.location.href = 'downtime.html';
 });

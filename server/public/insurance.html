@@ -229,20 +229,25 @@ document.getElementById('add-insurance-overlay').addEventListener('click', (e) =
 document.getElementById('ai-submit').addEventListener('click', async () => {
   const customer_id = document.getElementById('ai-customer').value;
   if (!customer_id) { alert('Select a customer'); return; }
-  await api('/api/insurance', {
-    method: 'POST',
-    body: JSON.stringify({
-      customer_id,
-      type: document.getElementById('ai-type').value,
-      carrier: document.getElementById('ai-carrier').value,
-      protection_type: document.getElementById('ai-protection-type').value,
-      policy_number: document.getElementById('ai-policy-number').value,
-      agency_contact: document.getElementById('ai-agency-contact').value,
-      status: document.getElementById('ai-status').value,
-      last_verified_at: document.getElementById('ai-last-verified').value,
-      next_payment_date: document.getElementById('ai-next-payment').value,
-    }),
-  });
+  try {
+    await api('/api/insurance', {
+      method: 'POST',
+      body: JSON.stringify({
+        customer_id,
+        type: document.getElementById('ai-type').value,
+        carrier: document.getElementById('ai-carrier').value,
+        protection_type: document.getElementById('ai-protection-type').value,
+        policy_number: document.getElementById('ai-policy-number').value,
+        agency_contact: document.getElementById('ai-agency-contact').value,
+        status: document.getElementById('ai-status').value,
+        last_verified_at: document.getElementById('ai-last-verified').value,
+        next_payment_date: document.getElementById('ai-next-payment').value,
+      }),
+    });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   document.getElementById('add-insurance-overlay').style.display = 'none';
   await load();
 });

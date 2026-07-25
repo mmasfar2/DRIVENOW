@@ -267,18 +267,23 @@ document.getElementById('dt-modal-submit').addEventListener('click', async () =>
   if (!service_type) { alert('Service type is required'); return; }
   if (!date_reported) { alert('Date reported is required'); return; }
 
-  await api('/api/downtime', {
-    method: 'POST',
-    body: JSON.stringify({
-      vehicle_id, service_type, date_reported,
-      status: document.getElementById('df-status').value,
-      clearance_eta: document.getElementById('df-clearance-eta').value,
-      vendor: document.getElementById('df-vendor').value,
-      est_cost: document.getElementById('df-est-cost').value,
-      notes: document.getElementById('df-notes').value,
-      remove_from_availability: document.getElementById('df-remove-availability').checked,
-    }),
-  });
+  try {
+    await api('/api/downtime', {
+      method: 'POST',
+      body: JSON.stringify({
+        vehicle_id, service_type, date_reported,
+        status: document.getElementById('df-status').value,
+        clearance_eta: document.getElementById('df-clearance-eta').value,
+        vendor: document.getElementById('df-vendor').value,
+        est_cost: document.getElementById('df-est-cost').value,
+        notes: document.getElementById('df-notes').value,
+        remove_from_availability: document.getElementById('df-remove-availability').checked,
+      }),
+    });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   document.getElementById('dt-modal-overlay').style.display = 'none';
   await load();
 });
