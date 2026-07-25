@@ -256,9 +256,21 @@ function todayStr() {
   return new Date().toLocaleDateString('en-CA', { timeZone: DISPLAY_TZ });
 }
 
+// Every timestamp column populated by CURRENT_TIMESTAMP (activity log,
+// notes, "Created", invoice/agreement sent-at, etc.) comes out of SQLite as
+// a bare 'YYYY-MM-DD HH:MM:SS' — genuinely UTC, but with no 'Z' or offset to
+// say so. `new Date(...)` treats a string with no zone marker as the
+// *viewer's own local time*, not UTC — so for Charlotte-based staff (whose
+// devices are already set to Eastern), parsing then reformatting with
+// timeZone: DISPLAY_TZ silently cancels out and just displays the raw UTC
+// clock reading, hours ahead of the real Eastern time. Rewriting the bare
+// string to explicit UTC (space -> 'T', append 'Z') before parsing fixes
+// that; a value that already carries a zone marker (ISO strings with 'Z' or
+// a +hh:mm offset) is left alone.
 function fmtDate(d) {
   if (!d) return '—';
-  return new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: DISPLAY_TZ });
+  const iso = /[zZ]|[+-]\d\d:?\d\d$/.test(d) ? d : d.replace(' ', 'T') + 'Z';
+  return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: DISPLAY_TZ });
 }
 
 // For calendar-date-only values (pickup/return dates, DOB, deposit collected
