@@ -233,6 +233,9 @@ if (!existingCols.includes('gas_level_out')) {
 if (!existingCols.includes('odometer_in')) {
   db.exec('ALTER TABLE applications ADD COLUMN odometer_in REAL');
 }
+if (!existingCols.includes('gas_level_in')) {
+  db.exec('ALTER TABLE applications ADD COLUMN gas_level_in TEXT');
+}
 if (!existingCols.includes('pickup_location')) {
   db.exec('ALTER TABLE applications ADD COLUMN pickup_location TEXT');
 }

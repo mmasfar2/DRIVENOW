@@ -793,15 +793,16 @@ router.post('/:id/revert-check-in', requireAuth, (req, res) => {
 // the booking's records intact and just marks it done. Odometer is optional
 // and this is always callable, not gated behind a prior stage. ──
 router.post('/:id/complete-rental', requireAuth, (req, res) => {
-  const { odometer_in } = req.body;
+  const { odometer_in, gas_level_in } = req.body;
   const id = req.params.id;
   const app = db.prepare('SELECT assigned_vehicle_id, status FROM applications WHERE id = ?').get(id);
   if (!app) return res.status(404).json({ error: 'Not found' });
 
   db.prepare(`
-    UPDATE applications SET status = 'completed', odometer_in = COALESCE(?, odometer_in), updated_at = CURRENT_TIMESTAMP
+    UPDATE applications SET status = 'completed', odometer_in = COALESCE(?, odometer_in),
+      gas_level_in = COALESCE(?, gas_level_in), updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
-  `).run(odometer_in || null, id);
+  `).run(odometer_in || null, gas_level_in || null, id);
   if (app.assigned_vehicle_id) {
     db.prepare("UPDATE vehicles SET status = 'available' WHERE id = ?").run(app.assigned_vehicle_id);
     // The vehicle's recorded mileage is only ever moved forward by an actual
@@ -811,7 +812,7 @@ router.post('/:id/complete-rental', requireAuth, (req, res) => {
       db.prepare('UPDATE vehicles SET mileage = ? WHERE id = ?').run(odometer_in, app.assigned_vehicle_id);
     }
   }
-  logActivity(id, 'Rental completed — vehicle checked back in and now available');
+  logActivity(id, `Rental completed — vehicle checked back in and now available${gas_level_in ? `, ${gas_level_in} tank` : ''}`);
   res.json({ ok: true });
 });
 
