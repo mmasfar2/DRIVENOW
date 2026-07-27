@@ -183,6 +183,15 @@ CREATE TABLE IF NOT EXISTS maintenance_photos (
   FOREIGN KEY (maintenance_id) REFERENCES vehicle_maintenance(id)
 );
 
+CREATE TABLE IF NOT EXISTS checkin_photos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  application_id INTEGER NOT NULL,
+  stage TEXT NOT NULL, -- checkout | checkin
+  photo_path TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (application_id) REFERENCES applications(id)
+);
+
 CREATE TABLE IF NOT EXISTS vehicle_photos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   vehicle_id INTEGER NOT NULL,

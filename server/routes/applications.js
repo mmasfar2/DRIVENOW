@@ -816,6 +816,32 @@ router.post('/:id/complete-rental', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── AUTHED: Check Out / Check In photos — condition photos tied to a
+// specific stage of this booking (not the vehicle's general gallery in
+// Fleet Management), so a dispute over damage can be checked against what
+// the car actually looked like at pickup vs. return. ──
+router.get('/:id/checkin-photos', requireAuth, (req, res) => {
+  res.json(db.prepare('SELECT * FROM checkin_photos WHERE application_id = ? ORDER BY created_at ASC').all(req.params.id));
+});
+
+router.post('/:id/checkin-photos', requireAuth, upload.array('photos', 20), (req, res) => {
+  const { stage } = req.body;
+  if (stage !== 'checkout' && stage !== 'checkin') return res.status(400).json({ error: 'stage must be "checkout" or "checkin"' });
+  const files = req.files && req.files.length ? req.files : (req.file ? [req.file] : []);
+  if (!files.length) return res.status(400).json({ error: 'No photo uploaded' });
+  const insert = db.prepare('INSERT INTO checkin_photos (application_id, stage, photo_path) VALUES (?, ?, ?)');
+  for (const file of files) insert.run(req.params.id, stage, file.filename);
+  res.json({ ok: true });
+});
+
+router.delete('/:id/checkin-photos/:photoId', requireAuth, (req, res) => {
+  const photo = db.prepare('SELECT * FROM checkin_photos WHERE id = ? AND application_id = ?').get(req.params.photoId, req.params.id);
+  if (!photo) return res.status(404).json({ error: 'Not found' });
+  logUndo('checkin_photo_delete', 'Removed check-in/check-out photo', photo);
+  db.prepare('DELETE FROM checkin_photos WHERE id = ? AND application_id = ?').run(req.params.photoId, req.params.id);
+  res.json({ ok: true });
+});
+
 // ── AUTHED: Delete a reservation/booking entirely ──
 router.delete('/:id', requireAuth, (req, res) => {
   const id = req.params.id;
@@ -827,6 +853,7 @@ router.delete('/:id', requireAuth, (req, res) => {
   const activity = db.prepare('SELECT * FROM activity_log WHERE application_id = ?').all(id);
   const messages = db.prepare('SELECT * FROM messages_outbox WHERE application_id = ?').all(id);
   const notes = db.prepare('SELECT * FROM booking_notes WHERE application_id = ?').all(id);
+  const checkinPhotos = db.prepare('SELECT * FROM checkin_photos WHERE application_id = ?').all(id);
   // Any swipe-linked business expenses tied to this booking's payments need
   // to go with them — otherwise they'd be left behind pointing at a
   // payment_id that no longer exists.
@@ -859,7 +886,7 @@ router.delete('/:id', requireAuth, (req, res) => {
   }
 
   logUndo('application_delete', `Removed reservation for ${application.first_name} ${application.last_name}`, {
-    application, payments, deposits, activity, messages, notes, customer, insuranceRecords, linkedExpenses,
+    application, payments, deposits, activity, messages, notes, checkinPhotos, customer, insuranceRecords, linkedExpenses,
   });
 
   if (application.assigned_vehicle_id) {
@@ -873,6 +900,7 @@ router.delete('/:id', requireAuth, (req, res) => {
   db.prepare('DELETE FROM activity_log WHERE application_id = ?').run(id);
   db.prepare('DELETE FROM messages_outbox WHERE application_id = ?').run(id);
   db.prepare('DELETE FROM booking_notes WHERE application_id = ?').run(id);
+  db.prepare('DELETE FROM checkin_photos WHERE application_id = ?').run(id);
   db.prepare('DELETE FROM applications WHERE id = ?').run(id);
 
   if (customer) {
