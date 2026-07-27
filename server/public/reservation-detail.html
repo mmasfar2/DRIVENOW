@@ -1281,7 +1281,7 @@ async function onStageClick(target) {
 // Pickup flow (records the Odometer Out reading) — opens under the "Check Out" pill.
 function openCheckOutModal() {
   document.getElementById('ci-odometer').value = booking.odometer_out ?? booking.vehicle_mileage ?? '';
-  document.getElementById('ci-gas-level').value = booking.gas_level_out || '';
+  document.getElementById('ci-gas-level').value = booking.gas_level_out || booking.vehicle_gas_level || '';
   document.getElementById('checkin-modal-overlay').style.display = 'flex';
 }
 document.getElementById('checkin-modal-close').addEventListener('click', () => {
@@ -1306,7 +1306,7 @@ document.getElementById('ci-submit').addEventListener('click', async () => {
 // Return flow (records the Odometer In reading) — opens under the "Check In" pill.
 function openCheckInModal() {
   document.getElementById('co-odometer').value = booking.odometer_in ?? booking.vehicle_mileage ?? '';
-  document.getElementById('co-gas-level').value = booking.gas_level_in || '';
+  document.getElementById('co-gas-level').value = booking.gas_level_in || booking.vehicle_gas_level || '';
   document.getElementById('co-prev-gas').textContent = booking.gas_level_out
     ? `Gas level at Check Out: ${booking.gas_level_out}`
     : 'No gas level was recorded at Check Out.';
