@@ -25,7 +25,18 @@
   </div>
 
   <div class="panel" style="padding:0;overflow-x:auto;">
-    <table>
+    <div style="padding:18px 22px 0;display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+      <select id="fleet-status-filter" style="font-family:inherit;font-weight:700;font-size:0.95rem;border:1.5px solid var(--gray-border);border-radius:4px;padding:9px 10px;background:#fff;">
+        <option value="">All Statuses</option>
+        <option value="available">Available</option>
+        <option value="reserved">Reserved</option>
+        <option value="rented">Rented</option>
+        <option value="maintenance">Maintenance</option>
+        <option value="sold">Sold</option>
+      </select>
+      <input id="fleet-search" placeholder="Search by make, model, plate, or stock #…" style="flex:1;min-width:220px;padding:10px 14px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;">
+    </div>
+    <table style="margin-top:14px;">
       <thead>
         <tr><th>Photo</th><th>S#</th><th>Vehicle</th><th>Plate Number</th><th>Weekly Rate</th><th>Status</th><th></th></tr>
       </thead>
@@ -104,8 +115,21 @@ async function load() {
 }
 
 function render() {
-  document.getElementById('fleet-panel-title').textContent = `Vehicles (${vehicles.length})`;
-  document.getElementById('fleet-table-body').innerHTML = vehicles.length ? vehicles.map(v => `
+  const statusFilter = document.getElementById('fleet-status-filter').value;
+  const search = document.getElementById('fleet-search').value.trim().toLowerCase();
+  const filtered = vehicles.filter(v => {
+    if (statusFilter && v.status !== statusFilter) return false;
+    if (search) {
+      const haystack = [v.stock_number, v.license_plate, v.vin, v.make, v.model, v.year, v.color]
+        .filter(Boolean).join(' ').toLowerCase();
+      if (!haystack.includes(search)) return false;
+    }
+    return true;
+  });
+
+  document.getElementById('fleet-panel-title').textContent =
+    filtered.length === vehicles.length ? `Vehicles (${vehicles.length})` : `Vehicles (${filtered.length} of ${vehicles.length})`;
+  document.getElementById('fleet-table-body').innerHTML = filtered.length ? filtered.map(v => `
     <tr style="cursor:pointer;" onclick="window.location.href='vehicle-detail.html?id=${v.id}'">
       <td>
         <img src="${(v.photos || [])[0] ? '/uploads/' + v.photos[0].photo_path : ''}" alt=""
@@ -118,7 +142,7 @@ function render() {
       <td><span style="text-transform:capitalize;">${v.status}</span></td>
       <td onclick="event.stopPropagation();"><button class="btn btn-sm btn-outline" onclick="removeVehicleFromRow(${v.id})">Remove</button></td>
     </tr>
-  `).join('') : '<tr><td colspan="7" style="text-align:center;color:#888;padding:32px;">No vehicles yet.</td></tr>';
+  `).join('') : `<tr><td colspan="7" style="text-align:center;color:#888;padding:32px;">${vehicles.length ? 'No vehicles match your search.' : 'No vehicles yet.'}</td></tr>`;
 }
 
 // Stock numbers are a plain sequential count (1, 2, 3...) — next one is just
@@ -231,6 +255,9 @@ async function removeVehicleFromRow(id) {
   await api(`/api/vehicles/${id}`, { method: 'DELETE' });
   load();
 }
+
+document.getElementById('fleet-status-filter').addEventListener('change', render);
+document.getElementById('fleet-search').addEventListener('input', render);
 
 document.getElementById('vehicle-modal-close').onclick = closeVehicleModal;
 document.getElementById('vehicle-overlay').onclick = (e) => { if (e.target.id === 'vehicle-overlay') closeVehicleModal(); };
