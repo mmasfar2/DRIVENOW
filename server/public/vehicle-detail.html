@@ -192,6 +192,15 @@
         <tbody id="vd-bookings-table-body"></tbody>
       </table>
     </div>
+
+    <div class="panel" style="padding:0;overflow-x:auto;">
+      <div class="panel-title" style="padding:18px 18px 0;">Insurance Claim Payouts</div>
+      <div class="page-sub" style="padding:0 18px 12px;">Money an insurer paid out on a claim against this vehicle — its own category, since it isn't tied to a booking. The claim's deductible is shown as its cost.</div>
+      <table>
+        <thead><tr><th>Claim</th><th>Incident</th><th>Payout Date</th><th>Payout</th><th>Deductible</th></tr></thead>
+        <tbody id="vd-claims-table-body"></tbody>
+      </table>
+    </div>
   </div>
 
   <div id="vd-panel-inspection" style="display:none;">
@@ -263,6 +272,7 @@ function render() {
   profitEl.textContent = fmtExact(vehicle.totalProfit);
   profitEl.style.color = vehicle.totalProfit < 0 ? '#c62828' : '';
   renderBookingsTable();
+  renderClaimPayoutsTable();
 
   renderInspectionPhotos();
 }
@@ -358,6 +368,20 @@ function renderBookingsTable() {
       <td>${fmtExact(b.outstanding)}</td>
     </tr>
   `).join('') : '<tr><td colspan="6" style="text-align:center;color:#888;padding:24px;">No rental history yet.</td></tr>';
+}
+
+function renderClaimPayoutsTable() {
+  const body = document.getElementById('vd-claims-table-body');
+  const payouts = vehicle.claimPayouts || [];
+  body.innerHTML = payouts.length ? payouts.map(c => `
+    <tr style="cursor:pointer;" onclick="window.location.href='claim-detail.html?id=${c.id}'">
+      <td>Claim #${c.id}</td>
+      <td>${c.incident_type || '—'}</td>
+      <td>${c.payout_date ? fmtDateOnly(c.payout_date) : '—'}</td>
+      <td>${fmtExact(c.insurance_payout)}</td>
+      <td>${c.deductible_amount != null ? fmtExact(c.deductible_amount) : '—'}</td>
+    </tr>
+  `).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:24px;">No insurance payouts recorded for this vehicle yet.</td></tr>';
 }
 
 function renderInspectionPhotos() {

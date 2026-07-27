@@ -108,14 +108,29 @@ router.get('/:id', requireAuth, (req, res) => {
     };
   });
 
-  const totalRevenue = Math.round(bookings.reduce((sum, b) => sum + b.revenue, 0) * 100) / 100;
+  // An insurance payout is money the vehicle actually earned back on a claim
+  // — counted as revenue, same as the Revenue by Vehicle report treats it.
+  // The deductible paid to file that claim is counted as an expense the same
+  // way, so this tab's Profit always matches that report's.
+  const claimPayouts = db.prepare(`
+    SELECT id, incident_type, damage_reported_at, payout_date, insurance_payout, deductible_amount
+    FROM claims
+    WHERE vehicle_id = ? AND insurance_payout IS NOT NULL
+    ORDER BY payout_date DESC
+  `).all(req.params.id);
+  const claimPayoutTotal = Math.round(claimPayouts.reduce((sum, c) => sum + Number(c.insurance_payout), 0) * 100) / 100;
+  const claimDeductibleTotal = Math.round((db.prepare(`
+    SELECT COALESCE(SUM(deductible_amount), 0) as total FROM claims WHERE vehicle_id = ? AND deductible_amount IS NOT NULL
+  `).get(req.params.id).total) * 100) / 100;
+
+  const totalRevenue = Math.round((bookings.reduce((sum, b) => sum + b.revenue, 0) + claimPayoutTotal) * 100) / 100;
   // Tolls are excluded from expense — they're a pass-through cost recovered
   // from the customer, not money actually lost on the vehicle (see
   // isTollRecord below; the same records still show up in the Maintenance
   // log and the dedicated Toll Report, just not dragging down Profit here).
   const maintenanceTotal = Math.round(maintenance.filter(m => !isTollRecord(m)).reduce((sum, m) => sum + (Number(m.cost) || 0), 0) * 100) / 100;
   const businessExpenseTotal = Math.round(businessExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0) * 100) / 100;
-  const totalExpense = Math.round((maintenanceTotal + businessExpenseTotal) * 100) / 100;
+  const totalExpense = Math.round((maintenanceTotal + businessExpenseTotal + claimDeductibleTotal) * 100) / 100;
   // Profit = revenue minus everything spent on the vehicle — both what it cost
   // to acquire (purchase price) and what's been spent on it since (maintenance).
   // Can go negative if the vehicle hasn't earned back what was put into it yet.
@@ -129,6 +144,9 @@ router.get('/:id', requireAuth, (req, res) => {
     maintenance,
     businessExpenses,
     bookings,
+    claimPayouts,
+    claimPayoutTotal,
+    claimDeductibleTotal,
     totalRevenue,
     totalExpense,
     maintenanceTotal,
