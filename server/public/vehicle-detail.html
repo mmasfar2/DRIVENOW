@@ -365,8 +365,8 @@ function renderInspectionPhotos() {
   const photos = vehicle.photos || [];
   box.innerHTML = photos.length ? photos.map(p => `
     <div class="vd-photo-box">
-      <img src="/uploads/${p.photo_path}" alt="">
-      <button class="vd-photo-del" onclick="deletePhoto(${p.id})" title="Remove photo">×</button>
+      <img src="/uploads/${p.photo_path}" alt="" onclick="openLightbox('/uploads/${p.photo_path}')" style="cursor:zoom-in;">
+      <button class="vd-photo-del" onclick="event.stopPropagation(); deletePhoto(${p.id})" title="Remove photo">×</button>
     </div>
   `).join('') : '<div style="color:#888;font-size:0.85rem;">No photos uploaded yet.</div>';
 }
