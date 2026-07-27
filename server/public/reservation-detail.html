@@ -68,7 +68,8 @@
         <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Odometer Out</div><div class="info-row__val" id="rd-odo-out"></div></div>
         <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Odometer In</div><div class="info-row__val" id="rd-odo-in"></div></div>
         <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Miles Driven</div><div class="info-row__val" id="rd-miles"></div></div>
-        <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Gas Level (Check In)</div><div class="info-row__val" id="rd-gas-out"></div></div>
+        <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Gas Level (Check Out)</div><div class="info-row__val" id="rd-gas-out"></div></div>
+        <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Gas Level (Check In)</div><div class="info-row__val" id="rd-gas-in"></div></div>
       </div>
       <div id="rd-charges"></div>
     </div>
@@ -310,6 +311,19 @@
     <div class="simple-modal__body">
       <div id="co-prev-gas" style="font-size:0.82rem;color:#444;margin-bottom:14px;padding:10px 12px;background:var(--gray-light);border-radius:6px;"></div>
       <div class="field"><label>Odometer In</label><input type="number" id="co-odometer" placeholder="Optional"></div>
+      <div class="field"><label>Gas Level In</label>
+        <select id="co-gas-level">
+          <option value="">Select gas level</option>
+          <option value="1/8">1/8</option>
+          <option value="1/4">1/4</option>
+          <option value="3/8">3/8</option>
+          <option value="1/2">1/2</option>
+          <option value="5/8">5/8</option>
+          <option value="3/4">3/4</option>
+          <option value="7/8">7/8</option>
+          <option value="Full">Full</option>
+        </select>
+      </div>
       <div style="font-size:0.8rem;color:#666;margin-bottom:14px;">This completes the rental, frees up the vehicle, and updates its recorded mileage.</div>
       <button class="btn btn-block" id="co-submit">Save &amp; Check In</button>
     </div>
@@ -405,6 +419,7 @@ function render() {
   document.getElementById('rd-miles').textContent = (booking.odometer_out != null && booking.odometer_in != null)
     ? `${(booking.odometer_in - booking.odometer_out).toLocaleString()} mi` : '—';
   document.getElementById('rd-gas-out').textContent = booking.gas_level_out || '—';
+  document.getElementById('rd-gas-in').textContent = booking.gas_level_in || '—';
 
   const weeklyRate = booking.weekly_rate || 0;
   const dailyRateExact = weeklyRate / 7;
@@ -1200,6 +1215,7 @@ document.getElementById('ci-submit').addEventListener('click', async () => {
 // Return flow (records the Odometer In reading) — opens under the "Check In" pill.
 function openCheckInModal() {
   document.getElementById('co-odometer').value = booking.odometer_in ?? booking.vehicle_mileage ?? '';
+  document.getElementById('co-gas-level').value = booking.gas_level_in || '';
   document.getElementById('co-prev-gas').textContent = booking.gas_level_out
     ? `Gas level at Check Out: ${booking.gas_level_out}`
     : 'No gas level was recorded at Check Out.';
@@ -1213,8 +1229,9 @@ document.getElementById('checkout-modal-overlay').addEventListener('click', (e) 
 });
 document.getElementById('co-submit').addEventListener('click', async () => {
   const odometer_in = document.getElementById('co-odometer').value;
+  const gas_level_in = document.getElementById('co-gas-level').value;
   try {
-    await api(`/api/applications/${id}/complete-rental`, { method: 'POST', body: JSON.stringify({ odometer_in }) });
+    await api(`/api/applications/${id}/complete-rental`, { method: 'POST', body: JSON.stringify({ odometer_in, gas_level_in }) });
   } catch (err) {
     alert(err.message);
     return;
