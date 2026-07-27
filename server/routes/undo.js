@@ -36,8 +36,11 @@ router.post('/', requireAuth, (req, res) => {
     const p = payload;
     db.prepare('INSERT INTO vehicle_photos (id, vehicle_id, photo_path, created_at) VALUES (?, ?, ?, ?)').run(p.id, p.vehicle_id, p.photo_path, p.created_at);
     db.prepare('UPDATE vehicles SET photo_path = ? WHERE id = ?').run(p.photo_path, p.vehicle_id);
+  } else if (row.entity_type === 'checkin_photo_delete') {
+    const p = payload;
+    db.prepare('INSERT INTO checkin_photos (id, application_id, stage, photo_path, created_at) VALUES (?, ?, ?, ?, ?)').run(p.id, p.application_id, p.stage, p.photo_path, p.created_at);
   } else if (row.entity_type === 'application_delete') {
-    const { application, payments, deposits, activity, messages, notes, customer, insuranceRecords, linkedExpenses } = payload;
+    const { application, payments, deposits, activity, messages, notes, checkinPhotos, customer, insuranceRecords, linkedExpenses } = payload;
     const cols = Object.keys(application);
     db.prepare(`
       INSERT INTO applications (${cols.join(', ')}) VALUES (${cols.map(c => `@${c}`).join(', ')})
@@ -62,6 +65,10 @@ router.post('/', requireAuth, (req, res) => {
     messages.forEach(m => insMessage.run(m.id, m.application_id, m.channel, m.to_value, m.body, m.status, m.created_at));
     const insNote = db.prepare('INSERT INTO booking_notes (id, application_id, note, created_at) VALUES (?, ?, ?, ?)');
     notes.forEach(n => insNote.run(n.id, n.application_id, n.note, n.created_at));
+    if (checkinPhotos && checkinPhotos.length) {
+      const insCheckinPhoto = db.prepare('INSERT INTO checkin_photos (id, application_id, stage, photo_path, created_at) VALUES (?, ?, ?, ?, ?)');
+      checkinPhotos.forEach(p => insCheckinPhoto.run(p.id, p.application_id, p.stage, p.photo_path, p.created_at));
+    }
     // Restore the customer profile and insurance records too, if this delete
     // cascaded to remove them (their only booking was the one just restored).
     if (customer) {

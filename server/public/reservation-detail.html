@@ -29,6 +29,17 @@
 }
 .rd-return-menu .resv-cal__month-head { font-size: 0.85rem; }
 .rd-return-menu .resv-cal__nav { padding: 2px 6px; }
+
+.vd-photo-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.vd-photo-box { position: relative; width: 140px; height: 100px; }
+.vd-photo-box img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; background: #eee; cursor: zoom-in; }
+.vd-photo-box .vd-photo-del {
+  position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%;
+  border: none; background: #c62828; color: #fff; font-size: 12px; line-height: 20px; cursor: pointer; padding: 0;
+}
+.lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; z-index: 100; cursor: zoom-out; }
+.lightbox.open { display: flex; }
+.lightbox img { max-width: 90vw; max-height: 90vh; border-radius: 6px; }
 </style>
 </head>
 <body>
@@ -145,7 +156,26 @@
   </div>
 
   <div id="rd-panel-inspection" style="display:none;">
-    <div class="panel"><div class="panel-title">Inspection</div><p class="rd-empty">Pickup/return vehicle condition reports will appear here.</p></div>
+    <div class="panel">
+      <div class="panel-title">Check Out Photos</div>
+      <div style="font-size:0.82rem;color:#666;margin-bottom:14px;">Vehicle condition when it left the lot.</div>
+      <div class="vd-photo-grid" id="rd-checkout-photos"></div>
+      <div class="field">
+        <label>Add Photos</label>
+        <input id="rd-checkout-photo-upload" type="file" accept="image/*" capture="environment" multiple>
+        <button class="btn btn-sm" id="rd-checkout-photo-upload-btn" style="margin-top:8px;">Upload</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Check In Photos</div>
+      <div style="font-size:0.82rem;color:#666;margin-bottom:14px;">Vehicle condition when it came back.</div>
+      <div class="vd-photo-grid" id="rd-checkin-photos"></div>
+      <div class="field">
+        <label>Add Photos</label>
+        <input id="rd-checkin-photo-upload" type="file" accept="image/*" capture="environment" multiple>
+        <button class="btn btn-sm" id="rd-checkin-photo-upload-btn" style="margin-top:8px;">Upload</button>
+      </div>
+    </div>
   </div>
 
   <div id="rd-panel-documents" style="display:none;">
@@ -316,6 +346,8 @@
   </div>
 </div>
 
+<div class="lightbox" id="lightbox" onclick="closeLightbox()"><img id="lightbox-img" src=""></div>
+
 <script src="js/admin-common.js"></script>
 <script>
 const id = new URLSearchParams(window.location.search).get('id');
@@ -343,17 +375,76 @@ function balanceDisplay(n) {
 }
 
 let vehiclePhotos = [];
+let checkinPhotos = [];
 
 let insuranceRecords = [];
 
 async function load() {
   booking = await api(`/api/applications/${id}/detail`);
   vehiclePhotos = booking.vehicle_id ? await api(`/api/vehicles/${booking.vehicle_id}/photos`) : [];
+  checkinPhotos = await api(`/api/applications/${id}/checkin-photos`);
   insuranceRecords = booking.customer_id
     ? await api(`/api/insurance/by-customer-id/${booking.customer_id}`)
     : (booking.email ? await api(`/api/insurance/by-customer-email/${encodeURIComponent(booking.email)}`) : []);
   render();
+  renderCheckinPhotos();
 }
+
+function openLightbox(src) {
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+}
+
+function renderCheckinPhotos() {
+  const sections = [
+    { stage: 'checkout', box: 'rd-checkout-photos' },
+    { stage: 'checkin', box: 'rd-checkin-photos' },
+  ];
+  sections.forEach(({ stage, box }) => {
+    const el = document.getElementById(box);
+    const photos = checkinPhotos.filter(p => p.stage === stage);
+    el.innerHTML = photos.length ? photos.map(p => `
+      <div class="vd-photo-box">
+        <img src="/uploads/${p.photo_path}" onclick="openLightbox('/uploads/${p.photo_path}')">
+        <button class="vd-photo-del" onclick="deleteCheckinPhoto(${p.id})" title="Remove photo">×</button>
+      </div>
+    `).join('') : '<div style="color:#888;font-size:0.85rem;">No photos uploaded yet.</div>';
+  });
+}
+
+async function deleteCheckinPhoto(photoId) {
+  if (!confirm('Remove this photo?')) return;
+  try {
+    await api(`/api/applications/${id}/checkin-photos/${photoId}`, { method: 'DELETE' });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  checkinPhotos = await api(`/api/applications/${id}/checkin-photos`);
+  renderCheckinPhotos();
+}
+
+async function uploadCheckinPhotos(stage, inputId) {
+  const input = document.getElementById(inputId);
+  if (!input.files.length) { alert('Choose at least one photo'); return; }
+  const formData = new FormData();
+  Array.from(input.files).forEach(f => formData.append('photos', f));
+  formData.append('stage', stage);
+  const res = await fetch(`/api/applications/${id}/checkin-photos`, { method: 'POST', body: formData });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(data.error || 'Upload failed');
+    return;
+  }
+  input.value = '';
+  checkinPhotos = await api(`/api/applications/${id}/checkin-photos`);
+  renderCheckinPhotos();
+}
+document.getElementById('rd-checkout-photo-upload-btn').addEventListener('click', () => uploadCheckinPhotos('checkout', 'rd-checkout-photo-upload'));
+document.getElementById('rd-checkin-photo-upload-btn').addEventListener('click', () => uploadCheckinPhotos('checkin', 'rd-checkin-photo-upload'));
 
 const INS_TYPE_LABELS = { our_policy: 'Our Policies', private: 'Private' };
 function renderInsurance() {
