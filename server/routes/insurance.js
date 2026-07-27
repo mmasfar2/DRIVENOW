@@ -116,7 +116,7 @@ router.get('/by-customer-id/:id', requireAuth, (req, res) => {
 
 router.get('/:id', requireAuth, (req, res) => {
   const row = db.prepare(`
-    SELECT ir.*, c.first_name, c.last_name, c.email, c.phone
+    SELECT ir.*, c.first_name, c.last_name, c.email, c.phone, c.dob, c.address, c.city, c.state, c.zip_code
     FROM insurance_records ir JOIN customers c ON c.id = ir.customer_id
     WHERE ir.id = ?
   `).get(req.params.id);

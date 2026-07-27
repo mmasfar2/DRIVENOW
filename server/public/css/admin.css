@@ -74,35 +74,37 @@ a { text-decoration: none; color: inherit; }
 .sidebar__user { font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-bottom: 10px; }
 .main-content { margin-left: 230px; flex: 1; min-width: 0; }
 
-@media (max-width: 900px) {
-  /* Without this, .admin-layout's default row direction lets the nav bar's
-     full content width (every top-level link, unwrapped) force the whole
-     layout wider than the viewport instead of scrolling within its own bar
-     — column stacks the nav bar above the page and caps both to 100% width. */
-  .admin-layout { flex-direction: column; }
-  #sidebar-root { min-width: 0; }
-  .sidebar { width: 100%; height: auto; min-height: 0; position: relative; flex-direction: row; align-items: center; padding: 12px 16px; overflow-x: auto; min-width: 0; }
-  .sidebar__logo { padding: 0 16px 0 0; }
-  .sidebar__nav { display: flex; overflow: visible; min-width: 0; }
-  .sidebar__nav a { padding: 10px 14px; border-left: none; border-bottom: 3px solid transparent; white-space: nowrap; }
-  .sidebar__nav a.active { border-left-color: transparent; border-bottom-color: #fff; }
-  .sidebar__footer { border-top: none; padding: 0 0 0 16px; }
-  .main-content { margin-left: 0; min-width: 0; }
+.sidebar-topbar { display: none; }
+.sidebar-backdrop { display: none; }
 
-  /* An expanded group's subnav is a vertical list (see base .sidebar__subnav)
-     that's fine nested inside a vertical sidebar, but inline here it would
-     stack inside a horizontal nav row and balloon the whole bar's height —
-     float it as a dropdown under its toggle instead, same idea as the
-     Reservations list dropdown elsewhere in this file. */
-  .sidebar__nav-item { position: relative; }
-  .sidebar__subnav {
-    position: absolute; top: 100%; left: 0; z-index: 20; min-width: 200px;
-    background: var(--black); border-radius: 0 0 6px 6px; box-shadow: 0 8px 18px rgba(0,0,0,0.25); padding: 6px 0;
+@media (max-width: 900px) {
+  .sidebar-topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--black); color: #fff; padding: 14px 16px;
+    position: fixed; top: 0; left: 0; right: 0; z-index: 20; height: 52px;
   }
-  .sidebar__sublink { padding: 10px 16px; white-space: nowrap; }
+  .sidebar-topbar__logo { font-size: 1.15rem; font-weight: 900; }
+  .sidebar-topbar__logo span { opacity: 0.4; }
+  .sidebar-topbar__burger { background: none; border: none; color: #fff; font-size: 1.5rem; line-height: 1; cursor: pointer; padding: 4px 8px; }
+
+  .sidebar {
+    width: 260px; max-width: 82vw; transform: translateX(-100%);
+    transition: transform 0.25s ease; z-index: 30;
+  }
+  .sidebar.is-open { transform: translateX(0); }
+
+  .sidebar-backdrop.is-open {
+    display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 25;
+  }
+
+  .main-content { margin-left: 0; margin-top: 52px; width: 100%; }
 }
 
 .page { max-width: 1280px; margin: 0 auto; padding: 32px 24px 80px; }
+
+@media (max-width: 900px) {
+  .page { padding: 20px 16px 60px; }
+}
 .page-title { font-size: 2rem; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.02em; }
 .page-sub { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 32px; }
 
@@ -135,6 +137,10 @@ a { text-decoration: none; color: inherit; }
 
 /* Tables */
 table { width: 100%; border-collapse: collapse; }
+
+@media (max-width: 900px) {
+  table:not(.resv-table) { display: block; overflow-x: auto; white-space: nowrap; }
+}
 th { text-align: left; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); padding: 10px 12px; border-bottom: 2px solid var(--gray-border); }
 td { padding: 12px; border-bottom: 1px solid var(--gray-border); font-size: 0.88rem; }
 tr:hover td { background: var(--gray-light); }
@@ -315,4 +321,8 @@ tr:hover td { background: var(--gray-light); }
 @media (max-width: 900px) {
   .split-grid { grid-template-columns: 1fr; }
   .action-tiles { grid-template-columns: 1fr; }
+  .rd-cols { grid-template-columns: 1fr; }
+  .rd-summary-grid { grid-template-columns: 1fr 1fr; }
+  .resv-cal__grid { flex-direction: column; }
+  #global-undo-wrap { top: auto !important; bottom: 16px !important; right: 16px !important; left: 16px !important; }
 }

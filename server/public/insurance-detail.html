@@ -32,6 +32,11 @@
       <div class="info-row"><div class="info-row__label">Name</div><div class="info-row__val" id="ind-cust-name"></div></div>
       <div class="info-row"><div class="info-row__label">Email</div><div class="info-row__val" id="ind-cust-email"></div></div>
       <div class="info-row"><div class="info-row__label">Phone</div><div class="info-row__val" id="ind-cust-phone"></div></div>
+      <div class="info-row"><div class="info-row__label">Date of Birth</div><div class="info-row__val" id="ind-cust-dob"></div></div>
+      <div class="info-row"><div class="info-row__label">Address</div><div class="info-row__val" id="ind-cust-address"></div></div>
+      <div class="info-row"><div class="info-row__label">City</div><div class="info-row__val" id="ind-cust-city"></div></div>
+      <div class="info-row"><div class="info-row__label">State</div><div class="info-row__val" id="ind-cust-state"></div></div>
+      <div class="info-row"><div class="info-row__label">ZIP Code</div><div class="info-row__val" id="ind-cust-zip"></div></div>
     </div>
 
     <div class="panel">
@@ -103,6 +108,11 @@ function render() {
   document.getElementById('ind-cust-name').innerHTML = `<a href="customer-detail.html?id=${record.customer_id}" style="color:inherit;">${record.first_name} ${record.last_name}</a>`;
   document.getElementById('ind-cust-email').textContent = record.email || '—';
   document.getElementById('ind-cust-phone').textContent = record.phone || '—';
+  document.getElementById('ind-cust-dob').textContent = record.dob ? fmtDateOnly(record.dob) : '—';
+  document.getElementById('ind-cust-address').textContent = record.address || '—';
+  document.getElementById('ind-cust-city').textContent = record.city || '—';
+  document.getElementById('ind-cust-state').textContent = record.state || '—';
+  document.getElementById('ind-cust-zip').textContent = record.zip_code || '—';
 
   document.getElementById('ind-f-type').value = record.type;
   document.getElementById('ind-f-carrier').value = record.carrier || '';

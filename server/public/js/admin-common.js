@@ -57,7 +57,12 @@ function renderSidebar(activeKey) {
   const links = getOrderedSidebarLinks();
   const isGroupActive = (l) => l.key === activeKey || (l.children && l.children.some(c => c.key === activeKey));
   root.innerHTML = `
-    <div class="sidebar">
+    <div class="sidebar-topbar" id="sidebar-topbar">
+      <div class="sidebar-topbar__logo">Drive<span>Now</span></div>
+      <button type="button" class="sidebar-topbar__burger" id="sidebar-burger" aria-label="Menu">☰</button>
+    </div>
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+    <div class="sidebar" id="sidebar-panel">
       <div class="sidebar__logo">Drive<span>Now</span></div>
       <div class="sidebar__nav" id="sidebar-nav">
         ${links.map(l => `
@@ -85,7 +90,25 @@ function renderSidebar(activeKey) {
   `;
   initSidebarDragReorder();
   initSidebarToggles();
+  initMobileSidebarToggle();
   ensureUndoButton();
+}
+
+function initMobileSidebarToggle() {
+  const burger = document.getElementById('sidebar-burger');
+  const panel = document.getElementById('sidebar-panel');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  if (!burger || !panel || !backdrop) return;
+  const closeDrawer = () => {
+    panel.classList.remove('is-open');
+    backdrop.classList.remove('is-open');
+  };
+  burger.addEventListener('click', () => {
+    panel.classList.toggle('is-open');
+    backdrop.classList.toggle('is-open');
+  });
+  backdrop.addEventListener('click', closeDrawer);
+  panel.querySelectorAll('.sidebar__nav a').forEach(a => a.addEventListener('click', closeDrawer));
 }
 
 function initSidebarToggles() {
