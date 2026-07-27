@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Resources & Earnings Calculator — DriveNow Charlotte, NC</title>
-  <meta name="description" content="Calculate your weekly and monthly net earnings as a gig driver in Charlotte. Factor in DriveNow rental costs, gas, and expenses.">
+  <title>Resources & Earnings Calculator — DriveNow</title>
+  <meta name="description" content="Calculate your weekly and monthly net earnings as a gig driver. Factor in DriveNow rental costs, gas, and expenses.">
+  <script src="js/config.js"></script>
   <link rel="stylesheet" href="css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -36,7 +37,7 @@
   <div class="container">
     <div class="tag">Resources</div>
     <h1>Know Your Numbers.</h1>
-    <p>Use our earnings calculator to see exactly what you'll take home driving with a DriveNow rental in Charlotte.</p>
+    <p>Use our earnings calculator to see exactly what you'll take home driving with a DriveNow rental in <span data-biz="city"></span>.</p>
   </div>
 </div>
 
@@ -151,14 +152,14 @@
       <div class="resource-card">
         <div class="resource-card__icon">🔴</div>
         <h3>DoorDash Driver Tips</h3>
-        <p>Maximize your DoorDash earnings in Charlotte. The right hours, best zones, and how to stack orders to increase your hourly rate significantly.</p>
+        <p>Maximize your DoorDash earnings in <span data-biz="city"></span>. The right hours, best zones, and how to stack orders to increase your hourly rate significantly.</p>
         <a href="contact.html" style="display:inline-block;margin-top:16px;font-size:0.82rem;font-weight:700;letter-spacing:0.06em;text-decoration:underline;">Ask Us →</a>
       </div>
 
       <div class="resource-card">
         <div class="resource-card__icon">⛽</div>
         <h3>Cutting Your Gas Bill</h3>
-        <p>Gas is your biggest variable expense. Tips for finding the cheapest stations in Charlotte, optimizing your route, and keeping fuel costs under $15/day.</p>
+        <p>Gas is your biggest variable expense. Tips for finding the cheapest stations in <span data-biz="city"></span>, optimizing your route, and keeping fuel costs under $15/day.</p>
         <a href="contact.html" style="display:inline-block;margin-top:16px;font-size:0.82rem;font-weight:700;letter-spacing:0.06em;text-decoration:underline;">Ask Us →</a>
       </div>
 
@@ -228,14 +229,14 @@
         <button class="faq-question">How much does it really cost per week all-in?
           <span class="faq-icon">+</span>
         </button>
-        <div class="faq-answer"><p>Rental: $350–$450/week depending on the vehicle. Gas in Charlotte typically runs $15–$25/day depending on your hours. Use our calculator above to build your own estimate based on your actual driving habits.</p></div>
+        <div class="faq-answer"><p>Rental: $350–$450/week depending on the vehicle. Gas in <span data-biz="city"></span> typically runs $15–$25/day depending on your hours. Use our calculator above to build your own estimate based on your actual driving habits.</p></div>
       </div>
 
       <div class="faq-item">
         <button class="faq-question">How fast can I get approved and pick up?
           <span class="faq-icon">+</span>
         </button>
-        <div class="faq-answer"><p>Most applicants hear back within 24–48 hours. Once approved, we coordinate a pickup time at our Charlotte location. In most cases, you can be driving and earning within 2–3 days of applying.</p></div>
+        <div class="faq-answer"><p>Most applicants hear back within 24–48 hours. Once approved, we coordinate a pickup time at our <span data-biz="city"></span> location. In most cases, you can be driving and earning within 2–3 days of applying.</p></div>
       </div>
 
     </div>
@@ -260,7 +261,7 @@
     <div class="footer__inner">
       <div class="footer__brand">
         <a href="index.html" class="nav__logo">Drive<span>Now</span></a>
-        <p class="footer__tagline">Weekly rental cars for gig workers in Charlotte, NC. Rent fast. Drive more. Keep the money.</p>
+        <p class="footer__tagline">Weekly rental cars for gig workers in <span data-biz="city"></span>. Rent fast. Drive more. Keep the money.</p>
       </div>
       <div>
         <div class="footer__col-title">Pages</div>
@@ -274,15 +275,15 @@
       <div>
         <div class="footer__col-title">Contact</div>
         <div class="footer__links">
-          <a href="tel:7047777777">(704) 777-7777</a>
-          <a href="mailto:info@queencityrentals.com">info@queencityrentals.com</a>
-          <a href="#">Charlotte, NC</a>
+          <a href="#" data-biz-href="tel" data-biz="phone"></a>
+          <a href="#" data-biz-href="mailto" data-biz="email"></a>
+          <a href="#" data-biz="city"></a>
         </div>
       </div>
     </div>
     <div class="footer__bottom">
-      <span>© 2024 DriveNow / Queen City Rentals. All rights reserved.</span>
-      <span>Charlotte, NC</span>
+      <span>© 2024 DriveNow / <span data-biz="legal-name"></span>. All rights reserved.</span>
+      <span data-biz="city"></span>
     </div>
   </div>
 </footer>

@@ -12,7 +12,7 @@ npm start
 
 Server runs on `http://localhost:4000`. Portal: `http://localhost:4000/login.html`
 
-Default owner login (change after first login): the email/password set in `.env` (`OWNER_EMAIL` / `OWNER_PASSWORD`), defaults to `mmasfar2@gmail.com` / `DriveNow2024!`.
+Default owner login (change after first login): the email/password set in `.env` (`OWNER_EMAIL` / `OWNER_PASSWORD`) — both are required before first run, there is no built-in default.
 
 ## Deploying
 
@@ -40,7 +40,7 @@ Once deployed, update `js/config.js`:
 const API_BASE_URL = window.DRIVENOW_API_URL || 'https://your-backend-url.onrender.com';
 ```
 
-Also set `PUBLIC_SITE_ORIGIN` in the backend's `.env` to your GitHub Pages URL (`https://mmasfar2.github.io`) so CORS allows the form submissions.
+Also set `PUBLIC_SITE_ORIGIN` in the backend's `.env` to your GitHub Pages URL (e.g. `https://your-username.github.io`) so CORS allows the form submissions.
 
 ## Pipeline stages
 

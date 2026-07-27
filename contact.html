@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Contact — DriveNow Charlotte, NC</title>
-  <meta name="description" content="Get in touch with DriveNow in Charlotte, NC. Questions about rental cars for gig workers? Call, text, or email us.">
+  <title>Contact — DriveNow</title>
+  <meta name="description" content="Get in touch with DriveNow. Questions about rental cars for gig workers? Call, text, or email us.">
   <link rel="stylesheet" href="css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="js/config.js"></script>
 </head>
 <body>
 
@@ -36,7 +37,7 @@
   <div class="container">
     <div class="tag">Get In Touch</div>
     <h1>We're Local.<br>We Pick Up.</h1>
-    <p>Charlotte-based and easy to reach. Call, text, or send us a message and we'll get back to you fast.</p>
+    <p><span data-biz="city"></span>-based and easy to reach. Call, text, or send us a message and we'll get back to you fast.</p>
   </div>
 </div>
 
@@ -55,7 +56,7 @@
           <div class="contact-detail__icon">📞</div>
           <div>
             <div class="contact-detail__label">Phone & Text</div>
-            <div class="contact-detail__value"><a href="tel:7047777777">(704) 777-7777</a></div>
+            <div class="contact-detail__value"><a href="#" data-biz-href="tel" data-biz="phone"></a></div>
           </div>
         </div>
 
@@ -63,7 +64,7 @@
           <div class="contact-detail__icon">✉️</div>
           <div>
             <div class="contact-detail__label">Email</div>
-            <div class="contact-detail__value"><a href="mailto:info@queencityrentals.com">info@queencityrentals.com</a></div>
+            <div class="contact-detail__value"><a href="#" data-biz-href="mailto" data-biz="email"></a></div>
           </div>
         </div>
 
@@ -71,7 +72,7 @@
           <div class="contact-detail__icon">📍</div>
           <div>
             <div class="contact-detail__label">Location</div>
-            <div class="contact-detail__value">Charlotte, NC<br><span style="font-size:0.82rem;color:var(--text-muted);font-weight:400;">Pickup address provided upon approval</span></div>
+            <div class="contact-detail__value"><span data-biz="city"></span><br><span style="font-size:0.82rem;color:var(--text-muted);font-weight:400;">Pickup address provided upon approval</span></div>
           </div>
         </div>
 
@@ -159,7 +160,7 @@
 <section style="background:var(--black);padding:0;">
   <div style="height:240px;background:var(--gray-dark);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;border-top:1px solid rgba(255,255,255,0.06);">
     <div style="font-size:2rem;">📍</div>
-    <div style="color:rgba(255,255,255,0.5);font-size:0.85rem;font-weight:600;letter-spacing:0.06em;">Charlotte, North Carolina</div>
+    <div style="color:rgba(255,255,255,0.5);font-size:0.85rem;font-weight:600;letter-spacing:0.06em;" data-biz="city"></div>
     <div style="color:rgba(255,255,255,0.3);font-size:0.75rem;">Exact pickup address provided after approval</div>
   </div>
 </section>
@@ -181,7 +182,7 @@
     <div class="footer__inner">
       <div class="footer__brand">
         <a href="index.html" class="nav__logo">Drive<span>Now</span></a>
-        <p class="footer__tagline">Weekly rental cars for gig workers in Charlotte, NC. Rent fast. Drive more. Keep the money.</p>
+        <p class="footer__tagline">Weekly rental cars for gig workers in <span data-biz="city"></span>. Rent fast. Drive more. Keep the money.</p>
       </div>
       <div>
         <div class="footer__col-title">Pages</div>
@@ -203,15 +204,15 @@
       <div>
         <div class="footer__col-title">Contact</div>
         <div class="footer__links">
-          <a href="tel:7047777777">(704) 777-7777</a>
-          <a href="mailto:info@queencityrentals.com">info@queencityrentals.com</a>
-          <a href="#">Charlotte, NC</a>
+          <a href="#" data-biz-href="tel" data-biz="phone"></a>
+          <a href="#" data-biz-href="mailto" data-biz="email"></a>
+          <a href="#" data-biz="city"></a>
         </div>
       </div>
     </div>
     <div class="footer__bottom">
-      <span>© 2024 DriveNow / Queen City Rentals. All rights reserved.</span>
-      <span>Charlotte, NC</span>
+      <span>© 2024 DriveNow / <span data-biz="legal-name"></span>. All rights reserved.</span>
+      <span data-biz="city"></span>
     </div>
   </div>
 </footer>

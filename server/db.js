@@ -1014,12 +1014,17 @@ for (const v of vehiclesWithLegacyPhoto) {
 // Seed owner account if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
 if (userCount === 0) {
-  const defaultEmail = process.env.OWNER_EMAIL || 'mmasfar2@gmail.com';
-  const defaultPassword = process.env.OWNER_PASSWORD || 'DriveNow2024!';
-  const hash = bcrypt.hashSync(defaultPassword, 10);
+  // No hardcoded fallback here on purpose — a default email/password baked
+  // into the source would (a) tie every fresh deployment's first login to
+  // whoever wrote this code and (b) be a known, guessable credential the
+  // moment this repo is public. Every new deployment must set its own.
+  if (!process.env.OWNER_EMAIL || !process.env.OWNER_PASSWORD) {
+    throw new Error('OWNER_EMAIL and OWNER_PASSWORD must be set (see .env.example) before first run — no owner account exists yet.');
+  }
+  const hash = bcrypt.hashSync(process.env.OWNER_PASSWORD, 10);
   db.prepare('INSERT INTO users (email, password_hash, name, role) VALUES (?, ?, ?, ?)')
-    .run(defaultEmail, hash, 'Owner', 'owner');
-  console.log(`Seeded owner account: ${defaultEmail} / ${defaultPassword} (change this password after first login)`);
+    .run(process.env.OWNER_EMAIL, hash, 'Owner', 'owner');
+  console.log(`Seeded owner account: ${process.env.OWNER_EMAIL} (change this password after first login)`);
 }
 
 // Seed fleet vehicles to match the public site if empty

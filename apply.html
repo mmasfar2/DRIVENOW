@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Apply — DriveNow Charlotte, NC</title>
-  <meta name="description" content="Apply for a weekly rental car with DriveNow in Charlotte, NC. Fast approval for gig workers on Uber, Lyft, and DoorDash.">
+  <title>Apply — DriveNow</title>
+  <meta name="description" content="Apply for a weekly rental car with DriveNow. Fast approval for gig workers on Uber, Lyft, and DoorDash.">
   <link rel="stylesheet" href="css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -37,7 +37,7 @@
   <div class="container">
     <div class="tag">Get Started</div>
     <h1>Apply for Your Car</h1>
-    <p>5 minutes to complete. Approval within 24–48 hours. Charlotte, NC.</p>
+    <p>5 minutes to complete. Approval within 24–48 hours. <span data-biz="city"></span>.</p>
   </div>
 </div>
 
@@ -255,7 +255,7 @@
       <div style="text-align:center;padding:24px;background:var(--gray-light);border-radius:8px;">
         <div style="font-size:1.5rem;margin-bottom:8px;">📞</div>
         <div style="font-weight:700;font-size:0.9rem;">Local Support</div>
-        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;">(704) 777-7777</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;" data-biz="phone"></div>
       </div>
     </div>
 
@@ -268,7 +268,7 @@
     <div class="footer__inner">
       <div class="footer__brand">
         <a href="index.html" class="nav__logo">Drive<span>Now</span></a>
-        <p class="footer__tagline">Weekly rental cars for gig workers in Charlotte, NC.</p>
+        <p class="footer__tagline">Weekly rental cars for gig workers in <span data-biz="city"></span>.</p>
       </div>
       <div>
         <div class="footer__col-title">Pages</div>
@@ -282,14 +282,14 @@
       <div>
         <div class="footer__col-title">Contact</div>
         <div class="footer__links">
-          <a href="tel:7047777777">(704) 777-7777</a>
-          <a href="mailto:info@queencityrentals.com">info@queencityrentals.com</a>
+          <a href="#" data-biz-href="tel" data-biz="phone"></a>
+          <a href="#" data-biz-href="mailto" data-biz="email"></a>
         </div>
       </div>
     </div>
     <div class="footer__bottom">
-      <span>© 2024 DriveNow / Queen City Rentals. All rights reserved.</span>
-      <span>Charlotte, NC</span>
+      <span>© 2024 DriveNow / <span data-biz="legal-name"></span>. All rights reserved.</span>
+      <span data-biz="city"></span>
     </div>
   </div>
 </footer>
