@@ -19,7 +19,7 @@
   .report-card__dates { display: flex; gap: 10px; margin-bottom: 14px; }
   .report-card__dates .field { flex: 1; margin-bottom: 0; }
   .report-card__dates label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #888; display: block; margin-bottom: 4px; }
-  .report-card__dates input { width: 100%; padding: 8px 10px; border: 1.5px solid var(--gray-border); border-radius: 4px; font-family: inherit; font-size: 0.82rem; }
+  .report-card__dates input, .report-card__dates select { width: 100%; padding: 8px 10px; border: 1.5px solid var(--gray-border); border-radius: 4px; font-family: inherit; font-size: 0.82rem; background: var(--white); }
   .report-card__footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
   .report-card__csv { font-size: 0.78rem; font-weight: 600; color: var(--black); text-decoration: underline; cursor: pointer; }
   .report-card__generate { padding: 9px 18px; font-size: 0.72rem; }
@@ -143,6 +143,11 @@ function reportUrl(key, format) {
   const params = new URLSearchParams();
   if (from) params.set('from', from.value);
   if (to) params.set('to', to.value);
+  const report = catalog && catalog.reports.find(r => r.key === key);
+  (report ? report.extraParams : []).forEach(p => {
+    const el = document.getElementById(`rpt-${key}-${p.key}`);
+    if (el) params.set(p.key, el.value);
+  });
   if (format) params.set('format', format);
   return `/api/reports/${key}/data?${params.toString()}`;
 }
@@ -256,6 +261,14 @@ async function generateReport(key, label, columns) {
 
 function reportCardHtml(report) {
   const dates = defaultDates();
+  const extraParamsHtml = (report.extraParams || []).map(p => `
+    <div class="field">
+      <label>${p.label}</label>
+      <select id="rpt-${report.key}-${p.key}">
+        ${p.options.map(o => `<option value="${o.value}"${o.value === p.default ? ' selected' : ''}>${o.label}</option>`).join('')}
+      </select>
+    </div>
+  `).join('');
   return `
     <div class="report-card">
       <div class="report-card__title">${report.label}</div>
@@ -266,6 +279,7 @@ function reportCardHtml(report) {
           <div class="field"><label>To</label><input type="date" id="rpt-${report.key}-to" value="${dates.to}"></div>
         </div>
       ` : ''}
+      ${extraParamsHtml ? `<div class="report-card__dates">${extraParamsHtml}</div>` : ''}
       <div class="report-card__footer">
         <span class="report-card__csv" onclick="window.open(reportUrl('${report.key}', 'csv'), '_blank')">CSV Export</span>
         <button class="btn report-card__generate" onclick='generateReport("${report.key}", ${JSON.stringify(report.label)}, ${JSON.stringify(report.columns)})'>Generate</button>

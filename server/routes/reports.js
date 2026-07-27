@@ -14,6 +14,35 @@ function round2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
 function dayDiff(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
 function clip(d, lo, hi) { return d < lo ? lo : d > hi ? hi : d; }
 
+// Same method vocabulary payments are actually logged with (see PAYMENT_METHODS
+// in routes/applications.js) — kept in display order for the Collections report.
+const PAYMENT_METHOD_LABELS = { cash: 'Cash', card: 'Card', swipe: 'Swipe', cash_app: 'Cash App', apple_pay: 'Apple Pay', zelle: 'Zelle' };
+const PAYMENT_METHOD_KEYS = Object.keys(PAYMENT_METHOD_LABELS);
+
+// Collapses a payment's own date (YYYY-MM-DD) down to the key for whatever
+// bucket it's being grouped into.
+function periodKeyFor(dateStr, groupBy) {
+  if (groupBy === 'month') return dateStr.slice(0, 7);
+  if (groupBy === 'week') {
+    // Monday-start ISO week, computed in UTC so it doesn't drift a day
+    // depending on the server's local timezone.
+    const d = new Date(`${dateStr}T00:00:00Z`);
+    const isoDay = d.getUTCDay() === 0 ? 7 : d.getUTCDay();
+    d.setUTCDate(d.getUTCDate() - (isoDay - 1));
+    return d.toISOString().slice(0, 10);
+  }
+  return dateStr;
+}
+
+function periodLabelFor(key, groupBy) {
+  if (groupBy === 'month') {
+    const [y, m] = key.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  }
+  if (groupBy === 'week') return `Week of ${key}`;
+  return key;
+}
+
 // Utilization only — whether a vehicle counts as "on rent" for a day. Unlike
 // revenue (getAccruedRevenueDays in db.js, always capped to a booking's own
 // scheduled dates), a still-active booking that's never been checked in
@@ -230,6 +259,45 @@ const REPORTS = {
         period: `${from} – ${to}`,
         highway_tax: highwayTax, sales_tax: salesTax, total_tax: round2(totalTax),
       }];
+    },
+  },
+
+  collections_by_method: {
+    category: 'revenue', label: 'Collections by Payment Method',
+    description: 'Rental payments actually collected in the selected range — dated by when the payment was logged (paid_at), not the rental nights it applies to, so this is "cash that came in on a given day," not accrued revenue. Grouped by day, week, or month and split out by the method used (Cash, Card, Swipe, Cash App, Apple Pay, Zelle). Security deposits are not included — only the payments table. To see a single day, set From and To to the same date.',
+    hasDateRange: true,
+    extraParams: [
+      { key: 'groupBy', label: 'Group By', type: 'select', default: 'day', options: [
+        { value: 'day', label: 'Day' },
+        { value: 'week', label: 'Week' },
+        { value: 'month', label: 'Month' },
+      ] },
+    ],
+    columns: [
+      { key: 'period', label: 'Period' },
+      ...PAYMENT_METHOD_KEYS.map(k => ({ key: k, label: PAYMENT_METHOD_LABELS[k], type: 'money' })),
+      { key: 'total', label: 'Total Collected', type: 'money' },
+    ],
+    run(from, to, params) {
+      const groupBy = (params && params.groupBy) || 'day';
+      const rows = db.prepare(`
+        SELECT amount, method, substr(paid_at, 1, 10) as date
+        FROM payments WHERE substr(paid_at, 1, 10) BETWEEN ? AND ?
+      `).all(from, to);
+      const byPeriod = new Map();
+      for (const r of rows) {
+        const key = periodKeyFor(r.date, groupBy);
+        if (!byPeriod.has(key)) {
+          const entry = { period: key, total: 0 };
+          PAYMENT_METHOD_KEYS.forEach(k => { entry[k] = 0; });
+          byPeriod.set(key, entry);
+        }
+        const entry = byPeriod.get(key);
+        const method = PAYMENT_METHOD_KEYS.includes(r.method) ? r.method : 'cash';
+        entry[method] = round2(entry[method] + r.amount);
+        entry.total = round2(entry.total + r.amount);
+      }
+      return [...byPeriod.keys()].sort().map(key => ({ ...byPeriod.get(key), period: periodLabelFor(key, groupBy) }));
     },
   },
 
@@ -601,6 +669,7 @@ router.get('/', requireAuth, (req, res) => {
     categories: CATEGORIES,
     reports: Object.entries(REPORTS).map(([key, r]) => ({
       key, category: r.category, label: r.label, description: r.description, hasDateRange: r.hasDateRange, columns: r.columns,
+      extraParams: r.extraParams || [],
     })),
   });
 });
@@ -614,7 +683,12 @@ router.get('/:key/data', requireAuth, (req, res) => {
   const to = report.hasDateRange ? (req.query.to || today) : '9999-12-31';
   if (from > to) return res.status(400).json({ error: '"From" date must be before "To" date' });
 
-  const rows = report.run(from, to);
+  const params = {};
+  for (const p of (report.extraParams || [])) {
+    const allowed = p.options.map(o => o.value);
+    params[p.key] = allowed.includes(req.query[p.key]) ? req.query[p.key] : p.default;
+  }
+  const rows = report.run(from, to, params);
 
   if (req.query.format === 'csv') {
     const csv = toCsv(report.columns, rows);
