@@ -730,12 +730,11 @@ router.get('/revenue_by_vehicle/:vehicleId/bookings', requireAuth, (req, res) =>
   });
 
   const appIds = new Set([...revenueByApp.keys(), ...businessExpenseByApp.keys(), ...forfeitedByApp.keys()]);
-  if (!appIds.size) return res.json([]);
   const idList = [...appIds];
-  const apps = db.prepare(`
+  const apps = idList.length ? db.prepare(`
     SELECT id, first_name, last_name, pickup_scheduled_at, rental_end_at, status
     FROM applications WHERE id IN (${idList.map(() => '?').join(',')})
-  `).all(...idList);
+  `).all(...idList) : [];
 
   const rows = apps.map(a => {
     const revenue = round2((revenueByApp.get(a.id) || 0) + (forfeitedByApp.get(a.id) || 0));
@@ -747,8 +746,30 @@ router.get('/revenue_by_vehicle/:vehicleId/bookings', requireAuth, (req, res) =>
       revenue, expense: 0, business_expense: businessExpense,
       profit: round2(revenue - businessExpense),
     };
-  }).sort((a, b) => b.revenue - a.revenue);
-  res.json(rows);
+  });
+
+  // Insurance claim payouts aren't tied to a booking — they're their own
+  // category, dated by payout_date (matching the top-level report), with the
+  // claim's deductible as this row's expense (also matching deductibleByVehicle
+  // there). Sits alongside booking rows rather than folded into one of them.
+  const claimRows = db.prepare(`
+    SELECT id, incident_type, payout_date, insurance_payout, deductible_amount
+    FROM claims
+    WHERE vehicle_id = ? AND insurance_payout IS NOT NULL AND payout_date IS NOT NULL
+      AND substr(payout_date, 1, 10) BETWEEN ? AND ?
+  `).all(vehicleId, from, to).map(c => {
+    const revenue = round2(Number(c.insurance_payout));
+    const expense = round2(Number(c.deductible_amount) || 0);
+    return {
+      booking_id: `Claim #${c.id}`,
+      customer: `Insurance Payout — ${c.incident_type || 'Claim'}`,
+      pickup_scheduled_at: null, rental_end_at: c.payout_date, status: 'claim',
+      revenue, expense, business_expense: 0,
+      profit: round2(revenue - expense),
+    };
+  });
+
+  res.json([...rows, ...claimRows].sort((a, b) => b.revenue - a.revenue));
 });
 
 module.exports = router;
