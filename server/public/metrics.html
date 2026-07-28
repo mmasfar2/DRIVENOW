@@ -168,9 +168,9 @@ document.getElementById('report-modal-overlay').addEventListener('click', (e) =>
 // Per-booking breakdown shown when a Revenue by Vehicle row is expanded —
 // same shape as reports.js's /revenue_by_vehicle/:vehicleId/bookings.
 // Expense is 0 for booking rows (maintenance is logged against the vehicle,
-// not any one booking) but insurance claim payouts appear here too, as
-// their own rows (not tied to a booking), with the claim's deductible as
-// their expense.
+// not any one booking); insurance claim payouts and vehicle sales appear
+// here too, as their own rows (not tied to a booking) — a payout's expense
+// is its claim's deductible, a sale's expense is 0.
 const BOOKING_DRILLDOWN_COLUMNS = [
   { key: 'booking_id', label: 'Booking #' },
   { key: 'customer', label: 'Customer' },

@@ -123,7 +123,12 @@ router.get('/:id', requireAuth, (req, res) => {
     SELECT COALESCE(SUM(deductible_amount), 0) as total FROM claims WHERE vehicle_id = ? AND deductible_amount IS NOT NULL
   `).get(req.params.id).total) * 100) / 100;
 
-  const totalRevenue = Math.round((bookings.reduce((sum, b) => sum + b.revenue, 0) + claimPayoutTotal) * 100) / 100;
+  // A vehicle sale is its own revenue category too, same treatment as an
+  // insurance payout — money the vehicle actually brought in, just not from
+  // renting it out.
+  const saleAmount = Math.round((Number(vehicle.sale_amount) || 0) * 100) / 100;
+
+  const totalRevenue = Math.round((bookings.reduce((sum, b) => sum + b.revenue, 0) + claimPayoutTotal + saleAmount) * 100) / 100;
   // Tolls are excluded from expense — they're a pass-through cost recovered
   // from the customer, not money actually lost on the vehicle (see
   // isTollRecord below; the same records still show up in the Maintenance
@@ -186,6 +191,7 @@ router.post('/', requireAuth, (req, res) => {
     make, model, year, weekly_rate, notes, status,
     stock_number, license_plate, vin, color, vehicle_class,
     purchase_date, purchase_price, mileage, purchase_mileage,
+    sale_amount, sale_date,
   } = req.body;
   if (!make || !model || !year || !weekly_rate) {
     return res.status(400).json({ error: 'Make, model, year, and weekly rate are required' });
@@ -194,12 +200,13 @@ router.post('/', requireAuth, (req, res) => {
     INSERT INTO vehicles (
       make, model, year, weekly_rate, notes, status,
       stock_number, license_plate, vin, color, vehicle_class,
-      purchase_date, purchase_price, mileage, purchase_mileage
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      purchase_date, purchase_price, mileage, purchase_mileage, sale_amount, sale_date
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     make, model, year, weekly_rate, notes || null, status || 'available',
     stock_number || null, license_plate || null, vin || null, color || null, vehicle_class || null,
-    purchase_date || null, purchase_price || null, mileage || null, purchase_mileage || null
+    purchase_date || null, purchase_price || null, mileage || null, purchase_mileage || null,
+    sale_amount || null, sale_date || null
   );
   res.status(201).json({ id: result.lastInsertRowid });
 });
@@ -208,6 +215,7 @@ router.patch('/:id', requireAuth, (req, res) => {
   const allowed = [
     'make', 'model', 'year', 'weekly_rate', 'status', 'notes', 'vin', 'license_plate', 'color', 'fuel_type', 'transmission',
     'stock_number', 'vehicle_class', 'purchase_date', 'purchase_price', 'mileage', 'purchase_mileage', 'next_service_at',
+    'sale_amount', 'sale_date',
   ];
   const updates = [];
   const params = [];

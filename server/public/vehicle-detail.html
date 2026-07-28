@@ -80,6 +80,10 @@
         <div class="field"><label>Fuel Type</label><input id="vd-f-fuel"></div>
         <div class="field"><label>Transmission</label><input id="vd-f-trans"></div>
       </div>
+      <div id="vd-sale-fields" style="display:none;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+        <div class="field"><label>Sale Amount ($)</label><input id="vd-f-sale-amount" type="number" step="0.01"></div>
+        <div class="field"><label>Sale Date</label><input id="vd-f-sale-date" type="date"></div>
+      </div>
       <div class="field"><label>Notes</label><textarea id="vd-f-notes" rows="3"></textarea></div>
       <div style="display:flex;justify-content:flex-end;">
         <button class="btn" id="vd-details-save">Save Changes</button>
@@ -201,6 +205,15 @@
         <tbody id="vd-claims-table-body"></tbody>
       </table>
     </div>
+
+    <div class="panel" style="padding:0;overflow-x:auto;" id="vd-sale-panel">
+      <div class="panel-title" style="padding:18px 18px 0;">Vehicle Sale</div>
+      <div class="page-sub" style="padding:0 18px 12px;">Money brought in by selling this vehicle — its own category, same as an insurance payout.</div>
+      <table>
+        <thead><tr><th>Sale Date</th><th>Amount</th></tr></thead>
+        <tbody id="vd-sale-table-body"></tbody>
+      </table>
+    </div>
   </div>
 
   <div id="vd-panel-inspection" style="display:none;">
@@ -254,6 +267,9 @@ function render() {
   document.getElementById('vd-f-fuel').value = vehicle.fuel_type || '';
   document.getElementById('vd-f-trans').value = vehicle.transmission || '';
   document.getElementById('vd-f-notes').value = vehicle.notes || '';
+  document.getElementById('vd-f-sale-amount').value = vehicle.sale_amount ?? '';
+  document.getElementById('vd-f-sale-date').value = vehicle.sale_date ? vehicle.sale_date.slice(0, 10) : '';
+  toggleSaleFields();
 
   document.getElementById('vd-last-serviced').textContent = vehicle.lastServiced || '—';
   renderOilChangeStatus();
@@ -273,6 +289,7 @@ function render() {
   profitEl.style.color = vehicle.totalProfit < 0 ? '#c62828' : '';
   renderBookingsTable();
   renderClaimPayoutsTable();
+  renderSaleTable();
 
   renderInspectionPhotos();
 }
@@ -384,6 +401,16 @@ function renderClaimPayoutsTable() {
   `).join('') : '<tr><td colspan="5" style="text-align:center;color:#888;padding:24px;">No insurance payouts recorded for this vehicle yet.</td></tr>';
 }
 
+function renderSaleTable() {
+  const body = document.getElementById('vd-sale-table-body');
+  body.innerHTML = vehicle.sale_amount ? `
+    <tr>
+      <td>${vehicle.sale_date ? fmtDateOnly(vehicle.sale_date) : '—'}</td>
+      <td>${fmtExact(vehicle.sale_amount)}</td>
+    </tr>
+  ` : '<tr><td colspan="2" style="text-align:center;color:#888;padding:24px;">This vehicle hasn\'t been sold.</td></tr>';
+}
+
 function renderInspectionPhotos() {
   const box = document.getElementById('vd-inspection-photos');
   const photos = vehicle.photos || [];
@@ -404,6 +431,12 @@ document.querySelectorAll('.rd-tab').forEach(tab => {
     });
   });
 });
+
+function toggleSaleFields() {
+  const isSold = document.getElementById('vd-f-status').value === 'sold';
+  document.getElementById('vd-sale-fields').style.display = isSold ? 'grid' : 'none';
+}
+document.getElementById('vd-f-status').addEventListener('change', toggleSaleFields);
 
 document.getElementById('vd-details-save').addEventListener('click', async () => {
   const rateInput = document.getElementById('vd-f-rate').value;
@@ -428,6 +461,8 @@ document.getElementById('vd-details-save').addEventListener('click', async () =>
         fuel_type: document.getElementById('vd-f-fuel').value,
         transmission: document.getElementById('vd-f-trans').value,
         notes: document.getElementById('vd-f-notes').value,
+        sale_amount: document.getElementById('vd-f-sale-amount').value,
+        sale_date: document.getElementById('vd-f-sale-date').value,
       }),
     });
   } catch (err) {
