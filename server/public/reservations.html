@@ -1071,6 +1071,28 @@ function initNewReservationModal() {
   let customerResults = [];
   let customerSearchTerm = '';
   let customerSearchTimer = null;
+  const COVERAGE_TYPES = ['Liability', 'Comprehensive & Collision', 'Full Coverage'];
+
+  // Prefills the Insurance step from whatever this customer already has on
+  // file (added via a past booking or the Insurance page) instead of
+  // starting blank every time — same info, no need to re-enter it.
+  // Fetched as soon as an existing customer is picked (step 1), well before
+  // the Insurance step (step 4) is ever shown.
+  async function applyExistingInsurance(customerId) {
+    let records = [];
+    try { records = await api(`/api/insurance/by-customer-id/${customerId}`); } catch { return; }
+    const rec = records.find(r => r.type === 'private') || records.find(r => r.type === 'our_policy');
+    if (!rec) return;
+    if (rec.type === 'private') {
+      form.insurance_type = 'private';
+      form.insurance_carrier = rec.carrier || '';
+      form.insurance_policy_number = rec.policy_number || '';
+      form.insurance_coverage_type = COVERAGE_TYPES.includes(rec.protection_type) ? rec.protection_type : '';
+    } else {
+      form.insurance_type = 'our_policies';
+    }
+    renderStep();
+  }
 
   const form = {
     source: '',
@@ -1420,7 +1442,6 @@ function initNewReservationModal() {
         { id: 'our_policies', label: 'Our Policies', sub: 'Insurance provided by DriveNow' },
         { id: 'third_party', label: 'Third Party Insurance', sub: 'Not available yet', disabled: true },
       ];
-      const COVERAGE_TYPES = ['Liability', 'Comprehensive & Collision', 'Full Coverage'];
       body.innerHTML = `
         <div class="resv-insurance-options">
           ${options.map(o => {
@@ -1803,6 +1824,7 @@ function initNewReservationModal() {
             address: c.address || '', dob: c.dob || '', license_number: c.license_number || '',
           });
           renderStep();
+          applyExistingInsurance(c.id);
         });
       });
     } else if (form.customer_mode === 'new') {
