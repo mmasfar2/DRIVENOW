@@ -40,12 +40,12 @@ router.get('/summary', requireAuth, (req, res) => {
   // 14 rental still shows its revenue spread across those May/June days
   // (see getAccruedRevenueDays in db.js). Forfeited security deposits count
   // as revenue too, as of the booking's return date (held deposits stay a
-  // liability, excluded), and so do insurance claim payouts, as of their
-  // payout date (matching the Revenue by Vehicle report's treatment) — a
-  // vehicle wrecked and paid out for actually earned that money back. Every
-  // revenue figure below reads from these same three queries so a
-  // forfeiture, a payout, or a fee can't show up as revenue in one place
-  // and not another.
+  // liability, excluded), and so do insurance claim payouts and vehicle
+  // sales, each as of its own date (matching the Revenue by Vehicle
+  // report's treatment) — a vehicle wrecked-and-paid-out, or sold outright,
+  // actually earned that money back. Every revenue figure below reads from
+  // these same queries so a forfeiture, a payout, a sale, or a fee can't
+  // show up as revenue in one place and not another.
   const accruedDays = getAccruedRevenueDays();
   const forfeitedDeposits = getForfeitedDeposits();
   const forfeitedTotal = forfeitedDeposits.reduce((sum, d) => sum + Number(d.forfeited_amount), 0);
@@ -54,6 +54,11 @@ router.get('/summary', requireAuth, (req, res) => {
     WHERE insurance_payout IS NOT NULL AND payout_date IS NOT NULL
   `).all();
   const payoutTotal = insurancePayouts.reduce((sum, d) => sum + Number(d.amount), 0);
+  const vehicleSales = db.prepare(`
+    SELECT sale_date as date, sale_amount as amount FROM vehicles
+    WHERE sale_amount IS NOT NULL AND sale_date IS NOT NULL
+  `).all();
+  const saleTotal = vehicleSales.reduce((sum, d) => sum + Number(d.amount), 0);
   const sevenDaysAgoStr = daysAgoStr(7);
   const forfeitedThisWeek = forfeitedDeposits
     .filter(d => d.date >= sevenDaysAgoStr)
@@ -61,10 +66,13 @@ router.get('/summary', requireAuth, (req, res) => {
   const payoutThisWeek = insurancePayouts
     .filter(d => d.date >= sevenDaysAgoStr)
     .reduce((sum, d) => sum + Number(d.amount), 0);
+  const saleThisWeek = vehicleSales
+    .filter(d => d.date >= sevenDaysAgoStr)
+    .reduce((sum, d) => sum + Number(d.amount), 0);
 
-  const totalRevenue = Math.round((accruedDays.reduce((sum, d) => sum + d.amount, 0) + forfeitedTotal + payoutTotal) * 100) / 100;
+  const totalRevenue = Math.round((accruedDays.reduce((sum, d) => sum + d.amount, 0) + forfeitedTotal + payoutTotal + saleTotal) * 100) / 100;
   const paidThisWeek = Math.round((
-    accruedDays.filter(d => d.date >= sevenDaysAgoStr).reduce((sum, d) => sum + d.amount, 0) + forfeitedThisWeek + payoutThisWeek
+    accruedDays.filter(d => d.date >= sevenDaysAgoStr).reduce((sum, d) => sum + d.amount, 0) + forfeitedThisWeek + payoutThisWeek + saleThisWeek
   ) * 100) / 100;
 
   // Pending/overdue invoices — net out payments already made (via billing.js's
@@ -109,8 +117,11 @@ router.get('/summary', requireAuth, (req, res) => {
   const payoutThisMonth = insurancePayouts
     .filter(d => d.date && d.date.slice(0, 7) === thisMonthStr)
     .reduce((sum, d) => sum + Number(d.amount), 0);
+  const saleThisMonth = vehicleSales
+    .filter(d => d.date && d.date.slice(0, 7) === thisMonthStr)
+    .reduce((sum, d) => sum + Number(d.amount), 0);
   const revenueThisMonth = Math.round((
-    accruedDays.filter(d => d.date && d.date.slice(0, 7) === thisMonthStr).reduce((sum, d) => sum + d.amount, 0) + forfeitedThisMonth + payoutThisMonth
+    accruedDays.filter(d => d.date && d.date.slice(0, 7) === thisMonthStr).reduce((sum, d) => sum + d.amount, 0) + forfeitedThisMonth + payoutThisMonth + saleThisMonth
   ) * 100) / 100;
 
   const overdueIds = new Set(
@@ -160,12 +171,19 @@ router.get('/summary', requireAuth, (req, res) => {
     const month = d.date.slice(0, 7);
     payoutByMonth.set(month, (payoutByMonth.get(month) || 0) + Number(d.amount));
   });
-  const monthSet = new Set([...monthlyAccruedMap.keys(), ...forfeitedByMonth.keys(), ...payoutByMonth.keys()]);
+  const saleByMonth = new Map();
+  vehicleSales.forEach(d => {
+    if (!d.date || d.date < twelveMonthsAgoStr) return;
+    const month = d.date.slice(0, 7);
+    saleByMonth.set(month, (saleByMonth.get(month) || 0) + Number(d.amount));
+  });
+  const monthSet = new Set([...monthlyAccruedMap.keys(), ...forfeitedByMonth.keys(), ...payoutByMonth.keys(), ...saleByMonth.keys()]);
   const monthlyRevenue = [...monthSet].sort().map(month => {
     const base = monthlyAccruedMap.get(month) || 0;
     const forfeited = forfeitedByMonth.get(month) || 0;
     const payout = payoutByMonth.get(month) || 0;
-    return { month, total: Math.round((base + forfeited + payout) * 100) / 100 };
+    const sale = saleByMonth.get(month) || 0;
+    return { month, total: Math.round((base + forfeited + payout + sale) * 100) / 100 };
   });
 
   const overdueList = overdueApps
