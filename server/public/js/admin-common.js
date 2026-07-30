@@ -33,7 +33,10 @@ const SIDEBAR_LINKS = [
   { key: 'metrics', label: 'Reports', href: 'metrics.html' },
   { key: 'clients', label: 'Clients', href: 'clients.html' },
   { key: 'insurance', label: 'Insurance', href: 'insurance.html' },
-  { key: 'mysite', label: 'My Site', href: 'https://mmasfar2.github.io/drivenow/', external: true },
+  // No hardcoded URL here on purpose — set window.DRIVENOW_PUBLIC_SITE_URL
+  // (e.g. in an inline <script> before this file loads) to point this at
+  // your own deployed public site.
+  { key: 'mysite', label: 'My Site', href: window.DRIVENOW_PUBLIC_SITE_URL || 'https://example.com', external: true },
 ];
 
 const SIDEBAR_ORDER_KEY = 'dn-sidebar-order';

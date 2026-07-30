@@ -43,6 +43,23 @@ function periodLabelFor(key, groupBy) {
   return key;
 }
 
+// The actual [from, to] calendar-day span a period key covers — used to back
+// the report's drilldown (which individual payments fall in this row) since
+// the period key itself is a Monday (week) or YYYY-MM (month), not a range.
+function periodRangeFor(key, groupBy) {
+  if (groupBy === 'month') {
+    const [y, m] = key.split('-').map(Number);
+    const lastDay = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+    return { from: `${key}-01`, to: lastDay };
+  }
+  if (groupBy === 'week') {
+    const d = new Date(`${key}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 6);
+    return { from: key, to: d.toISOString().slice(0, 10) };
+  }
+  return { from: key, to: key };
+}
+
 // Utilization only — whether a vehicle counts as "on rent" for a day. Unlike
 // revenue (getAccruedRevenueDays in db.js, always capped to a booking's own
 // scheduled dates), a still-active booking that's never been checked in
@@ -307,7 +324,13 @@ const REPORTS = {
         entry[method] = round2(entry[method] + r.amount);
         entry.total = round2(entry.total + r.amount);
       }
-      return [...byPeriod.keys()].sort().map(key => ({ ...byPeriod.get(key), period: periodLabelFor(key, groupBy) }));
+      // period_from/period_to ride along on each row for the drilldown below
+      // (which exact payments make up this row) — not in `columns`, so they
+      // never render as a visible column, same as vehicle_id on Revenue by Vehicle.
+      return [...byPeriod.keys()].sort().map(key => {
+        const range = periodRangeFor(key, groupBy);
+        return { ...byPeriod.get(key), period: periodLabelFor(key, groupBy), period_from: range.from, period_to: range.to };
+      });
     },
   },
 
@@ -795,6 +818,31 @@ router.get('/revenue_by_vehicle/:vehicleId/bookings', requireAuth, (req, res) =>
   }] : [];
 
   res.json([...rows, ...claimRows, ...saleRows].sort((a, b) => b.revenue - a.revenue));
+});
+
+// Per-payment breakdown behind a Collections by Payment Method row — every
+// individual payment that rolled up into that row's totals, so a number
+// that looks off can be traced back to the actual payment(s) behind it
+// instead of just trusting the aggregate.
+router.get('/collections_by_method/payments', requireAuth, (req, res) => {
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'from and to are required' });
+  const rows = db.prepare(`
+    SELECT p.id, p.amount, p.paid_at, p.method,
+           a.first_name, a.last_name, v.year, v.make, v.model
+    FROM payments p
+    JOIN applications a ON a.id = p.application_id
+    LEFT JOIN vehicles v ON v.id = a.assigned_vehicle_id
+    WHERE substr(p.paid_at, 1, 10) BETWEEN ? AND ?
+    ORDER BY p.paid_at
+  `).all(from, to);
+  res.json(rows.map(r => ({
+    paid_at: r.paid_at,
+    customer: `${r.first_name} ${r.last_name}`,
+    vehicle: r.make ? `${r.year} ${r.make} ${r.model}` : 'Unassigned',
+    method: PAYMENT_METHOD_LABELS[r.method] || r.method,
+    amount: round2(r.amount),
+  })));
 });
 
 module.exports = router;
