@@ -599,7 +599,7 @@ router.post('/:id/deposits/:depositId/resolve', requireAuth, (req, res) => {
 router.get('/:id/detail', requireAuth, (req, res) => {
   const row = db.prepare(`
     SELECT a.*, v.id as vehicle_id, v.make, v.model, v.year, v.status as vehicle_status, v.mileage as vehicle_mileage,
-           v.vin, v.license_plate, v.color, v.fuel_type, v.transmission, ${CUSTOMER_SYNC_COLUMNS}
+           v.gas_level as vehicle_gas_level, v.vin, v.license_plate, v.color, v.fuel_type, v.transmission, ${CUSTOMER_SYNC_COLUMNS}
     FROM applications a
     LEFT JOIN vehicles v ON v.id = a.assigned_vehicle_id
     ${CUSTOMER_JOIN}
@@ -767,6 +767,12 @@ router.post('/:id/check-in', requireAuth, (req, res) => {
   if (odometer_out != null && odometer_out !== '') {
     db.prepare('UPDATE vehicles SET mileage = ? WHERE id = ?').run(odometer_out, app.assigned_vehicle_id);
   }
+  // Carries forward the same way mileage does — the vehicle's recorded gas
+  // level is always whatever reading was taken most recently, so the next
+  // Check Out (on this or a future booking) starts from the truth left behind.
+  if (gas_level) {
+    db.prepare('UPDATE vehicles SET gas_level = ? WHERE id = ?').run(gas_level, app.assigned_vehicle_id);
+  }
   logActivity(id, `Checked out — vehicle left the lot${odometer_out ? ` at ${odometer_out} mi` : ''}${gas_level ? `, ${gas_level} tank` : ''}`);
   res.json({ ok: true });
 });
@@ -810,6 +816,9 @@ router.post('/:id/complete-rental', requireAuth, (req, res) => {
     // showing the same current mileage this booking just registered.
     if (odometer_in != null && odometer_in !== '') {
       db.prepare('UPDATE vehicles SET mileage = ? WHERE id = ?').run(odometer_in, app.assigned_vehicle_id);
+    }
+    if (gas_level_in) {
+      db.prepare('UPDATE vehicles SET gas_level = ? WHERE id = ?').run(gas_level_in, app.assigned_vehicle_id);
     }
   }
   logActivity(id, `Rental completed — vehicle checked back in and now available${gas_level_in ? `, ${gas_level_in} tank` : ''}`);

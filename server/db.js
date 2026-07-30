@@ -354,11 +354,20 @@ if (!vehicleCols.includes('purchase_price')) {
 if (!vehicleCols.includes('mileage')) {
   db.exec('ALTER TABLE vehicles ADD COLUMN mileage REAL');
 }
+if (!vehicleCols.includes('gas_level')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN gas_level TEXT');
+}
 if (!vehicleCols.includes('next_service_at')) {
   db.exec('ALTER TABLE vehicles ADD COLUMN next_service_at TEXT');
 }
 if (!vehicleCols.includes('purchase_mileage')) {
   db.exec('ALTER TABLE vehicles ADD COLUMN purchase_mileage REAL');
+}
+if (!vehicleCols.includes('sale_amount')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN sale_amount REAL');
+}
+if (!vehicleCols.includes('sale_date')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN sale_date TEXT');
 }
 
 const maintenanceCols = db.prepare("PRAGMA table_info(vehicle_maintenance)").all().map(c => c.name);
