@@ -196,12 +196,16 @@ router.post('/', requireAuth, (req, res) => {
   if (!make || !model || !year || !weekly_rate) {
     return res.status(400).json({ error: 'Make, model, year, and weekly rate are required' });
   }
+  // mileage_updated_at is only stamped if a starting mileage was actually
+  // entered — a raw SQL keyword, not a bound param, but safe since it's
+  // always one of these two fixed literals, never user input.
+  const mileageStamp = mileage ? 'CURRENT_TIMESTAMP' : 'NULL';
   const result = db.prepare(`
     INSERT INTO vehicles (
       make, model, year, weekly_rate, notes, status,
       stock_number, license_plate, vin, color, vehicle_class,
-      purchase_date, purchase_price, mileage, purchase_mileage, sale_amount, sale_date
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      purchase_date, purchase_price, mileage, purchase_mileage, sale_amount, sale_date, mileage_updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${mileageStamp})
   `).run(
     make, model, year, weekly_rate, notes || null, status || 'available',
     stock_number || null, license_plate || null, vin || null, color || null, vehicle_class || null,
@@ -223,6 +227,16 @@ router.patch('/:id', requireAuth, (req, res) => {
     if (req.body[key] !== undefined) {
       updates.push(`${key} = ?`);
       params.push(req.body[key]);
+    }
+  }
+  // The mileage's own "as of" date only moves when the reading itself
+  // actually changes — not on every unrelated field edit that happens to
+  // resend the same current value (the Details tab form saves everything
+  // at once, mileage included, whether or not it was touched).
+  if (req.body.mileage !== undefined && req.body.mileage !== '') {
+    const current = db.prepare('SELECT mileage FROM vehicles WHERE id = ?').get(req.params.id);
+    if (!current || Number(current.mileage) !== Number(req.body.mileage)) {
+      updates.push('mileage_updated_at = CURRENT_TIMESTAMP');
     }
   }
   if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update' });

@@ -765,7 +765,7 @@ router.post('/:id/check-in', requireAuth, (req, res) => {
   `).run(odometer_out || null, gas_level || null, id);
   db.prepare("UPDATE vehicles SET status = 'rented' WHERE id = ?").run(app.assigned_vehicle_id);
   if (odometer_out != null && odometer_out !== '') {
-    db.prepare('UPDATE vehicles SET mileage = ? WHERE id = ?').run(odometer_out, app.assigned_vehicle_id);
+    db.prepare("UPDATE vehicles SET mileage = ?, mileage_updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(odometer_out, app.assigned_vehicle_id);
   }
   // Carries forward the same way mileage does — the vehicle's recorded gas
   // level is always whatever reading was taken most recently, so the next
@@ -815,7 +815,7 @@ router.post('/:id/complete-rental', requireAuth, (req, res) => {
     // odometer reading taken at this moment — keeps Fleet Management/Reports
     // showing the same current mileage this booking just registered.
     if (odometer_in != null && odometer_in !== '') {
-      db.prepare('UPDATE vehicles SET mileage = ? WHERE id = ?').run(odometer_in, app.assigned_vehicle_id);
+      db.prepare("UPDATE vehicles SET mileage = ?, mileage_updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(odometer_in, app.assigned_vehicle_id);
     }
     if (gas_level_in) {
       db.prepare('UPDATE vehicles SET gas_level = ? WHERE id = ?').run(gas_level_in, app.assigned_vehicle_id);
