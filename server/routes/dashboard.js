@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, getForfeitedDeposits, getAccruedRevenueDays } = require('../db');
+const { db, getForfeitedDeposits, getCollectedRevenueDays } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { computeOwed } = require('../billing');
 const { todayStr, daysAgoStr, monthsAgoStr } = require('../timezone');
@@ -34,19 +34,21 @@ router.get('/summary', requireAuth, (req, res) => {
   //
   // Not every dollar collected is revenue, though — sales tax, highway tax,
   // insurance fee, and processing fee are pass-through/ancillary and are
-  // excluded. And revenue is counted as of the days the booking itself
-  // covers (its own daily rate, day by day), not whenever a payment against
-  // it happened to be logged — a booking paid on July 11 for a May 12–June
-  // 14 rental still shows its revenue spread across those May/June days
-  // (see getAccruedRevenueDays in db.js). Forfeited security deposits count
-  // as revenue too, as of the booking's return date (held deposits stay a
-  // liability, excluded), and so do insurance claim payouts and vehicle
-  // sales, each as of its own date (matching the Revenue by Vehicle
-  // report's treatment) — a vehicle wrecked-and-paid-out, or sold outright,
-  // actually earned that money back. Every revenue figure below reads from
-  // these same queries so a forfeiture, a payout, a sale, or a fee can't
-  // show up as revenue in one place and not another.
-  const accruedDays = getAccruedRevenueDays();
+  // excluded. Revenue is cash-basis: counted as of the date a payment was
+  // actually collected, not whenever the rental nights it happens to fund
+  // occur — a payment made July 11 toward a May 12–June 14 rental shows up
+  // as July revenue, not spread back across May/June (see
+  // getCollectedRevenueDays in db.js). That also means extending an active
+  // booking's return date further out never retroactively moves revenue
+  // already recognized for its earlier payments. Forfeited security
+  // deposits count as revenue too, as of the booking's return date (held
+  // deposits stay a liability, excluded), and so do insurance claim payouts
+  // and vehicle sales, each as of its own date (matching the Revenue by
+  // Vehicle report's treatment) — a vehicle wrecked-and-paid-out, or sold
+  // outright, actually earned that money back. Every revenue figure below
+  // reads from these same queries so a forfeiture, a payout, a sale, or a
+  // fee can't show up as revenue in one place and not another.
+  const collectedDays = getCollectedRevenueDays();
   const forfeitedDeposits = getForfeitedDeposits();
   const forfeitedTotal = forfeitedDeposits.reduce((sum, d) => sum + Number(d.forfeited_amount), 0);
   const insurancePayouts = db.prepare(`
@@ -70,9 +72,9 @@ router.get('/summary', requireAuth, (req, res) => {
     .filter(d => d.date >= sevenDaysAgoStr)
     .reduce((sum, d) => sum + Number(d.amount), 0);
 
-  const totalRevenue = Math.round((accruedDays.reduce((sum, d) => sum + d.amount, 0) + forfeitedTotal + payoutTotal + saleTotal) * 100) / 100;
+  const totalRevenue = Math.round((collectedDays.reduce((sum, d) => sum + d.amount, 0) + forfeitedTotal + payoutTotal + saleTotal) * 100) / 100;
   const paidThisWeek = Math.round((
-    accruedDays.filter(d => d.date >= sevenDaysAgoStr).reduce((sum, d) => sum + d.amount, 0) + forfeitedThisWeek + payoutThisWeek + saleThisWeek
+    collectedDays.filter(d => d.date >= sevenDaysAgoStr).reduce((sum, d) => sum + d.amount, 0) + forfeitedThisWeek + payoutThisWeek + saleThisWeek
   ) * 100) / 100;
 
   // Pending/overdue invoices — net out payments already made (via billing.js's
@@ -123,7 +125,7 @@ router.get('/summary', requireAuth, (req, res) => {
     .filter(d => d.date && d.date.slice(0, 7) === thisMonthStr)
     .reduce((sum, d) => sum + Number(d.amount), 0);
   const revenueThisMonth = Math.round((
-    accruedDays.filter(d => d.date && d.date.slice(0, 7) === thisMonthStr).reduce((sum, d) => sum + d.amount, 0) + forfeitedThisMonth + payoutThisMonth + saleThisMonth
+    collectedDays.filter(d => d.date && d.date.slice(0, 7) === thisMonthStr).reduce((sum, d) => sum + d.amount, 0) + forfeitedThisMonth + payoutThisMonth + saleThisMonth
   ) * 100) / 100;
 
   const overdueIds = new Set(
@@ -155,11 +157,11 @@ router.get('/summary', requireAuth, (req, res) => {
   `).get().total;
 
   const twelveMonthsAgoStr = monthsAgoStr(12);
-  const monthlyAccruedMap = new Map();
-  accruedDays.forEach(d => {
+  const monthlyCollectedMap = new Map();
+  collectedDays.forEach(d => {
     if (!d.date || d.date < twelveMonthsAgoStr) return;
     const month = d.date.slice(0, 7);
-    monthlyAccruedMap.set(month, (monthlyAccruedMap.get(month) || 0) + d.amount);
+    monthlyCollectedMap.set(month, (monthlyCollectedMap.get(month) || 0) + d.amount);
   });
   const forfeitedByMonth = new Map();
   forfeitedDeposits.forEach(d => {
@@ -179,9 +181,9 @@ router.get('/summary', requireAuth, (req, res) => {
     const month = d.date.slice(0, 7);
     saleByMonth.set(month, (saleByMonth.get(month) || 0) + Number(d.amount));
   });
-  const monthSet = new Set([...monthlyAccruedMap.keys(), ...forfeitedByMonth.keys(), ...payoutByMonth.keys(), ...saleByMonth.keys()]);
+  const monthSet = new Set([...monthlyCollectedMap.keys(), ...forfeitedByMonth.keys(), ...payoutByMonth.keys(), ...saleByMonth.keys()]);
   const monthlyRevenue = [...monthSet].sort().map(month => {
-    const base = monthlyAccruedMap.get(month) || 0;
+    const base = monthlyCollectedMap.get(month) || 0;
     const forfeited = forfeitedByMonth.get(month) || 0;
     const payout = payoutByMonth.get(month) || 0;
     const sale = saleByMonth.get(month) || 0;

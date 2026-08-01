@@ -64,11 +64,11 @@ function computeOwed(row, paidTotal) {
 
 // The revenue-eligible portion of a booking's own charge — lease subtotal +
 // admin fee + travel fee + misc fee, minus discount. Same components (and
-// same definition of "revenue") getAccruedRevenueDays() in db.js sums
-// day-by-day for reports; this is that same total for one booking, not
-// spread across days. Sales tax, highway tax, insurance fee, processing
-// fee, and tolls are excluded (pass-through/surplus, not profit) — same as
-// everywhere else revenue is computed.
+// same definition of "revenue") getCollectedRevenueDays() in db.js sums up
+// by payment date for reports; this is that same total for one booking, not
+// split by which payment funded it. Sales tax, highway tax, insurance fee,
+// processing fee, and tolls are excluded (pass-through/surplus, not profit)
+// — same as everywhere else revenue is computed.
 function computeRevenueEligible(row) {
   if (!row.pickup_scheduled_at || !row.rental_end_at || !row.weekly_rate) return 0;
   const days = Math.round((new Date(row.rental_end_at) - new Date(row.pickup_scheduled_at)) / 86400000);
