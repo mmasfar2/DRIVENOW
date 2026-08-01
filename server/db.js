@@ -2,7 +2,7 @@ const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const { DATA_DIR } = require('./paths');
-const { computeCharge, computeRevenueEligible, SALES_TAX_RATE, HIGHWAY_TAX_RATE } = require('./billing');
+const { SALES_TAX_RATE, HIGHWAY_TAX_RATE } = require('./billing');
 
 const db = new Database(path.join(DATA_DIR, 'data.db'));
 db.pragma('journal_mode = WAL');
@@ -1191,8 +1191,6 @@ function getCollectedRevenueDays() {
     // separate, utilization-only concern handled in reports.js.)
     const end = new Date(a.rental_end_at.slice(0, 10));
     if (!(end > start)) return;
-    const totalCharge = computeCharge(a);
-    const revenueShare = totalCharge > 0 ? computeRevenueEligible(a) / totalCharge : 0;
     const dailyRate = a.weekly_rate / 7;
     const dailyTaxedRate = dailyRate * (1 + HIGHWAY_TAX_RATE + SALES_TAX_RATE);
     const dailyTaxPortion = Math.round((dailyRate * (HIGHWAY_TAX_RATE + SALES_TAX_RATE)) * 100) / 100;
@@ -1214,6 +1212,20 @@ function getCollectedRevenueDays() {
       firstDay = false;
       cursor.setDate(cursor.getDate() + 1);
     }
+    // Derived from this exact nightCosts sequence — not computeCharge/
+    // computeRevenueEligible (billing.js), which can disagree with it for a
+    // booking that's been extended/renewed without its stored invoice_amount
+    // being regenerated to match: computeCharge prefers that stored (and
+    // potentially stale, too-small) figure, while computeRevenueEligible
+    // always recomputes fresh from weekly_rate × the current pickup/return
+    // span. Feeding a stale-vs-fresh mismatch into revenueShare could push it
+    // well past 1, and every overpayment dollar below gets multiplied by it
+    // — silently inflating recognized revenue. Summing the same nightCosts
+    // this function already walks keeps the ratio mathematically bounded to
+    // [0, 1], since revenuePortion is always a subset of fullDayInvoice.
+    const totalNightRevenue = nightCosts.reduce((sum, n) => sum + n.revenuePortion, 0);
+    const totalNightInvoice = nightCosts.reduce((sum, n) => sum + n.fullDayInvoice, 0);
+    const revenueShare = totalNightInvoice > 0 ? totalNightRevenue / totalNightInvoice : 0;
 
     const payments = paymentsByApp.get(a.application_id) || [];
     const byDate = new Map();
