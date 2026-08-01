@@ -146,6 +146,7 @@ function monthLabel(ym) {
     const max = Math.max(...ov.monthlyRevenue.map(m => m.total), 1);
     chartEl.innerHTML = `<div class="chart-wrap">${ov.monthlyRevenue.map(m => `
       <div class="chart-bar-col">
+        <div class="chart-bar-value">${fmtMoney(m.total)}</div>
         <div class="chart-bar" style="height:${Math.max((m.total / max) * 100, 1)}%" title="${fmtMoney(m.total)}"></div>
         <div class="chart-bar-label">${monthLabel(m.month)}</div>
       </div>
