@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo, getCollectedRevenueDays } = require('../db');
+const { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo, getAccruedRevenueDays } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
 const { computeCharge, computeOwed, SWIPE_FEE_RATE } = require('../billing');
@@ -392,19 +392,19 @@ router.get('/:id/payments', requireAuth, (req, res) => {
   res.json(rows);
 });
 
-// The latest payment date getCollectedRevenueDays actually recognized
-// revenue against for this booking — reused here so a Swipe fee lands on
-// the same date its revenue does (which, since revenue is now dated by
-// whichever payment funded it, is effectively "this booking's most recent
-// payment"). Falls back to the booking's own dates if nothing's been
-// recognized as revenue yet (e.g. a payment that's entirely an overpayment
-// against an unset/zero rate, or a booking with no revenue-eligible charge).
+// Same day-by-day FIFO logic getAccruedRevenueDays uses to figure out how
+// far a booking's cumulative payments actually reach — reused here so a
+// Swipe fee lands on the same night its revenue does, rather than a fixed
+// field. Naturally handles both ends: a booking paid in full lands on its
+// last night (old convention, same as forfeited deposits); a partial payment
+// on a still-active booking lands wherever that money actually reaches,
+// which might be well before the (possibly future) return date.
 function getPaymentFrontierDate(applicationId, app) {
-  // req.params.id arrives as a string; application_id out of getCollectedRevenueDays
+  // req.params.id arrives as a string; application_id out of getAccruedRevenueDays
   // is a number (straight off an INTEGER column) — Number() both sides so the
   // filter below doesn't silently match nothing.
   const appId = Number(applicationId);
-  const days = getCollectedRevenueDays().filter(d => d.application_id === appId && d.amount > 0);
+  const days = getAccruedRevenueDays().filter(d => d.application_id === appId && d.amount > 0);
   if (days.length) return days.reduce((max, d) => (d.date > max ? d.date : max), days[0].date);
   return (app.rental_end_at || app.pickup_scheduled_at || todayStr()).slice(0, 10);
 }
