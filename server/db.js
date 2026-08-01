@@ -417,19 +417,18 @@ db.exec(`
   )
   WHERE vehicle_id IS NULL AND payment_id IS NOT NULL
 `);
-// Swipe-triggered expenses are dated to the most recent payment date that's
-// actually recognized as revenue for that booking (see getCollectedRevenueDays
-// — revenue is now attributed to the payment that funded it, so this is
-// effectively "whichever payment is this booking's latest"), not whenever
-// the payment happened to be logged as a fixed field. Matters when
-// backfilling old bookings entered well after the fact, and for partial
-// payments on still-active bookings. applications.js's syncSwipeExpense sets
-// this correctly going forward; this re-derives it for every swipe-linked
-// row on every startup (cheap, and safe to re-run since it recomputes the
-// same answer) so edits to a booking's dates or payments stay in sync too.
+// Swipe-triggered expenses are dated to the most recent night that's
+// actually been paid for and recognized as accrued revenue on that booking
+// (see getAccruedRevenueDays), not whenever the payment happened to be
+// logged as a fixed field. Matters when backfilling old bookings entered
+// well after the fact, and for partial payments on still-active bookings.
+// applications.js's syncSwipeExpense sets this correctly going forward;
+// this re-derives it for every swipe-linked row on every startup (cheap,
+// and safe to re-run since it recomputes the same answer) so edits to a
+// booking's dates or payments stay in sync too.
 {
   const frontierByApp = new Map();
-  getCollectedRevenueDays().forEach(d => {
+  getAccruedRevenueDays().forEach(d => {
     if (d.amount <= 0) return;
     const current = frontierByApp.get(d.application_id);
     if (!current || d.date > current) frontierByApp.set(d.application_id, d.date);
@@ -1119,54 +1118,18 @@ function getForfeitedDeposits() {
   }));
 }
 
-// Revenue as it's actually collected — one row per payment, dated to that
-// payment's own paid_at, for whatever share of the booking's day-by-day
-// invoice that payment actually funded. This is a cash-basis definition:
-// money is recognized the month it came in, never the month(s) the rental
-// nights it happens to cover fall on. Concretely, that means extending an
-// active booking's return date further into the future never moves a single
-// dollar of already-recognized revenue — the extension only adds new,
-// as-yet-unfunded nights at the end of the sequence below; it can't reach
-// back and reclassify a payment that was already fully spent on earlier
-// nights, and a booking's own day-by-day rate/fee structure barely shifts
-// with more nights added (only the one-time first-day fees dilute slightly
-// as a share of the whole). Sales tax, highway tax, insurance fee,
-// processing fee, and tolls are excluded from `amount` — pass-through/
-// ancillary, not earnings — same exclusions as always.
-//
-// The day-by-day invoice structure itself (daily rate + that day's admin
-// fee, with one-time travel/misc fees minus any discount folded into the
-// pickup day) is unchanged from before — what's different is which date a
-// day's dollars get filed under. Walk the booking's nights in order and its
-// payments in paid_at order side by side, like two running tabs: spend the
-// current payment against the current night's full invoice cost (rate +
-// its share of tax + admin + insurance fee, plus travel/processing/misc/
-// toll fee and minus discount on the pickup day) until either runs out, at
-// which point move to the next one. A night whose cost straddles two
-// payments has its revenue split between both payments' dates, in
-// proportion to how much each contributed. A night with no payment left to
-// spend on it simply produces no entry — unpaid nights aren't revenue
-// (same as before, no unfunded-but-still-emitted zero rows anymore).
-//
-// Each entry also carries taxAmount — that same night's share of highway +
-// sales tax (only ever levied on the lease subtotal, never on admin/
-// travel/insurance/processing fees), split by the identical fraction as the
-// night's revenue. This is what the Taxes Collected report reads from, so
-// "how much tax was collected" always uses the same payment-allocation
-// logic — and the same cash-basis dating — as "how much revenue was
-// collected."
-//
-// Splitting an already-cent-rounded night's revenuePortion across two
-// payments (each independently rounded) can drift a cent or two from the
-// booking's actual stored total — the same accepted tradeoff as always
-// treating each night as its own real, independently rounded charge.
-//
-// A booking paid MORE than its full invoice (an overpayment — the same
-// thing computeOwed shows as a negative balance) still has that excess
-// classified the same way as everything else: split by the booking's own
-// revenue-vs-tax ratio, dated to whichever payment pushed it past the full
-// invoice amount, rather than left uncounted.
-function getCollectedRevenueDays() {
+// Revenue accrued night-by-night across a booking's actual rental dates,
+// capped by what's actually been paid (FIFO — oldest unpaid nights filled
+// first). Money is recognized the calendar night it covers, not whenever a
+// payment against it happened to be logged — a booking paid on July 11 for
+// a May 12–June 14 rental still shows its revenue spread across those
+// May/June days. Sales tax, highway tax, insurance fee, processing fee, and
+// tolls are excluded from `amount` — pass-through/ancillary, not earnings.
+// Each entry also carries taxAmount — that night's share of highway + sales
+// tax (only ever levied on the lease subtotal, never on admin/travel/
+// insurance/processing fees) — read by the Taxes Collected report so it
+// uses the exact same accrual/FIFO logic as Revenue.
+function getAccruedRevenueDays() {
   const rows = db.prepare(`
     SELECT id as application_id, assigned_vehicle_id as vehicle_id, status,
            pickup_scheduled_at, rental_end_at, weekly_rate, admin_fee_rate, travel_fee, discount,
@@ -1175,13 +1138,9 @@ function getCollectedRevenueDays() {
     WHERE status IN ('active', 'completed')
       AND pickup_scheduled_at IS NOT NULL AND rental_end_at IS NOT NULL AND weekly_rate IS NOT NULL
   `).all();
-  const paymentsByApp = new Map();
-  db.prepare(`
-    SELECT application_id, amount, paid_at FROM payments ORDER BY paid_at ASC, id ASC
-  `).all().forEach(p => {
-    if (!paymentsByApp.has(p.application_id)) paymentsByApp.set(p.application_id, []);
-    paymentsByApp.get(p.application_id).push({ amount: Number(p.amount), date: p.paid_at.slice(0, 10) });
-  });
+  const paidByApp = new Map(db.prepare(`
+    SELECT application_id, COALESCE(SUM(amount), 0) as total FROM payments GROUP BY application_id
+  `).all().map(r => [r.application_id, r.total]));
   const days = [];
   rows.forEach(a => {
     const start = new Date(a.pickup_scheduled_at.slice(0, 10));
@@ -1192,6 +1151,7 @@ function getCollectedRevenueDays() {
     const end = new Date(a.rental_end_at.slice(0, 10));
     if (!(end > start)) return;
     const totalCharge = computeCharge(a);
+    let remainingPaid = Math.max(0, paidByApp.get(a.application_id) || 0);
     const revenueShare = totalCharge > 0 ? computeRevenueEligible(a) / totalCharge : 0;
     const dailyRate = a.weekly_rate / 7;
     const dailyTaxedRate = dailyRate * (1 + HIGHWAY_TAX_RATE + SALES_TAX_RATE);
@@ -1203,72 +1163,52 @@ function getCollectedRevenueDays() {
     const miscFee = Math.round((Number(a.misc_fee) || 0) * 100) / 100;
     const tollFee = Math.round((Number(a.toll_fee) || 0) * 100) / 100;
     const discount = Math.round((Number(a.discount) || 0) * 100) / 100;
-
-    const nightCosts = [];
     const cursor = new Date(start);
     let firstDay = true;
+    let lastEntry = null;
     while (cursor < end) {
       const revenuePortion = Math.round((dailyRate + adminFeeRate + (firstDay ? travelFee + miscFee - discount : 0)) * 100) / 100;
       const fullDayInvoice = Math.round((dailyTaxedRate + adminFeeRate + insuranceFeeRate + (firstDay ? travelFee + processingFee + miscFee + tollFee - discount : 0)) * 100) / 100;
-      nightCosts.push({ revenuePortion, taxPortion: dailyTaxPortion, fullDayInvoice });
+      let amount;
+      let taxAmount;
+      if (remainingPaid >= fullDayInvoice) {
+        amount = revenuePortion;
+        taxAmount = dailyTaxPortion;
+        remainingPaid = Math.round((remainingPaid - fullDayInvoice) * 100) / 100;
+      } else if (remainingPaid > 0) {
+        const fraction = fullDayInvoice > 0 ? remainingPaid / fullDayInvoice : 0;
+        amount = Math.round(revenuePortion * fraction * 100) / 100;
+        taxAmount = Math.round(dailyTaxPortion * fraction * 100) / 100;
+        remainingPaid = 0;
+      } else {
+        amount = 0;
+        taxAmount = 0;
+      }
+      lastEntry = { application_id: a.application_id, vehicle_id: a.vehicle_id, date: cursor.toISOString().slice(0, 10), amount, taxAmount };
+      days.push(lastEntry);
       firstDay = false;
       cursor.setDate(cursor.getDate() + 1);
     }
-
-    const payments = paymentsByApp.get(a.application_id) || [];
-    const byDate = new Map();
-    const addTo = (date, amount, taxAmount) => {
-      if (!byDate.has(date)) byDate.set(date, { amount: 0, taxAmount: 0 });
-      const entry = byDate.get(date);
-      entry.amount = Math.round((entry.amount + amount) * 100) / 100;
-      entry.taxAmount = Math.round((entry.taxAmount + taxAmount) * 100) / 100;
-    };
-
-    let payIdx = -1;
-    let payRemaining = 0;
-    for (const night of nightCosts) {
-      let nightRemaining = night.fullDayInvoice;
-      while (nightRemaining > 0) {
-        if (payRemaining <= 0) {
-          if (payIdx + 1 >= payments.length) break; // no more payments — rest of this night (and any after) go unearned
-          payIdx++;
-          payRemaining = payments[payIdx].amount;
-        }
-        const spend = Math.round(Math.min(nightRemaining, payRemaining) * 100) / 100;
-        if (spend <= 0) break;
-        const fraction = night.fullDayInvoice > 0 ? spend / night.fullDayInvoice : 0;
-        addTo(payments[payIdx].date, night.revenuePortion * fraction, night.taxPortion * fraction);
-        nightRemaining = Math.round((nightRemaining - spend) * 100) / 100;
-        payRemaining = Math.round((payRemaining - spend) * 100) / 100;
-      }
+    // A booking paid MORE than its full invoice (an overpayment — the same
+    // thing computeOwed shows as a negative balance) still has that excess
+    // counted as revenue, folded into the last night's entry rather than
+    // left uncounted — split by the booking's own revenue-vs-tax ratio.
+    if (remainingPaid > 0 && lastEntry) {
+      const extraRevenue = Math.round(remainingPaid * revenueShare * 100) / 100;
+      lastEntry.amount = Math.round((lastEntry.amount + extraRevenue) * 100) / 100;
+      lastEntry.taxAmount = Math.round((lastEntry.taxAmount + (remainingPaid - extraRevenue)) * 100) / 100;
     }
-    // Every night's invoice is spent — anything still left over (in the
-    // payment we stopped on, plus any payments after it) is an overpayment.
-    if (payRemaining > 0) {
-      const extraRevenue = Math.round(payRemaining * revenueShare * 100) / 100;
-      addTo(payments[payIdx].date, extraRevenue, Math.round((payRemaining - extraRevenue) * 100) / 100);
-    }
-    for (let i = payIdx + 1; i < payments.length; i++) {
-      const extraRevenue = Math.round(payments[i].amount * revenueShare * 100) / 100;
-      addTo(payments[i].date, extraRevenue, Math.round((payments[i].amount - extraRevenue) * 100) / 100);
-    }
-
-    byDate.forEach((v, date) => {
-      days.push({ application_id: a.application_id, vehicle_id: a.vehicle_id, date, amount: v.amount, taxAmount: v.taxAmount });
-    });
   });
   return days;
 }
 
 // A swipe-payment's card-processing fee (the business_expenses row
 // syncSwipeExpense in applications.js creates, joined back via payment_id)
-// spread across the same payment-dated entries — and in the same
-// proportion — as the booking's own revenue (see getCollectedRevenueDays),
-// rather than dated to a single fixed day. Since revenue is now itself dated
-// by whichever payment funded it, this naturally lands each fee on (or very
-// near) its own triggering payment's date rather than needing its own
-// separate frontier calculation.
-function getCollectedCardFeeDays() {
+// spread across the same accrued-revenue nights — and in the same
+// proportion — as the booking's own revenue (see getAccruedRevenueDays),
+// rather than dated to a single arbitrary "frontier" day whenever a new
+// payment happened to arrive.
+function getAccruedCardFeeDays() {
   const feesByApp = new Map(db.prepare(`
     SELECT p.application_id, COALESCE(SUM(be.amount), 0) as fee
     FROM business_expenses be
@@ -1277,7 +1217,7 @@ function getCollectedCardFeeDays() {
   `).all().map(r => [r.application_id, r.fee]));
   if (!feesByApp.size) return [];
 
-  const revenueDays = getCollectedRevenueDays().filter(d => feesByApp.has(d.application_id) && d.amount > 0);
+  const revenueDays = getAccruedRevenueDays().filter(d => feesByApp.has(d.application_id) && d.amount > 0);
   const revenueByApp = new Map();
   revenueDays.forEach(d => {
     revenueByApp.set(d.application_id, (revenueByApp.get(d.application_id) || 0) + d.amount);
@@ -1288,7 +1228,7 @@ function getCollectedCardFeeDays() {
   // Independently rounding each day's proportional share can drift a cent
   // or two from the fee's actual stored total across enough days — fold
   // whatever's left into the booking's last entry instead, same as
-  // getCollectedRevenueDays does for its own leftover cents.
+  // getAccruedRevenueDays does for its own leftover cents.
   const remainingByApp = new Map(feesByApp);
   return revenueDays.map((d, i) => {
     const isLast = lastIndexByApp.get(d.application_id) === i;
@@ -1312,4 +1252,4 @@ function queueMessage(applicationId, channel, to, body) {
     .run(applicationId, channel, to, body);
 }
 
-module.exports = { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo, getForfeitedDeposits, getCollectedRevenueDays, getCollectedCardFeeDays, getLastOilChangeByVehicle, withOilChangeStatus, OIL_CHANGE_INTERVAL_MILES };
+module.exports = { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo, getForfeitedDeposits, getAccruedRevenueDays, getAccruedCardFeeDays, getLastOilChangeByVehicle, withOilChangeStatus, OIL_CHANGE_INTERVAL_MILES };
