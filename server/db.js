@@ -354,6 +354,9 @@ if (!vehicleCols.includes('purchase_price')) {
 if (!vehicleCols.includes('mileage')) {
   db.exec('ALTER TABLE vehicles ADD COLUMN mileage REAL');
 }
+if (!vehicleCols.includes('mileage_updated_at')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN mileage_updated_at TEXT');
+}
 if (!vehicleCols.includes('gas_level')) {
   db.exec('ALTER TABLE vehicles ADD COLUMN gas_level TEXT');
 }
