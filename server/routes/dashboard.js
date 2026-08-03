@@ -2,7 +2,7 @@ const express = require('express');
 const { db, getForfeitedDeposits, getAccruedRevenueDays } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { computeOwed } = require('../billing');
-const { todayStr, daysAgoStr, monthsAgoStr } = require('../timezone');
+const { todayStr, daysAgoStr } = require('../timezone');
 
 const router = express.Router();
 
@@ -159,37 +159,38 @@ router.get('/summary', requireAuth, (req, res) => {
     WHERE strftime('%Y-%m', COALESCE(performed_at, created_at)) = strftime('%Y-%m', datetime('now', '-1 month'))
   `).get().total;
 
-  const twelveMonthsAgoStr = monthsAgoStr(12);
+  // Window starts at the first day of last month (not 12 months back) and
+  // just keeps going forward — last month, this month, and whatever
+  // "coming months" accumulate data as time passes — rather than a fixed
+  // trailing-12-months lookback.
+  const [todayY, todayM] = todayStr().split('-').map(Number);
+  const lastMonthStartStr = new Date(Date.UTC(todayY, todayM - 2, 1)).toISOString().slice(0, 10);
   const monthlyAccruedMap = new Map();
   accruedDays.forEach(d => {
-    if (!d.date || d.date < twelveMonthsAgoStr) return;
+    if (!d.date || d.date < lastMonthStartStr) return;
     const month = d.date.slice(0, 7);
     monthlyAccruedMap.set(month, (monthlyAccruedMap.get(month) || 0) + d.amount);
   });
   const forfeitedByMonth = new Map();
   forfeitedDeposits.forEach(d => {
-    if (!d.date || d.date < twelveMonthsAgoStr) return;
+    if (!d.date || d.date < lastMonthStartStr) return;
     const month = d.date.slice(0, 7);
     forfeitedByMonth.set(month, (forfeitedByMonth.get(month) || 0) + Number(d.forfeited_amount));
   });
   const payoutByMonth = new Map();
   insurancePayouts.forEach(d => {
-    if (!d.date || d.date < twelveMonthsAgoStr) return;
+    if (!d.date || d.date < lastMonthStartStr) return;
     const month = d.date.slice(0, 7);
     payoutByMonth.set(month, (payoutByMonth.get(month) || 0) + Number(d.amount));
   });
   const saleByMonth = new Map();
   vehicleSales.forEach(d => {
-    if (!d.date || d.date < twelveMonthsAgoStr) return;
+    if (!d.date || d.date < lastMonthStartStr) return;
     const month = d.date.slice(0, 7);
     saleByMonth.set(month, (saleByMonth.get(month) || 0) + Number(d.amount));
   });
-  // Most recent completed month first (left to right), and the still-in-progress
-  // current month left out entirely — its number is misleadingly small early in
-  // the month and only grows as more nights are paid for/occur, so it doesn't
-  // belong next to twelve fully-settled months.
   const monthSet = new Set([...monthlyAccruedMap.keys(), ...forfeitedByMonth.keys(), ...payoutByMonth.keys(), ...saleByMonth.keys()]);
-  const monthlyRevenue = [...monthSet].filter(month => month !== thisMonthStr).sort().reverse().map(month => {
+  const monthlyRevenue = [...monthSet].sort().map(month => {
     const base = monthlyAccruedMap.get(month) || 0;
     const forfeited = forfeitedByMonth.get(month) || 0;
     const payout = payoutByMonth.get(month) || 0;
