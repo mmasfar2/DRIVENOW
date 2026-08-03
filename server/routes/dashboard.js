@@ -184,8 +184,12 @@ router.get('/summary', requireAuth, (req, res) => {
     const month = d.date.slice(0, 7);
     saleByMonth.set(month, (saleByMonth.get(month) || 0) + Number(d.amount));
   });
+  // Most recent completed month first (left to right), and the still-in-progress
+  // current month left out entirely — its number is misleadingly small early in
+  // the month and only grows as more nights are paid for/occur, so it doesn't
+  // belong next to twelve fully-settled months.
   const monthSet = new Set([...monthlyAccruedMap.keys(), ...forfeitedByMonth.keys(), ...payoutByMonth.keys(), ...saleByMonth.keys()]);
-  const monthlyRevenue = [...monthSet].sort().map(month => {
+  const monthlyRevenue = [...monthSet].filter(month => month !== thisMonthStr).sort().reverse().map(month => {
     const base = monthlyAccruedMap.get(month) || 0;
     const forfeited = forfeitedByMonth.get(month) || 0;
     const payout = payoutByMonth.get(month) || 0;
