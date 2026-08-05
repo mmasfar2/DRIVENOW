@@ -124,6 +124,14 @@
         </div>
         <div id="vd-mileage-as-of-2" style="font-size:0.72rem;color:#888;margin-top:6px;"></div>
       </div>
+      <div class="vd-stat-card">
+        <div class="vd-stat-card__label">Last Oil Change</div>
+        <div class="vd-stat-card__edit">
+          <input type="date" id="vd-oil-change-input">
+          <button class="btn btn-sm" id="vd-oil-change-save">Save</button>
+        </div>
+        <div style="font-size:0.72rem;color:#888;margin-top:6px;">Logged against the current odometer reading above.</div>
+      </div>
     </div>
     <div class="vd-stat-row">
       <div class="vd-stat-card">
@@ -282,6 +290,7 @@ function render() {
   renderOilChangeStatus();
   document.getElementById('vd-next-service-input').value = vehicle.next_service_at ? vehicle.next_service_at.slice(0, 10) : '';
   document.getElementById('vd-mileage-input').value = vehicle.mileage ?? '';
+  document.getElementById('vd-oil-change-input').value = vehicle.last_oil_change_at ? vehicle.last_oil_change_at.slice(0, 10) : '';
   document.getElementById('vd-mileage-as-of-2').textContent = vehicle.mileage_updated_at ? `As of ${fmtDate(vehicle.mileage_updated_at)}` : '';
   document.getElementById('vd-maint-total').textContent = fmtExact(vehicle.maintenanceTotal);
   document.getElementById('vd-expense-total').textContent = fmtExact(vehicle.businessExpenseTotal);
@@ -495,6 +504,30 @@ document.getElementById('vd-mileage-save').addEventListener('click', async () =>
   const mileage = document.getElementById('vd-mileage-input').value;
   try {
     await api(`/api/vehicles/${id}`, { method: 'PATCH', body: JSON.stringify({ mileage }) });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  await load();
+});
+
+// Quick-logs an Oil Change maintenance record with just a date — same
+// record the full "Log Service / Maintenance Record" form below creates,
+// just without re-typing description/category/odometer every time. Pinned
+// to the vehicle's current recorded mileage (Current Odometer Reading
+// above), since the 3,000-mile countdown is anchored to that reading.
+document.getElementById('vd-oil-change-save').addEventListener('click', async () => {
+  const performed_at = document.getElementById('vd-oil-change-input').value;
+  if (!performed_at) { alert('Pick a date'); return; }
+  if (vehicle.mileage == null) { alert('Set Current Odometer Reading first, so the oil change has a mileage to anchor to'); return; }
+  try {
+    await api('/api/maintenance', {
+      method: 'POST',
+      body: JSON.stringify({
+        vehicle_id: id, description: 'Oil Change', category: 'Oil Change',
+        performed_at, odometer_at_service: vehicle.mileage,
+      }),
+    });
   } catch (err) {
     alert(err.message);
     return;
