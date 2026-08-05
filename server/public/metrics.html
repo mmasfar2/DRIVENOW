@@ -239,6 +239,57 @@ async function toggleCollectionsPayments(row, colSpan, periodFrom, periodTo) {
   }
 }
 
+// Per-entry breakdown shown when a Maintenance by Week/Month row is
+// expanded — every individual maintenance log entry that rolled up into
+// that row's totals (see reports.js's /maintenance_by_period/entries).
+const MAINTENANCE_DRILLDOWN_COLUMNS = [
+  { key: 'performed_at', label: 'Date' },
+  { key: 'vehicle', label: 'Vehicle' },
+  { key: 'license_plate', label: 'License Plate' },
+  { key: 'description', label: 'Description' },
+  { key: 'category', label: 'Category' },
+  { key: 'cost', label: 'Cost', type: 'money' },
+  { key: 'notes', label: 'Notes' },
+];
+
+async function toggleMaintenanceEntries(row, colSpan, periodFrom, periodTo) {
+  const existing = row.nextElementSibling;
+  if (existing && existing.classList.contains('report-drilldown-row')) {
+    existing.remove();
+    row.classList.remove('report-row--expanded');
+    return;
+  }
+  document.querySelectorAll('.report-drilldown-row').forEach(r => r.remove());
+  document.querySelectorAll('.report-row--expanded').forEach(r => r.classList.remove('report-row--expanded'));
+
+  row.classList.add('report-row--expanded');
+  const drillRow = document.createElement('tr');
+  drillRow.className = 'report-drilldown-row';
+  const cell = document.createElement('td');
+  cell.colSpan = colSpan;
+  cell.innerHTML = '<div class="report-drilldown__loading">Loading entries…</div>';
+  drillRow.appendChild(cell);
+  row.after(drillRow);
+
+  try {
+    const entries = await api(`/api/reports/maintenance_by_period/entries?from=${periodFrom}&to=${periodTo}`);
+    if (!entries.length) {
+      cell.innerHTML = '<div class="report-drilldown__loading">No entries in this period.</div>';
+      return;
+    }
+    cell.innerHTML = `
+      <table class="report-drilldown__table">
+        <thead><tr>${MAINTENANCE_DRILLDOWN_COLUMNS.map(c => `<th>${c.label}</th>`).join('')}</tr></thead>
+        <tbody>
+          ${entries.map(en => `<tr>${MAINTENANCE_DRILLDOWN_COLUMNS.map(c => `<td>${drilldownCell(en[c.key], c.type)}</td>`).join('')}</tr>`).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    cell.innerHTML = `<div class="report-drilldown__loading">${e.message || 'Failed to load entries'}</div>`;
+  }
+}
+
 async function toggleVehicleBookings(row, colSpan, from, to) {
   const existing = row.nextElementSibling;
   if (existing && existing.classList.contains('report-drilldown-row')) {
@@ -291,14 +342,17 @@ async function generateReport(key, label, columns) {
       body.innerHTML = '<div class="report-results__empty">No data in this range.</div>';
       return;
     }
-    const drillKind = key === 'revenue_by_vehicle' ? 'vehicle' : key === 'collections_by_method' ? 'payments' : null;
+    const drillKind = key === 'revenue_by_vehicle' ? 'vehicle'
+      : key === 'collections_by_method' ? 'payments'
+      : key === 'maintenance_by_period' ? 'maintenance'
+      : null;
     body.innerHTML = `
       <table>
         <thead><tr>${columns.map(c => `<th>${c.label}</th>`).join('')}</tr></thead>
         <tbody>
           ${data.rows.map(r => {
             if (drillKind === 'vehicle') return `<tr class="report-row--drillable" data-vehicle-id="${r.vehicle_id}">${columns.map(c => `<td>${fmtCell(r[c.key], c.type)}</td>`).join('')}</tr>`;
-            if (drillKind === 'payments') return `<tr class="report-row--drillable" data-period-from="${r.period_from}" data-period-to="${r.period_to}">${columns.map(c => `<td>${fmtCell(r[c.key], c.type)}</td>`).join('')}</tr>`;
+            if (drillKind === 'payments' || drillKind === 'maintenance') return `<tr class="report-row--drillable" data-period-from="${r.period_from}" data-period-to="${r.period_to}">${columns.map(c => `<td>${fmtCell(r[c.key], c.type)}</td>`).join('')}</tr>`;
             return `<tr>${columns.map(c => `<td>${fmtCell(r[c.key], c.type)}</td>`).join('')}</tr>`;
           }).join('')}
         </tbody>
@@ -313,6 +367,10 @@ async function generateReport(key, label, columns) {
     } else if (drillKind === 'payments') {
       body.querySelectorAll('.report-row--drillable').forEach(row => {
         row.addEventListener('click', () => toggleCollectionsPayments(row, columns.length, row.dataset.periodFrom, row.dataset.periodTo));
+      });
+    } else if (drillKind === 'maintenance') {
+      body.querySelectorAll('.report-row--drillable').forEach(row => {
+        row.addEventListener('click', () => toggleMaintenanceEntries(row, columns.length, row.dataset.periodFrom, row.dataset.periodTo));
       });
     }
   } catch (e) {

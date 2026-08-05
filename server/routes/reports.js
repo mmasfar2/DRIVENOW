@@ -580,6 +580,44 @@ const REPORTS = {
     },
   },
 
+  maintenance_by_period: {
+    category: 'health', label: 'Maintenance by Week/Month',
+    description: 'Every maintenance log entry across the fleet (tolls included), grouped by day, week, or month and dated to when the work was performed. Click a row to see the individual entries behind it.',
+    hasDateRange: true,
+    extraParams: [
+      { key: 'groupBy', label: 'Group By', type: 'select', default: 'month', options: [
+        { value: 'day', label: 'Day' },
+        { value: 'week', label: 'Week' },
+        { value: 'month', label: 'Month' },
+      ] },
+    ],
+    columns: [
+      { key: 'period', label: 'Period' },
+      { key: 'events', label: 'Maintenance Events', type: 'number' },
+      { key: 'total_cost', label: 'Total Cost', type: 'money' },
+    ],
+    run(from, to, params) {
+      const groupBy = (params && params.groupBy) || 'month';
+      const rows = db.prepare(`
+        SELECT cost, substr(performed_at, 1, 10) as date
+        FROM vehicle_maintenance WHERE substr(performed_at, 1, 10) BETWEEN ? AND ?
+      `).all(from, to);
+      const byPeriod = new Map();
+      for (const r of rows) {
+        const key = periodKeyFor(r.date, groupBy);
+        if (!byPeriod.has(key)) byPeriod.set(key, { events: 0, total_cost: 0 });
+        const entry = byPeriod.get(key);
+        entry.events += 1;
+        entry.total_cost = round2(entry.total_cost + (Number(r.cost) || 0));
+      }
+      return [...byPeriod.keys()].sort().map(key => {
+        const range = periodRangeFor(key, groupBy);
+        const entry = byPeriod.get(key);
+        return { period: periodLabelFor(key, groupBy), events: entry.events, total_cost: entry.total_cost, period_from: range.from, period_to: range.to };
+      });
+    },
+  },
+
   outstanding_balance: {
     category: 'past_due', label: 'Reservations with Outstanding Balance',
     description: 'Active bookings currently owing money, computed the same way as the balance shown on each reservation page.',
@@ -842,6 +880,30 @@ router.get('/collections_by_method/payments', requireAuth, (req, res) => {
     vehicle: r.make ? `${r.year} ${r.make} ${r.model}` : 'Unassigned',
     method: PAYMENT_METHOD_LABELS[r.method] || r.method,
     amount: round2(r.amount),
+  })));
+});
+
+// Per-entry breakdown behind a Maintenance by Week/Month row — every
+// individual maintenance log entry that rolled up into that row's totals.
+router.get('/maintenance_by_period/entries', requireAuth, (req, res) => {
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'from and to are required' });
+  const rows = db.prepare(`
+    SELECT vm.performed_at, vm.description, vm.category, vm.cost, vm.notes,
+           v.year, v.make, v.model, v.license_plate
+    FROM vehicle_maintenance vm
+    JOIN vehicles v ON v.id = vm.vehicle_id
+    WHERE substr(vm.performed_at, 1, 10) BETWEEN ? AND ?
+    ORDER BY vm.performed_at
+  `).all(from, to);
+  res.json(rows.map(r => ({
+    performed_at: r.performed_at ? r.performed_at.slice(0, 10) : '—',
+    vehicle: `${r.year} ${r.make} ${r.model}`,
+    license_plate: r.license_plate || '—',
+    description: r.description,
+    category: r.category || '—',
+    cost: round2(r.cost),
+    notes: r.notes || '—',
   })));
 });
 
