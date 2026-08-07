@@ -471,7 +471,7 @@ const REPORTS = {
 
   revpav: {
     category: 'utilization', label: 'Revenue per Available Vehicle (RevPAV)',
-    description: 'The car\'s daily rate, travel fee, and admin fee, accrued day-by-day across the actual rental dates that fall in the selected range, plus deposit amounts forfeited in range — same Revenue definition as Revenue by Vehicle, capped to each booking\'s actual scheduled dates regardless of check-in status — divided by days in range.',
+    description: 'The car\'s daily rate, travel fee, and admin fee, accrued day-by-day across the actual rental dates that fall in the selected range, plus deposit amounts forfeited in range — the same rental-revenue accrual Revenue by Vehicle uses, capped to each booking\'s actual scheduled dates regardless of check-in status — divided by days in range. Unlike Revenue by Vehicle, this doesn\'t include insurance claim payouts or vehicle sale proceeds, since those are one-off events rather than a measure of how well the vehicle is renting.',
     hasDateRange: true,
     columns: [
       { key: 'vehicle', label: 'Vehicle' },
@@ -595,7 +595,7 @@ const REPORTS = {
 
   downtime_due_to_maintenance: {
     category: 'health', label: 'Downtime Due to Maintenance',
-    description: 'Maintenance events and cost per vehicle in range — a proxy for how often each vehicle was down.',
+    description: 'Maintenance events and cost per vehicle in range (tolls excluded — logging a toll doesn\'t take a vehicle out of service) — a proxy for how often each vehicle was down.',
     hasDateRange: true,
     columns: [
       { key: 'vehicle', label: 'Vehicle' },
@@ -604,10 +604,19 @@ const REPORTS = {
       { key: 'total_cost', label: 'Total Cost', type: 'money' },
     ],
     run(from, to) {
+      // Tolls are logged in this same table (see Toll Report) but aren't
+      // downtime — the vehicle isn't out of service to record one — so they're
+      // excluded here the same way every other actual-cost/downtime figure in
+      // this file excludes them (Revenue by Vehicle's Expense, Revenue by Time
+      // Period's vehicleExpense). COALESCE both sides first — category is
+      // often NULL for ordinary maintenance rows, and NULL = 'toll' is NULL
+      // rather than false, which would make NOT(...) also NULL and silently
+      // drop every NULL-category row, not just the toll ones.
       return db.prepare(`
         SELECT v.year, v.make, v.model, v.license_plate, COUNT(*) as events, COALESCE(SUM(vm.cost), 0) as total_cost
         FROM vehicle_maintenance vm JOIN vehicles v ON v.id = vm.vehicle_id
         WHERE substr(vm.performed_at, 1, 10) BETWEEN ? AND ?
+          AND NOT (COALESCE(vm.category, '') = 'toll' OR lower(COALESCE(vm.description, '')) LIKE '%toll%')
         GROUP BY v.id ORDER BY events DESC
       `).all(from, to).map(r => ({
         vehicle: `${r.year} ${r.make} ${r.model}`, license_plate: r.license_plate || '—',
@@ -816,7 +825,7 @@ const REPORTS = {
 
   late_returns_overage: {
     category: 'operational', label: 'Late Returns & Overage Charges',
-    description: 'Completed bookings checked back in after their scheduled return date, with an estimated overage charge (days late × daily rate).',
+    description: 'Completed bookings checked back in after their scheduled return date, with an estimated overage charge (days late × daily rate). Actual return is when Check In was actually pressed (checked_in_at) — not whenever the booking record happened to be last saved, which could be a later unrelated edit.',
     hasDateRange: true,
     columns: [
       { key: 'customer', label: 'Customer' },
@@ -827,16 +836,20 @@ const REPORTS = {
       { key: 'overage', label: 'Est. Overage Charge', type: 'money' },
     ],
     run(from, to) {
+      // checked_in_at is only ever set by the Check In action itself, unlike
+      // updated_at which any later edit to a completed booking also touches
+      // (see routes/applications.js) — falls back to updated_at only for
+      // bookings completed before checked_in_at existed and never re-checked-in.
       const rows = db.prepare(`
-        SELECT a.first_name, a.last_name, a.rental_end_at, a.updated_at, a.weekly_rate, v.year, v.make, v.model
+        SELECT a.first_name, a.last_name, a.rental_end_at, COALESCE(a.checked_in_at, a.updated_at) as actual_return_at, a.weekly_rate, v.year, v.make, v.model
         FROM applications a LEFT JOIN vehicles v ON v.id = a.assigned_vehicle_id
         WHERE a.status = 'completed' AND a.rental_end_at IS NOT NULL
-          AND substr(a.updated_at, 1, 10) BETWEEN ? AND ?
+          AND substr(COALESCE(a.checked_in_at, a.updated_at), 1, 10) BETWEEN ? AND ?
       `).all(from, to);
       const out = [];
       for (const r of rows) {
         const scheduled = r.rental_end_at.slice(0, 10);
-        const actual = r.updated_at.slice(0, 10);
+        const actual = r.actual_return_at.slice(0, 10);
         const daysLate = dayDiff(new Date(scheduled), new Date(actual));
         if (daysLate > 0) {
           out.push({

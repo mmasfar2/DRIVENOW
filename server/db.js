@@ -319,6 +319,18 @@ if (!existingCols.includes('toll_fee')) {
   // profit" treatment as every other toll and Insurance Fee.
   db.exec('ALTER TABLE applications ADD COLUMN toll_fee REAL');
 }
+if (!existingCols.includes('checked_in_at')) {
+  // Set exactly once, only by the Check In (complete-rental) action — unlike
+  // updated_at, which the general edit endpoint also touches for any later
+  // change to a completed booking (fixing a typo'd phone number, etc.).
+  // Reports/late_returns_overage needs a date that means "the vehicle
+  // actually came back," not "this row was last saved," so it reads this
+  // column instead. Backfilled from the existing updated_at for bookings
+  // already completed before this column existed — the best information
+  // available for history that predates this fix.
+  db.exec('ALTER TABLE applications ADD COLUMN checked_in_at TEXT');
+  db.exec("UPDATE applications SET checked_in_at = updated_at WHERE status = 'completed' AND checked_in_at IS NULL");
+}
 
 const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);
 if (!vehicleCols.includes('photo_path')) {
