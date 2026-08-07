@@ -627,7 +627,7 @@ router.post('/:id/notes', requireAuth, (req, res) => {
 
 // ── AUTHED: General notes / edit ──
 router.patch('/:id', requireAuth, (req, res) => {
-  const allowed = ['first_name', 'last_name', 'phone', 'email', 'address', 'occupation', 'intended_use', 'pickup_scheduled_at', 'rental_end_at', 'odometer_out', 'odometer_in', 'pickup_location', 'dropoff_location'];
+  const allowed = ['first_name', 'last_name', 'phone', 'email', 'address', 'occupation', 'intended_use', 'pickup_scheduled_at', 'rental_end_at', 'odometer_out', 'odometer_in', 'gas_level_out', 'gas_level_in', 'pickup_location', 'dropoff_location'];
   const updates = [];
   const params = [];
   for (const key of allowed) {
