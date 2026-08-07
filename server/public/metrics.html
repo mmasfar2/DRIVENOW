@@ -187,21 +187,66 @@ function drilldownCell(val, type) {
   return fmtCell(val, type);
 }
 
-// Per-payment breakdown shown when a Collections by Payment Method row is
-// expanded — every individual payment that rolled up into that row's
-// totals (see reports.js's /collections_by_method/payments), so a total
-// that looks wrong can be traced back to the actual payment(s) behind it.
-// paid_at is shown raw (not date-only) since it can carry a time of day
-// that's the only thing distinguishing same-day payments apart.
-const PAYMENT_DRILLDOWN_COLUMNS = [
-  { key: 'paid_at', label: 'Paid At' },
-  { key: 'customer', label: 'Customer' },
-  { key: 'vehicle', label: 'Vehicle' },
-  { key: 'method', label: 'Method' },
-  { key: 'amount', label: 'Amount', type: 'money' },
-];
+// Per-entry breakdown shared by every "period" report (Collections by
+// Payment Method, Maintenance by Week/Month, Business Expenses by
+// Week/Month, and Maintenance + Business Expense combined) — each expands
+// its clicked row to show the individual entries behind that row's totals,
+// fetched from its own endpoint and rendered with its own column set, so a
+// total that looks off can be traced back to what actually makes it up.
+const PERIOD_DRILLDOWN_CONFIG = {
+  payments: {
+    endpoint: 'collections_by_method/payments',
+    emptyLabel: 'payments',
+    // paid_at is shown raw (not date-only) since it can carry a time of day
+    // that's the only thing distinguishing same-day payments apart.
+    columns: [
+      { key: 'paid_at', label: 'Paid At' },
+      { key: 'customer', label: 'Customer' },
+      { key: 'vehicle', label: 'Vehicle' },
+      { key: 'method', label: 'Method' },
+      { key: 'amount', label: 'Amount', type: 'money' },
+    ],
+  },
+  maintenance: {
+    endpoint: 'maintenance_by_period/entries',
+    emptyLabel: 'entries',
+    columns: [
+      { key: 'performed_at', label: 'Date' },
+      { key: 'vehicle', label: 'Vehicle' },
+      { key: 'license_plate', label: 'License Plate' },
+      { key: 'description', label: 'Description' },
+      { key: 'category', label: 'Category' },
+      { key: 'cost', label: 'Cost', type: 'money' },
+      { key: 'notes', label: 'Notes' },
+    ],
+  },
+  business_expense: {
+    endpoint: 'business_expense_by_period/entries',
+    emptyLabel: 'entries',
+    columns: [
+      { key: 'expense_date', label: 'Date' },
+      { key: 'category', label: 'Category' },
+      { key: 'vehicle', label: 'Vehicle' },
+      { key: 'license_plate', label: 'License Plate' },
+      { key: 'amount', label: 'Amount', type: 'money' },
+      { key: 'notes', label: 'Notes' },
+    ],
+  },
+  combined: {
+    endpoint: 'maintenance_and_business_expense_by_period/entries',
+    emptyLabel: 'entries',
+    columns: [
+      { key: 'date', label: 'Date' },
+      { key: 'type', label: 'Type' },
+      { key: 'vehicle', label: 'Vehicle' },
+      { key: 'license_plate', label: 'License Plate' },
+      { key: 'description', label: 'Description' },
+      { key: 'amount', label: 'Amount', type: 'money' },
+    ],
+  },
+};
 
-async function toggleCollectionsPayments(row, colSpan, periodFrom, periodTo) {
+async function togglePeriodEntries(row, colSpan, periodFrom, periodTo, kind) {
   const existing = row.nextElementSibling;
   if (existing && existing.classList.contains('report-drilldown-row')) {
     existing.remove();
@@ -211,82 +256,32 @@ async function toggleCollectionsPayments(row, colSpan, periodFrom, periodTo) {
   document.querySelectorAll('.report-drilldown-row').forEach(r => r.remove());
   document.querySelectorAll('.report-row--expanded').forEach(r => r.classList.remove('report-row--expanded'));
 
+  const config = PERIOD_DRILLDOWN_CONFIG[kind];
   row.classList.add('report-row--expanded');
   const drillRow = document.createElement('tr');
   drillRow.className = 'report-drilldown-row';
   const cell = document.createElement('td');
   cell.colSpan = colSpan;
-  cell.innerHTML = '<div class="report-drilldown__loading">Loading payments…</div>';
+  cell.innerHTML = `<div class="report-drilldown__loading">Loading ${config.emptyLabel}…</div>`;
   drillRow.appendChild(cell);
   row.after(drillRow);
 
   try {
-    const payments = await api(`/api/reports/collections_by_method/payments?from=${periodFrom}&to=${periodTo}`);
-    if (!payments.length) {
-      cell.innerHTML = '<div class="report-drilldown__loading">No payments in this period.</div>';
-      return;
-    }
-    cell.innerHTML = `
-      <table class="report-drilldown__table">
-        <thead><tr>${PAYMENT_DRILLDOWN_COLUMNS.map(c => `<th>${c.label}</th>`).join('')}</tr></thead>
-        <tbody>
-          ${payments.map(p => `<tr>${PAYMENT_DRILLDOWN_COLUMNS.map(c => `<td>${drilldownCell(p[c.key], c.type)}</td>`).join('')}</tr>`).join('')}
-        </tbody>
-      </table>
-    `;
-  } catch (e) {
-    cell.innerHTML = `<div class="report-drilldown__loading">${e.message || 'Failed to load payments'}</div>`;
-  }
-}
-
-// Per-entry breakdown shown when a Maintenance by Week/Month row is
-// expanded — every individual maintenance log entry that rolled up into
-// that row's totals (see reports.js's /maintenance_by_period/entries).
-const MAINTENANCE_DRILLDOWN_COLUMNS = [
-  { key: 'performed_at', label: 'Date' },
-  { key: 'vehicle', label: 'Vehicle' },
-  { key: 'license_plate', label: 'License Plate' },
-  { key: 'description', label: 'Description' },
-  { key: 'category', label: 'Category' },
-  { key: 'cost', label: 'Cost', type: 'money' },
-  { key: 'notes', label: 'Notes' },
-];
-
-async function toggleMaintenanceEntries(row, colSpan, periodFrom, periodTo) {
-  const existing = row.nextElementSibling;
-  if (existing && existing.classList.contains('report-drilldown-row')) {
-    existing.remove();
-    row.classList.remove('report-row--expanded');
-    return;
-  }
-  document.querySelectorAll('.report-drilldown-row').forEach(r => r.remove());
-  document.querySelectorAll('.report-row--expanded').forEach(r => r.classList.remove('report-row--expanded'));
-
-  row.classList.add('report-row--expanded');
-  const drillRow = document.createElement('tr');
-  drillRow.className = 'report-drilldown-row';
-  const cell = document.createElement('td');
-  cell.colSpan = colSpan;
-  cell.innerHTML = '<div class="report-drilldown__loading">Loading entries…</div>';
-  drillRow.appendChild(cell);
-  row.after(drillRow);
-
-  try {
-    const entries = await api(`/api/reports/maintenance_by_period/entries?from=${periodFrom}&to=${periodTo}`);
+    const entries = await api(`/api/reports/${config.endpoint}?from=${periodFrom}&to=${periodTo}`);
     if (!entries.length) {
-      cell.innerHTML = '<div class="report-drilldown__loading">No entries in this period.</div>';
+      cell.innerHTML = `<div class="report-drilldown__loading">No ${config.emptyLabel} in this period.</div>`;
       return;
     }
     cell.innerHTML = `
       <table class="report-drilldown__table">
-        <thead><tr>${MAINTENANCE_DRILLDOWN_COLUMNS.map(c => `<th>${c.label}</th>`).join('')}</tr></thead>
+        <thead><tr>${config.columns.map(c => `<th>${c.label}</th>`).join('')}</tr></thead>
         <tbody>
-          ${entries.map(en => `<tr>${MAINTENANCE_DRILLDOWN_COLUMNS.map(c => `<td>${drilldownCell(en[c.key], c.type)}</td>`).join('')}</tr>`).join('')}
+          ${entries.map(en => `<tr>${config.columns.map(c => `<td>${drilldownCell(en[c.key], c.type)}</td>`).join('')}</tr>`).join('')}
         </tbody>
       </table>
     `;
   } catch (e) {
-    cell.innerHTML = `<div class="report-drilldown__loading">${e.message || 'Failed to load entries'}</div>`;
+    cell.innerHTML = `<div class="report-drilldown__loading">${e.message || `Failed to load ${config.emptyLabel}`}</div>`;
   }
 }
 
@@ -345,6 +340,8 @@ async function generateReport(key, label, columns) {
     const drillKind = key === 'revenue_by_vehicle' ? 'vehicle'
       : key === 'collections_by_method' ? 'payments'
       : key === 'maintenance_by_period' ? 'maintenance'
+      : key === 'business_expense_by_period' ? 'business_expense'
+      : key === 'maintenance_and_business_expense_by_period' ? 'combined'
       : null;
     body.innerHTML = `
       <table>
@@ -352,7 +349,7 @@ async function generateReport(key, label, columns) {
         <tbody>
           ${data.rows.map(r => {
             if (drillKind === 'vehicle') return `<tr class="report-row--drillable" data-vehicle-id="${r.vehicle_id}">${columns.map(c => `<td>${fmtCell(r[c.key], c.type)}</td>`).join('')}</tr>`;
-            if (drillKind === 'payments' || drillKind === 'maintenance') return `<tr class="report-row--drillable" data-period-from="${r.period_from}" data-period-to="${r.period_to}">${columns.map(c => `<td>${fmtCell(r[c.key], c.type)}</td>`).join('')}</tr>`;
+            if (drillKind === 'payments' || drillKind === 'maintenance' || drillKind === 'business_expense' || drillKind === 'combined') return `<tr class="report-row--drillable" data-period-from="${r.period_from}" data-period-to="${r.period_to}">${columns.map(c => `<td>${fmtCell(r[c.key], c.type)}</td>`).join('')}</tr>`;
             return `<tr>${columns.map(c => `<td>${fmtCell(r[c.key], c.type)}</td>`).join('')}</tr>`;
           }).join('')}
         </tbody>
@@ -364,13 +361,9 @@ async function generateReport(key, label, columns) {
       body.querySelectorAll('.report-row--drillable').forEach(row => {
         row.addEventListener('click', () => toggleVehicleBookings(row, columns.length, fromVal, toVal));
       });
-    } else if (drillKind === 'payments') {
+    } else if (drillKind === 'payments' || drillKind === 'maintenance' || drillKind === 'business_expense' || drillKind === 'combined') {
       body.querySelectorAll('.report-row--drillable').forEach(row => {
-        row.addEventListener('click', () => toggleCollectionsPayments(row, columns.length, row.dataset.periodFrom, row.dataset.periodTo));
-      });
-    } else if (drillKind === 'maintenance') {
-      body.querySelectorAll('.report-row--drillable').forEach(row => {
-        row.addEventListener('click', () => toggleMaintenanceEntries(row, columns.length, row.dataset.periodFrom, row.dataset.periodTo));
+        row.addEventListener('click', () => togglePeriodEntries(row, columns.length, row.dataset.periodFrom, row.dataset.periodTo, drillKind));
       });
     }
   } catch (e) {

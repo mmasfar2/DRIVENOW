@@ -618,6 +618,100 @@ const REPORTS = {
     },
   },
 
+  maintenance_and_business_expense_by_period: {
+    category: 'health', label: 'Maintenance + Business Expense by Week/Month',
+    description: 'Every maintenance log entry (tolls included, dated to when the work was performed) plus every business expense (subscriptions, absorbed Swipe card-processing fees, and other overhead, dated to its own expense date), grouped by day, week, or month. Maintenance Cost and Business Expense are shown separately as well as combined. Click a row to see the individual entries behind it.',
+    hasDateRange: true,
+    extraParams: [
+      { key: 'groupBy', label: 'Group By', type: 'select', default: 'month', options: [
+        { value: 'day', label: 'Day' },
+        { value: 'week', label: 'Week' },
+        { value: 'month', label: 'Month' },
+      ] },
+    ],
+    columns: [
+      { key: 'period', label: 'Period' },
+      { key: 'events', label: 'Entries', type: 'number' },
+      { key: 'maintenance_cost', label: 'Maintenance Cost', type: 'money' },
+      { key: 'business_expense', label: 'Business Expense', type: 'money' },
+      { key: 'total_cost', label: 'Total Cost', type: 'money' },
+    ],
+    run(from, to, params) {
+      const groupBy = (params && params.groupBy) || 'month';
+      const byPeriod = new Map();
+      const touch = key => {
+        if (!byPeriod.has(key)) byPeriod.set(key, { events: 0, maintenance_cost: 0, business_expense: 0 });
+        return byPeriod.get(key);
+      };
+      const maintRows = db.prepare(`
+        SELECT cost, substr(performed_at, 1, 10) as date
+        FROM vehicle_maintenance WHERE substr(performed_at, 1, 10) BETWEEN ? AND ?
+      `).all(from, to);
+      for (const r of maintRows) {
+        const entry = touch(periodKeyFor(r.date, groupBy));
+        entry.events += 1;
+        entry.maintenance_cost = round2(entry.maintenance_cost + (Number(r.cost) || 0));
+      }
+      const expenseRows = db.prepare(`
+        SELECT amount, substr(expense_date, 1, 10) as date
+        FROM business_expenses WHERE substr(expense_date, 1, 10) BETWEEN ? AND ?
+      `).all(from, to);
+      for (const r of expenseRows) {
+        const entry = touch(periodKeyFor(r.date, groupBy));
+        entry.events += 1;
+        entry.business_expense = round2(entry.business_expense + (Number(r.amount) || 0));
+      }
+      return [...byPeriod.keys()].sort().map(key => {
+        const range = periodRangeFor(key, groupBy);
+        const entry = byPeriod.get(key);
+        return {
+          period: periodLabelFor(key, groupBy), events: entry.events,
+          maintenance_cost: entry.maintenance_cost, business_expense: entry.business_expense,
+          total_cost: round2(entry.maintenance_cost + entry.business_expense),
+          period_from: range.from, period_to: range.to,
+        };
+      });
+    },
+  },
+
+  business_expense_by_period: {
+    category: 'operational', label: 'Business Expenses by Week/Month',
+    description: 'Every business expense — subscriptions, absorbed Swipe card-processing fees, and other overhead entered by hand — grouped by day, week, or month and dated to its own expense date. Click a row to see the individual entries behind it.',
+    hasDateRange: true,
+    extraParams: [
+      { key: 'groupBy', label: 'Group By', type: 'select', default: 'month', options: [
+        { value: 'day', label: 'Day' },
+        { value: 'week', label: 'Week' },
+        { value: 'month', label: 'Month' },
+      ] },
+    ],
+    columns: [
+      { key: 'period', label: 'Period' },
+      { key: 'events', label: 'Entries', type: 'number' },
+      { key: 'total_cost', label: 'Total Cost', type: 'money' },
+    ],
+    run(from, to, params) {
+      const groupBy = (params && params.groupBy) || 'month';
+      const rows = db.prepare(`
+        SELECT amount, substr(expense_date, 1, 10) as date
+        FROM business_expenses WHERE substr(expense_date, 1, 10) BETWEEN ? AND ?
+      `).all(from, to);
+      const byPeriod = new Map();
+      for (const r of rows) {
+        const key = periodKeyFor(r.date, groupBy);
+        if (!byPeriod.has(key)) byPeriod.set(key, { events: 0, total_cost: 0 });
+        const entry = byPeriod.get(key);
+        entry.events += 1;
+        entry.total_cost = round2(entry.total_cost + (Number(r.amount) || 0));
+      }
+      return [...byPeriod.keys()].sort().map(key => {
+        const range = periodRangeFor(key, groupBy);
+        const entry = byPeriod.get(key);
+        return { period: periodLabelFor(key, groupBy), events: entry.events, total_cost: entry.total_cost, period_from: range.from, period_to: range.to };
+      });
+    },
+  },
+
   outstanding_balance: {
     category: 'past_due', label: 'Reservations with Outstanding Balance',
     description: 'Active bookings currently owing money, computed the same way as the balance shown on each reservation page.',
@@ -905,6 +999,70 @@ router.get('/maintenance_by_period/entries', requireAuth, (req, res) => {
     cost: round2(r.cost),
     notes: r.notes || '—',
   })));
+});
+
+// Per-entry breakdown behind a Business Expenses by Week/Month row — every
+// individual business expense that rolled up into that row's totals.
+// vehicle_id is only ever set for expenses attributed to one car (currently
+// just Swipe fees) — everything else is general overhead, shown as "—".
+router.get('/business_expense_by_period/entries', requireAuth, (req, res) => {
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'from and to are required' });
+  const rows = db.prepare(`
+    SELECT be.expense_date, be.category, be.amount, be.notes,
+           v.year, v.make, v.model, v.license_plate
+    FROM business_expenses be
+    LEFT JOIN vehicles v ON v.id = be.vehicle_id
+    WHERE substr(be.expense_date, 1, 10) BETWEEN ? AND ?
+    ORDER BY be.expense_date
+  `).all(from, to);
+  res.json(rows.map(r => ({
+    expense_date: r.expense_date ? r.expense_date.slice(0, 10) : '—',
+    category: r.category,
+    vehicle: r.make ? `${r.year} ${r.make} ${r.model}` : '—',
+    license_plate: r.license_plate || '—',
+    amount: round2(r.amount),
+    notes: r.notes || '—',
+  })));
+});
+
+// Per-entry breakdown behind a Maintenance + Business Expense by Week/Month
+// row — the individual maintenance log entries and business expenses that
+// rolled up into that row's totals, merged into one list (each tagged with
+// its Type) and sorted chronologically so the two sources read as a single
+// timeline rather than two disconnected tables.
+router.get('/maintenance_and_business_expense_by_period/entries', requireAuth, (req, res) => {
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'from and to are required' });
+  const maintRows = db.prepare(`
+    SELECT vm.performed_at as date, vm.description, vm.cost as amount,
+           v.year, v.make, v.model, v.license_plate
+    FROM vehicle_maintenance vm
+    JOIN vehicles v ON v.id = vm.vehicle_id
+    WHERE substr(vm.performed_at, 1, 10) BETWEEN ? AND ?
+  `).all(from, to).map(r => ({
+    date: r.date ? r.date.slice(0, 10) : '—',
+    type: 'Maintenance',
+    vehicle: `${r.year} ${r.make} ${r.model}`,
+    license_plate: r.license_plate || '—',
+    description: r.description,
+    amount: round2(r.amount),
+  }));
+  const expenseRows = db.prepare(`
+    SELECT be.expense_date as date, be.category, be.amount,
+           v.year, v.make, v.model, v.license_plate
+    FROM business_expenses be
+    LEFT JOIN vehicles v ON v.id = be.vehicle_id
+    WHERE substr(be.expense_date, 1, 10) BETWEEN ? AND ?
+  `).all(from, to).map(r => ({
+    date: r.date ? r.date.slice(0, 10) : '—',
+    type: 'Business Expense',
+    vehicle: r.make ? `${r.year} ${r.make} ${r.model}` : '—',
+    license_plate: r.license_plate || '—',
+    description: r.category,
+    amount: round2(r.amount),
+  }));
+  res.json([...maintRows, ...expenseRows].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)));
 });
 
 module.exports = router;
