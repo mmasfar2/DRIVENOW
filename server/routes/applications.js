@@ -785,7 +785,7 @@ router.post('/:id/revert-check-in', requireAuth, (req, res) => {
   const id = req.params.id;
   const app = db.prepare('SELECT assigned_vehicle_id, status FROM applications WHERE id = ?').get(id);
   if (!app) return res.status(404).json({ error: 'Not found' });
-  db.prepare("UPDATE applications SET status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
+  db.prepare("UPDATE applications SET status = 'active', checked_in_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
   if (app.assigned_vehicle_id) {
     db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ?").run(app.assigned_vehicle_id);
   }
@@ -806,7 +806,7 @@ router.post('/:id/complete-rental', requireAuth, (req, res) => {
 
   db.prepare(`
     UPDATE applications SET status = 'completed', odometer_in = COALESCE(?, odometer_in),
-      gas_level_in = COALESCE(?, gas_level_in), updated_at = CURRENT_TIMESTAMP
+      gas_level_in = COALESCE(?, gas_level_in), checked_in_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(odometer_in || null, gas_level_in || null, id);
   if (app.assigned_vehicle_id) {
