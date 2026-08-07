@@ -30,6 +30,25 @@
 .rd-return-menu .resv-cal__month-head { font-size: 0.85rem; }
 .rd-return-menu .resv-cal__nav { padding: 2px 6px; }
 
+.gas-gauge__readout-row { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; font-size: 0.9rem; font-weight: 700; color: var(--black); }
+.field .gas-gauge__input, .gas-gauge__input { width: 56px; padding: 4px 6px; font-size: 0.9rem; font-weight: 700; border: 1.5px solid var(--gray-border); border-radius: 6px; text-align: right; -moz-appearance: textfield; }
+.gas-gauge__input:focus { outline: none; border-color: var(--black); }
+.gas-gauge__slider {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 10px; border-radius: 999px;
+  background: linear-gradient(to right, #c62828 0%, #f2b705 50%, #2e7d32 100%);
+  outline: none; cursor: pointer; margin: 0; display: block;
+}
+.gas-gauge__slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; border: 3px solid var(--black); cursor: grab; box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+}
+.gas-gauge__slider::-webkit-slider-thumb:active { cursor: grabbing; }
+.gas-gauge__slider::-moz-range-thumb {
+  width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 3px solid var(--black); cursor: grab; box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+}
+.gas-gauge__slider::-moz-range-track { height: 10px; border-radius: 999px; }
+.gas-gauge__ticks { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--text-muted); margin-top: 5px; padding: 0 1px; }
+
 .vd-photo-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
 .vd-photo-box { position: relative; width: 140px; height: 100px; }
 .vd-photo-box img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; background: #eee; cursor: zoom-in; }
@@ -71,8 +90,8 @@
 
   <div id="rd-panel-details">
     <div class="panel">
-      <div class="panel-title">Booking Summary</div>
-      <div class="rd-summary-grid">
+      <div class="panel-title"><span>Booking Summary</span><button class="btn btn-sm btn-outline" id="rd-summary-edit-btn">Edit</button></div>
+      <div class="rd-summary-grid" id="rd-summary-view">
         <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Pickup</div><div class="info-row__val" id="rd-pickup"></div></div>
         <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Return</div><div class="info-row__val" id="rd-return"></div></div>
         <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Duration</div><div class="info-row__val" id="rd-duration"></div></div>
@@ -81,6 +100,32 @@
         <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Miles Driven</div><div class="info-row__val" id="rd-miles"></div></div>
         <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Gas Level (Check Out)</div><div class="info-row__val" id="rd-gas-out"></div></div>
         <div class="info-row" style="display:block;border-bottom:none;"><div class="info-row__label">Gas Level (Check In)</div><div class="info-row__val" id="rd-gas-in"></div></div>
+      </div>
+      <div class="rd-summary-grid" id="rd-summary-edit-form" style="display:none;">
+        <div class="field"><label>Pickup</label><input type="date" id="rd-edit-pickup"></div>
+        <div class="field"><label>Return</label><input type="date" id="rd-edit-return"></div>
+        <div class="field"><label>Odometer Out</label><input type="number" id="rd-edit-odo-out" placeholder="Optional"></div>
+        <div class="field"><label>Odometer In</label><input type="number" id="rd-edit-odo-in" placeholder="Optional"></div>
+        <div class="field">
+          <label>Gas Level (Check Out)</label>
+          <div class="gas-gauge">
+            <div class="gas-gauge__readout-row"><input type="number" min="0" max="100" step="1" class="gas-gauge__input" id="rd-edit-gas-out-readout" value="50">% tank</div>
+            <input type="range" min="0" max="100" step="1" value="50" class="gas-gauge__slider" id="rd-edit-gas-out">
+            <div class="gas-gauge__ticks"><span>E</span><span>1/4</span><span>1/2</span><span>3/4</span><span>F</span></div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Gas Level (Check In)</label>
+          <div class="gas-gauge">
+            <div class="gas-gauge__readout-row"><input type="number" min="0" max="100" step="1" class="gas-gauge__input" id="rd-edit-gas-in-readout" value="50">% tank</div>
+            <input type="range" min="0" max="100" step="1" value="50" class="gas-gauge__slider" id="rd-edit-gas-in">
+            <div class="gas-gauge__ticks"><span>E</span><span>1/4</span><span>1/2</span><span>3/4</span><span>F</span></div>
+          </div>
+        </div>
+      </div>
+      <div id="rd-summary-edit-actions" style="display:none;justify-content:flex-end;gap:8px;margin:-4px 0 20px;">
+        <button class="btn btn-outline" id="rd-summary-cancel-btn">Cancel</button>
+        <button class="btn" id="rd-summary-save-btn">Save</button>
       </div>
       <div id="rd-charges"></div>
     </div>
@@ -313,17 +358,11 @@
       <div class="field"><label>Odometer Out</label><input type="number" id="ci-odometer" placeholder="Optional"></div>
       <div style="font-size:0.8rem;color:#666;margin-bottom:14px;">Pre-filled from this vehicle's last recorded mileage — adjust if it's different, or leave blank to skip.</div>
       <div class="field"><label>Gas Level</label>
-        <select id="ci-gas-level">
-          <option value="">Select gas level</option>
-          <option value="1/8">1/8</option>
-          <option value="1/4">1/4</option>
-          <option value="3/8">3/8</option>
-          <option value="1/2">1/2</option>
-          <option value="5/8">5/8</option>
-          <option value="3/4">3/4</option>
-          <option value="7/8">7/8</option>
-          <option value="Full">Full</option>
-        </select>
+        <div class="gas-gauge">
+          <div class="gas-gauge__readout-row"><input type="number" min="0" max="100" step="1" class="gas-gauge__input" id="ci-gas-readout" value="50">% tank</div>
+          <input type="range" min="0" max="100" step="1" value="50" class="gas-gauge__slider" id="ci-gas-level">
+          <div class="gas-gauge__ticks"><span>E</span><span>1/4</span><span>1/2</span><span>3/4</span><span>F</span></div>
+        </div>
       </div>
       <button class="btn btn-block" id="ci-submit">Save &amp; Check Out</button>
     </div>
@@ -342,17 +381,11 @@
       <div id="co-prev-gas" style="font-size:0.82rem;color:#444;margin-bottom:14px;padding:10px 12px;background:var(--gray-light);border-radius:6px;"></div>
       <div class="field"><label>Odometer In</label><input type="number" id="co-odometer" placeholder="Optional"></div>
       <div class="field"><label>Gas Level In</label>
-        <select id="co-gas-level">
-          <option value="">Select gas level</option>
-          <option value="1/8">1/8</option>
-          <option value="1/4">1/4</option>
-          <option value="3/8">3/8</option>
-          <option value="1/2">1/2</option>
-          <option value="5/8">5/8</option>
-          <option value="3/4">3/4</option>
-          <option value="7/8">7/8</option>
-          <option value="Full">Full</option>
-        </select>
+        <div class="gas-gauge">
+          <div class="gas-gauge__readout-row"><input type="number" min="0" max="100" step="1" class="gas-gauge__input" id="co-gas-readout" value="50">% tank</div>
+          <input type="range" min="0" max="100" step="1" value="50" class="gas-gauge__slider" id="co-gas-level">
+          <div class="gas-gauge__ticks"><span>E</span><span>1/4</span><span>1/2</span><span>3/4</span><span>F</span></div>
+        </div>
       </div>
       <div style="font-size:0.8rem;color:#666;margin-bottom:14px;">This completes the rental, frees up the vehicle, and updates its recorded mileage.</div>
       <button class="btn btn-block" id="co-submit">Save &amp; Check In</button>
@@ -1278,10 +1311,94 @@ async function onStageClick(target) {
   }
 }
 
+// Gas level is stored as free text ("62%", legacy "3/4"/"Full" values from
+// the old dropdown, or a vehicle's last-known level) — this normalizes any
+// of those into a 0-100 slider position so old data still prefills sanely.
+function gasLevelToPercent(val) {
+  if (!val) return 50;
+  const trimmed = String(val).trim();
+  if (/%$/.test(trimmed)) return Math.max(0, Math.min(100, parseInt(trimmed, 10) || 0));
+  if (/^full$/i.test(trimmed)) return 100;
+  if (/^empty$/i.test(trimmed)) return 0;
+  const frac = /^(\d+)\/(\d+)$/.exec(trimmed);
+  if (frac) return Math.round((parseInt(frac[1], 10) / parseInt(frac[2], 10)) * 100);
+  const n = parseFloat(trimmed);
+  return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 50;
+}
+function wireGasGauge(sliderId, readoutId) {
+  const slider = document.getElementById(sliderId);
+  const readout = document.getElementById(readoutId);
+  const fromSlider = () => { readout.value = slider.value; };
+  const fromReadout = () => {
+    if (readout.value === '') return;
+    slider.value = Math.max(0, Math.min(100, Math.round(Number(readout.value) || 0)));
+  };
+  slider.addEventListener('input', fromSlider);
+  readout.addEventListener('input', fromReadout);
+  readout.addEventListener('blur', () => { readout.value = slider.value; });
+  slider._updateReadout = fromSlider;
+}
+wireGasGauge('ci-gas-level', 'ci-gas-readout');
+wireGasGauge('co-gas-level', 'co-gas-readout');
+wireGasGauge('rd-edit-gas-out', 'rd-edit-gas-out-readout');
+wireGasGauge('rd-edit-gas-in', 'rd-edit-gas-in-readout');
+
+// Booking Summary "Edit" toggle — lets pickup/return dates, odometer
+// readings, and gas levels be corrected directly instead of only through
+// the Check Out/Check In modals (which also advance the reservation stage,
+// not appropriate for a simple after-the-fact fix).
+function openSummaryEdit() {
+  document.getElementById('rd-edit-pickup').value = booking.pickup_scheduled_at ? booking.pickup_scheduled_at.slice(0, 10) : '';
+  document.getElementById('rd-edit-return').value = booking.rental_end_at ? booking.rental_end_at.slice(0, 10) : '';
+  document.getElementById('rd-edit-odo-out').value = booking.odometer_out ?? '';
+  document.getElementById('rd-edit-odo-in').value = booking.odometer_in ?? '';
+  const gasOutSlider = document.getElementById('rd-edit-gas-out');
+  gasOutSlider.value = gasLevelToPercent(booking.gas_level_out || booking.vehicle_gas_level);
+  gasOutSlider._updateReadout();
+  const gasInSlider = document.getElementById('rd-edit-gas-in');
+  gasInSlider.value = gasLevelToPercent(booking.gas_level_in || booking.vehicle_gas_level);
+  gasInSlider._updateReadout();
+
+  document.getElementById('rd-summary-view').style.display = 'none';
+  document.getElementById('rd-summary-edit-form').style.display = 'grid';
+  document.getElementById('rd-summary-edit-actions').style.display = 'flex';
+  document.getElementById('rd-summary-edit-btn').style.display = 'none';
+}
+function closeSummaryEdit() {
+  document.getElementById('rd-summary-view').style.display = 'grid';
+  document.getElementById('rd-summary-edit-form').style.display = 'none';
+  document.getElementById('rd-summary-edit-actions').style.display = 'none';
+  document.getElementById('rd-summary-edit-btn').style.display = '';
+}
+document.getElementById('rd-summary-edit-btn').addEventListener('click', openSummaryEdit);
+document.getElementById('rd-summary-cancel-btn').addEventListener('click', closeSummaryEdit);
+document.getElementById('rd-summary-save-btn').addEventListener('click', async () => {
+  const odoOutVal = document.getElementById('rd-edit-odo-out').value;
+  const odoInVal = document.getElementById('rd-edit-odo-in').value;
+  const body = {
+    pickup_scheduled_at: document.getElementById('rd-edit-pickup').value || null,
+    rental_end_at: document.getElementById('rd-edit-return').value || null,
+    odometer_out: odoOutVal === '' ? null : Number(odoOutVal),
+    odometer_in: odoInVal === '' ? null : Number(odoInVal),
+    gas_level_out: `${document.getElementById('rd-edit-gas-out').value}%`,
+    gas_level_in: `${document.getElementById('rd-edit-gas-in').value}%`,
+  };
+  try {
+    await api(`/api/applications/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  closeSummaryEdit();
+  await load();
+});
+
 // Pickup flow (records the Odometer Out reading) — opens under the "Check Out" pill.
 function openCheckOutModal() {
   document.getElementById('ci-odometer').value = booking.odometer_out ?? booking.vehicle_mileage ?? '';
-  document.getElementById('ci-gas-level').value = booking.gas_level_out || booking.vehicle_gas_level || '';
+  const ciSlider = document.getElementById('ci-gas-level');
+  ciSlider.value = gasLevelToPercent(booking.gas_level_out || booking.vehicle_gas_level);
+  ciSlider._updateReadout();
   document.getElementById('checkin-modal-overlay').style.display = 'flex';
 }
 document.getElementById('checkin-modal-close').addEventListener('click', () => {
@@ -1292,7 +1409,7 @@ document.getElementById('checkin-modal-overlay').addEventListener('click', (e) =
 });
 document.getElementById('ci-submit').addEventListener('click', async () => {
   const odometer_out = document.getElementById('ci-odometer').value;
-  const gas_level = document.getElementById('ci-gas-level').value;
+  const gas_level = `${document.getElementById('ci-gas-level').value}%`;
   try {
     await api(`/api/applications/${id}/check-in`, { method: 'POST', body: JSON.stringify({ odometer_out, gas_level }) });
   } catch (err) {
@@ -1306,7 +1423,9 @@ document.getElementById('ci-submit').addEventListener('click', async () => {
 // Return flow (records the Odometer In reading) — opens under the "Check In" pill.
 function openCheckInModal() {
   document.getElementById('co-odometer').value = booking.odometer_in ?? booking.vehicle_mileage ?? '';
-  document.getElementById('co-gas-level').value = booking.gas_level_in || booking.vehicle_gas_level || '';
+  const coSlider = document.getElementById('co-gas-level');
+  coSlider.value = gasLevelToPercent(booking.gas_level_in || booking.vehicle_gas_level);
+  coSlider._updateReadout();
   document.getElementById('co-prev-gas').textContent = booking.gas_level_out
     ? `Gas level at Check Out: ${booking.gas_level_out}`
     : 'No gas level was recorded at Check Out.';
@@ -1320,7 +1439,7 @@ document.getElementById('checkout-modal-overlay').addEventListener('click', (e) 
 });
 document.getElementById('co-submit').addEventListener('click', async () => {
   const odometer_in = document.getElementById('co-odometer').value;
-  const gas_level_in = document.getElementById('co-gas-level').value;
+  const gas_level_in = `${document.getElementById('co-gas-level').value}%`;
   try {
     await api(`/api/applications/${id}/complete-rental`, { method: 'POST', body: JSON.stringify({ odometer_in, gas_level_in }) });
   } catch (err) {
