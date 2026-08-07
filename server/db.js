@@ -429,37 +429,20 @@ db.exec(`
   )
   WHERE vehicle_id IS NULL AND payment_id IS NOT NULL
 `);
-// Swipe-triggered expenses are dated to wherever the booking's cumulative
-// payments actually reach in the same day-by-day FIFO walk getAccruedRevenueDays
-// uses for revenue — not whenever the payment happened to be logged, and not
-// a fixed field, so the fee lands on the same night its revenue does. Matters
-// when backfilling old bookings entered well after the fact, and for partial
-// payments on still-active bookings that shouldn't land on a future date.
-// applications.js's syncSwipeExpense sets this correctly going forward; this
-// re-derives it for every swipe-linked row on every startup (cheap, and safe
-// to re-run since it recomputes the same answer) so edits to a booking's
-// dates or payments stay in sync too.
-{
-  const frontierByApp = new Map();
-  getAccruedRevenueDays().forEach(d => {
-    if (d.amount <= 0) return;
-    const current = frontierByApp.get(d.application_id);
-    if (!current || d.date > current) frontierByApp.set(d.application_id, d.date);
-  });
-  const rows = db.prepare(`
-    SELECT be.id, p.application_id, a.rental_end_at, a.pickup_scheduled_at
-    FROM business_expenses be
-    JOIN payments p ON p.id = be.payment_id
-    JOIN applications a ON a.id = p.application_id
-    WHERE be.payment_id IS NOT NULL
-  `).all();
-  const updExpenseDate = db.prepare('UPDATE business_expenses SET expense_date = ? WHERE id = ?');
-  rows.forEach(r => {
-    const date = frontierByApp.get(r.application_id)
-      || (r.rental_end_at || r.pickup_scheduled_at || '').slice(0, 10);
-    if (date) updExpenseDate.run(date, r.id);
-  });
-}
+// Swipe-triggered expenses are dated to the same calendar day the underlying
+// payment was actually charged (payments.paid_at) — not a booking's rental
+// nights, and not whenever the expense row happened to be logged. Keeps
+// existing rows in sync if a payment's date is ever corrected after the
+// fact. applications.js's syncSwipeExpense sets this correctly at
+// creation/edit time; this just re-syncs it for every swipe-linked row on
+// every startup (cheap, and a no-op once already in sync).
+db.exec(`
+  UPDATE business_expenses
+  SET expense_date = (
+    SELECT substr(p.paid_at, 1, 10) FROM payments p WHERE p.id = business_expenses.payment_id
+  )
+  WHERE payment_id IS NOT NULL
+`);
 
 const paymentCols = db.prepare("PRAGMA table_info(payments)").all().map(c => c.name);
 if (!paymentCols.includes('method')) {
@@ -1269,45 +1252,21 @@ function getAccruedRevenueDays() {
 }
 
 // A swipe-payment's card-processing fee (the business_expenses row
-// syncSwipeExpense in applications.js creates, joined back via payment_id)
-// spread across the same nights — and in the same proportion — as the
-// booking's own revenue, rather than dated to a single day. The fee isn't
-// earned night by night any more than a subscription bill is, but treating
-// it as the cost of collecting that booking's revenue matches it to the
-// same nights Revenue itself is spread across.
-function getAccruedCardFeeDays() {
-  const feesByApp = new Map(db.prepare(`
-    SELECT p.application_id, COALESCE(SUM(be.amount), 0) as fee
+// syncSwipeExpense in applications.js creates, joined back via payment_id) —
+// one row per Swipe payment, its full fee amount, dated to when that
+// specific payment was actually charged (payments.paid_at). Unlike Revenue,
+// which is earned night by night as a booking's stay actually happens, the
+// processor takes its cut the moment the card is run — a real, one-time
+// event on a real calendar date, not something to spread across future
+// nights that haven't been paid for yet or haven't happened.
+function getSwipeFeeCharges() {
+  return db.prepare(`
+    SELECT p.application_id, a.assigned_vehicle_id as vehicle_id,
+           substr(p.paid_at, 1, 10) as date, be.amount
     FROM business_expenses be
     JOIN payments p ON p.id = be.payment_id
-    GROUP BY p.application_id
-  `).all().map(r => [r.application_id, r.fee]));
-  if (!feesByApp.size) return [];
-
-  const revenueDays = getAccruedRevenueDays().filter(d => feesByApp.has(d.application_id) && d.amount > 0);
-  const revenueByApp = new Map();
-  revenueDays.forEach(d => {
-    revenueByApp.set(d.application_id, (revenueByApp.get(d.application_id) || 0) + d.amount);
-  });
-  let lastIndexByApp = new Map();
-  revenueDays.forEach((d, i) => lastIndexByApp.set(d.application_id, i));
-
-  // Independently rounding each day's proportional share can drift a cent
-  // or two from the fee's actual stored total across enough days — fold
-  // whatever's left into the booking's last night instead, same as
-  // getAccruedRevenueDays does for its own leftover cents.
-  const remainingByApp = new Map(feesByApp);
-  return revenueDays.map((d, i) => {
-    const isLast = lastIndexByApp.get(d.application_id) === i;
-    if (isLast) {
-      return { application_id: d.application_id, vehicle_id: d.vehicle_id, date: d.date, amount: Math.round(remainingByApp.get(d.application_id) * 100) / 100 };
-    }
-    const totalFee = feesByApp.get(d.application_id);
-    const totalRevenue = revenueByApp.get(d.application_id);
-    const amount = totalRevenue > 0 ? Math.round((totalFee * (d.amount / totalRevenue)) * 100) / 100 : 0;
-    remainingByApp.set(d.application_id, remainingByApp.get(d.application_id) - amount);
-    return { application_id: d.application_id, vehicle_id: d.vehicle_id, date: d.date, amount };
-  });
+    JOIN applications a ON a.id = p.application_id
+  `).all();
 }
 
 function logActivity(applicationId, message) {
@@ -1319,4 +1278,4 @@ function queueMessage(applicationId, channel, to, body) {
     .run(applicationId, channel, to, body);
 }
 
-module.exports = { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo, getForfeitedDeposits, getAccruedRevenueDays, getAccruedCardFeeDays, getLastOilChangeByVehicle, withOilChangeStatus, OIL_CHANGE_INTERVAL_MILES };
+module.exports = { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo, getForfeitedDeposits, getAccruedRevenueDays, getSwipeFeeCharges, getLastOilChangeByVehicle, withOilChangeStatus, OIL_CHANGE_INTERVAL_MILES };
