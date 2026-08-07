@@ -60,6 +60,42 @@ function periodRangeFor(key, groupBy) {
   return { from: key, to: key };
 }
 
+// Swipe card-processing fees (business_expenses rows with payment_id set)
+// are spread across the same nights as the booking's own revenue via
+// getAccruedCardFeeDays (db.js) rather than dated to a single logged day —
+// the same treatment revenue_by_time_period and revenue_by_vehicle already
+// give them. Enriches each accrued night with the reservation and vehicle
+// it came from so period-based expense reports and their drilldowns show it
+// like any other dated entry instead of bunching every fee tied to a
+// booking onto whatever single day business_expenses.expense_date happens
+// to hold (that field is only a best-effort single date for the flat
+// Business Expenses list, not one per accrual night).
+function swipeFeeAccrualRows(from, to) {
+  const days = getAccruedCardFeeDays().filter(d => d.date >= from && d.date <= to && d.amount !== 0);
+  if (!days.length) return [];
+  const appIds = [...new Set(days.map(d => d.application_id))];
+  const apps = new Map(db.prepare(`
+    SELECT id, first_name, last_name FROM applications WHERE id IN (${appIds.map(() => '?').join(',')})
+  `).all(...appIds).map(a => [a.id, a]));
+  const vehicleIds = [...new Set(days.map(d => d.vehicle_id).filter(Boolean))];
+  const vehicles = vehicleIds.length ? new Map(db.prepare(`
+    SELECT id, year, make, model, license_plate FROM vehicles WHERE id IN (${vehicleIds.map(() => '?').join(',')})
+  `).all(...vehicleIds).map(v => [v.id, v])) : new Map();
+  return days.map(d => {
+    const app = apps.get(d.application_id);
+    const vehicle = vehicles.get(d.vehicle_id);
+    const customer = app ? `${app.first_name} ${app.last_name}` : null;
+    return {
+      date: d.date,
+      amount: round2(d.amount),
+      category: 'Card Processing Fee',
+      vehicle: vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : '—',
+      license_plate: (vehicle && vehicle.license_plate) || '—',
+      notes: customer ? `Swipe processing fee (accrued) — reservation #${d.application_id} (${customer})` : 'Swipe processing fee (accrued)',
+    };
+  });
+}
+
 // Utilization only — whether a vehicle counts as "on rent" for a day. Unlike
 // revenue (getAccruedRevenueDays in db.js, always capped to a booking's own
 // scheduled dates), a still-active booking that's never been checked in
@@ -620,7 +656,7 @@ const REPORTS = {
 
   maintenance_and_business_expense_by_period: {
     category: 'health', label: 'Maintenance + Business Expense by Week/Month',
-    description: 'Every maintenance log entry (tolls included, dated to when the work was performed) plus every business expense (subscriptions, absorbed Swipe card-processing fees, and other overhead, dated to its own expense date), grouped by day, week, or month. Maintenance Cost and Business Expense are shown separately as well as combined. Click a row to see the individual entries behind it.',
+    description: 'Every maintenance log entry (tolls included, dated to when the work was performed) plus every business expense — general overhead dated to its own expense date, and absorbed Swipe card-processing fees spread across the same nights as the booking\'s revenue instead of one lump sum — grouped by day, week, or month. Maintenance Cost and Business Expense are shown separately as well as combined. Click a row to see the individual entries behind it.',
     hasDateRange: true,
     extraParams: [
       { key: 'groupBy', label: 'Group By', type: 'select', default: 'month', options: [
@@ -652,10 +688,13 @@ const REPORTS = {
         entry.events += 1;
         entry.maintenance_cost = round2(entry.maintenance_cost + (Number(r.cost) || 0));
       }
-      const expenseRows = db.prepare(`
-        SELECT amount, substr(expense_date, 1, 10) as date
-        FROM business_expenses WHERE substr(expense_date, 1, 10) BETWEEN ? AND ?
-      `).all(from, to);
+      const expenseRows = [
+        ...db.prepare(`
+          SELECT amount, substr(expense_date, 1, 10) as date
+          FROM business_expenses WHERE payment_id IS NULL AND substr(expense_date, 1, 10) BETWEEN ? AND ?
+        `).all(from, to),
+        ...swipeFeeAccrualRows(from, to),
+      ];
       for (const r of expenseRows) {
         const entry = touch(periodKeyFor(r.date, groupBy));
         entry.events += 1;
@@ -676,7 +715,7 @@ const REPORTS = {
 
   business_expense_by_period: {
     category: 'operational', label: 'Business Expenses by Week/Month',
-    description: 'Every business expense — subscriptions, absorbed Swipe card-processing fees, and other overhead entered by hand — grouped by day, week, or month and dated to its own expense date. Click a row to see the individual entries behind it.',
+    description: 'Every business expense — subscriptions and other overhead entered by hand (dated to its own expense date), plus absorbed Swipe card-processing fees spread across the same nights as the booking\'s revenue instead of one lump sum — grouped by day, week, or month. Click a row to see the individual entries behind it.',
     hasDateRange: true,
     extraParams: [
       { key: 'groupBy', label: 'Group By', type: 'select', default: 'month', options: [
@@ -692,10 +731,13 @@ const REPORTS = {
     ],
     run(from, to, params) {
       const groupBy = (params && params.groupBy) || 'month';
-      const rows = db.prepare(`
-        SELECT amount, substr(expense_date, 1, 10) as date
-        FROM business_expenses WHERE substr(expense_date, 1, 10) BETWEEN ? AND ?
-      `).all(from, to);
+      const rows = [
+        ...db.prepare(`
+          SELECT amount, substr(expense_date, 1, 10) as date
+          FROM business_expenses WHERE payment_id IS NULL AND substr(expense_date, 1, 10) BETWEEN ? AND ?
+        `).all(from, to),
+        ...swipeFeeAccrualRows(from, to),
+      ];
       const byPeriod = new Map();
       for (const r of rows) {
         const key = periodKeyFor(r.date, groupBy);
@@ -1008,22 +1050,29 @@ router.get('/maintenance_by_period/entries', requireAuth, (req, res) => {
 router.get('/business_expense_by_period/entries', requireAuth, (req, res) => {
   const { from, to } = req.query;
   if (!from || !to) return res.status(400).json({ error: 'from and to are required' });
-  const rows = db.prepare(`
+  const generalRows = db.prepare(`
     SELECT be.expense_date, be.category, be.amount, be.notes,
            v.year, v.make, v.model, v.license_plate
     FROM business_expenses be
     LEFT JOIN vehicles v ON v.id = be.vehicle_id
-    WHERE substr(be.expense_date, 1, 10) BETWEEN ? AND ?
-    ORDER BY be.expense_date
-  `).all(from, to);
-  res.json(rows.map(r => ({
+    WHERE be.payment_id IS NULL AND substr(be.expense_date, 1, 10) BETWEEN ? AND ?
+  `).all(from, to).map(r => ({
     expense_date: r.expense_date ? r.expense_date.slice(0, 10) : '—',
     category: r.category,
     vehicle: r.make ? `${r.year} ${r.make} ${r.model}` : '—',
     license_plate: r.license_plate || '—',
     amount: round2(r.amount),
     notes: r.notes || '—',
-  })));
+  }));
+  const swipeRows = swipeFeeAccrualRows(from, to).map(r => ({
+    expense_date: r.date,
+    category: r.category,
+    vehicle: r.vehicle,
+    license_plate: r.license_plate,
+    amount: r.amount,
+    notes: r.notes,
+  }));
+  res.json([...generalRows, ...swipeRows].sort((a, b) => (a.expense_date < b.expense_date ? -1 : a.expense_date > b.expense_date ? 1 : 0)));
 });
 
 // Per-entry breakdown behind a Maintenance + Business Expense by Week/Month
@@ -1048,12 +1097,12 @@ router.get('/maintenance_and_business_expense_by_period/entries', requireAuth, (
     description: r.description,
     amount: round2(r.amount),
   }));
-  const expenseRows = db.prepare(`
+  const generalExpenseRows = db.prepare(`
     SELECT be.expense_date as date, be.category, be.amount,
            v.year, v.make, v.model, v.license_plate
     FROM business_expenses be
     LEFT JOIN vehicles v ON v.id = be.vehicle_id
-    WHERE substr(be.expense_date, 1, 10) BETWEEN ? AND ?
+    WHERE be.payment_id IS NULL AND substr(be.expense_date, 1, 10) BETWEEN ? AND ?
   `).all(from, to).map(r => ({
     date: r.date ? r.date.slice(0, 10) : '—',
     type: 'Business Expense',
@@ -1062,7 +1111,15 @@ router.get('/maintenance_and_business_expense_by_period/entries', requireAuth, (
     description: r.category,
     amount: round2(r.amount),
   }));
-  res.json([...maintRows, ...expenseRows].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)));
+  const swipeExpenseRows = swipeFeeAccrualRows(from, to).map(r => ({
+    date: r.date,
+    type: 'Business Expense',
+    vehicle: r.vehicle,
+    license_plate: r.license_plate,
+    description: r.category,
+    amount: r.amount,
+  }));
+  res.json([...maintRows, ...generalExpenseRows, ...swipeExpenseRows].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)));
 });
 
 module.exports = router;
