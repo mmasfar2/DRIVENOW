@@ -809,3 +809,31 @@ h3 { font-size: clamp(1.2rem, 2.5vw, 1.75rem); }
   .footer__bottom { flex-direction: column; gap: 12px; text-align: center; }
   .stats-bar__inner { grid-template-columns: repeat(2,1fr); }
 }
+
+/* Vehicle Tier Cards */
+.tier-card {
+  border: 2px solid var(--gray-border);
+  border-radius: 10px;
+  padding: 20px 16px;
+  cursor: pointer;
+  transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+  text-align: center;
+  background: var(--white);
+  user-select: none;
+}
+.tier-card:hover {
+  border-color: var(--black);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+.tier-card.selected {
+  border-color: var(--black);
+  background: var(--black);
+  color: #fff;
+}
+.tier-card__icon { font-size: 1.8rem; margin-bottom: 8px; }
+.tier-card__name { font-weight: 800; font-size: 0.92rem; margin-bottom: 6px; }
+.tier-card__price { font-size: 1.4rem; font-weight: 900; margin-bottom: 4px; }
+.tier-card__price span { font-size: 0.78rem; font-weight: 500; opacity: 0.7; }
+.tier-card__desc { font-size: 0.75rem; opacity: 0.65; line-height: 1.4; }
+.tier-card.selected .tier-card__desc,
+.tier-card.selected .tier-card__price span { opacity: 0.8; }

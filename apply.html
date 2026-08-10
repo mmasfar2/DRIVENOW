@@ -136,16 +136,49 @@
           </div>
         </div>
 
-        <!-- Selected Vehicle -->
-        <div class="form-section-title">Selected Vehicle</div>
-        <div id="selected-vehicle-box" style="display:flex;align-items:center;gap:16px;background:var(--gray-light);border-radius:8px;padding:18px 20px;margin-bottom:8px;">
-          <div style="font-size:1.6rem;">🚗</div>
-          <div style="flex:1;">
-            <div id="selected-vehicle-name" style="font-weight:800;font-size:1rem;">No vehicle selected</div>
-            <div id="selected-vehicle-rate" style="font-size:0.82rem;color:var(--text-muted);"><a href="fleet.html">Choose a vehicle from our fleet →</a></div>
+        <!-- Vehicle Tier Selection -->
+        <div class="form-section-title">Select Your Vehicle Tier</div>
+        <input type="hidden" id="vehicle-tier" name="vehicle_tier" required>
+        <div id="tier-error" style="display:none;color:#e53e3e;font-size:0.82rem;margin-bottom:8px;">Please select a vehicle tier.</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:20px;">
+
+          <div class="tier-card" data-tier="Economy Sedan" data-rate="350" onclick="selectTier(this)">
+            <div class="tier-card__icon">🚗</div>
+            <div class="tier-card__name">Economy Sedan</div>
+            <div class="tier-card__price">$350<span>/wk</span></div>
+            <div class="tier-card__desc">Great for everyday driving & rideshare</div>
           </div>
+
+          <div class="tier-card" data-tier="Midsize Sedan" data-rate="400" onclick="selectTier(this)">
+            <div class="tier-card__icon">🚙</div>
+            <div class="tier-card__name">Midsize Sedan</div>
+            <div class="tier-card__price">$400<span>/wk</span></div>
+            <div class="tier-card__desc">More comfort & space for longer shifts</div>
+          </div>
+
+          <div class="tier-card" data-tier="Premium Sedan" data-rate="420" onclick="selectTier(this)">
+            <div class="tier-card__icon">🏎️</div>
+            <div class="tier-card__name">Premium Sedan</div>
+            <div class="tier-card__price">$420<span>/wk</span></div>
+            <div class="tier-card__desc">Luxury finish, higher-tier ride platforms</div>
+          </div>
+
+          <div class="tier-card" data-tier="SUV" data-rate="420" onclick="selectTier(this)">
+            <div class="tier-card__icon">🚐</div>
+            <div class="tier-card__name">SUV</div>
+            <div class="tier-card__price">$420<span>/wk</span></div>
+            <div class="tier-card__desc">Extra room for passengers & deliveries</div>
+          </div>
+
+          <div class="tier-card" data-tier="Premium SUV" data-rate="490" onclick="selectTier(this)">
+            <div class="tier-card__icon">🛻</div>
+            <div class="tier-card__name">Premium SUV</div>
+            <div class="tier-card__price">$490<span>/wk</span></div>
+            <div class="tier-card__desc">Top-of-the-line SUV for premium service</div>
+          </div>
+
         </div>
-        <input type="hidden" id="vehicle-id" name="vehicle_id">
+
         <div class="form-group">
           <label for="rental-duration">How long do you plan to rent?</label>
           <select id="rental-duration" name="rental_duration">
@@ -295,5 +328,22 @@
 </footer>
 
 <script src="js/main.js"></script>
+<script>
+function selectTier(el) {
+  document.querySelectorAll('.tier-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('vehicle-tier').value = el.dataset.tier + ' — $' + el.dataset.rate + '/wk';
+  document.getElementById('tier-error').style.display = 'none';
+}
+
+// Validate tier selection on submit
+document.getElementById('application-form').addEventListener('submit', function(e) {
+  if (!document.getElementById('vehicle-tier').value) {
+    e.preventDefault();
+    document.getElementById('tier-error').style.display = 'block';
+    document.getElementById('tier-error').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}, true);
+</script>
 </body>
 </html>
