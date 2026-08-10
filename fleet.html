@@ -90,18 +90,94 @@
 <section class="section">
   <div class="container">
 
-    <!-- Filter Bar -->
-    <div style="display:flex;gap:12px;margin-bottom:48px;flex-wrap:wrap;align-items:center;">
-      <span style="font-size:0.78rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#888;margin-right:8px;">Filter:</span>
-      <button class="filter-btn btn btn-primary" style="padding:8px 20px;font-size:0.72rem;" data-filter="all">All Vehicles</button>
-      <button class="filter-btn btn btn-outline" style="padding:8px 20px;font-size:0.72rem;" data-filter="accord">Honda Accord</button>
-      <button class="filter-btn btn btn-outline" style="padding:8px 20px;font-size:0.72rem;" data-filter="camry">Toyota Camry</button>
-      <button class="filter-btn btn btn-outline" style="padding:8px 20px;font-size:0.72rem;" data-filter="available">Available Now</button>
-    </div>
+    <div class="fleet-grid">
 
-    <div class="fleet-grid" id="fleet-grid">
-      <p style="color:#888;grid-column:1/-1;">Loading fleet…</p>
-    </div><!-- /fleet-grid (rendered dynamically from the live fleet, see script at bottom) -->
+      <!-- Economy Sedan -->
+      <div class="fleet-card">
+        <div class="slideshow">
+          <div class="slide active"><div class="slide-bg slide-1a"></div><div class="car-label"><span class="car-icon">🚗</span><span class="car-label-big">Economy</span><span class="car-label-sub">Sedan</span></div></div>
+        </div>
+        <div class="fleet-card__body">
+          <div class="fleet-card__make">Economy</div>
+          <div class="fleet-card__name">Economy Sedan</div>
+          <div style="font-size:0.8rem;color:#888;margin-bottom:16px;line-height:1.6;">Sedan · 4-door · Uber/Lyft/DoorDash approved</div>
+          <div class="fleet-card__price-row">
+            <div class="price-weekly">$350 <span>/ week</span></div>
+            <div class="availability availability--open">Available</div>
+          </div>
+          <a href="apply.html" class="btn btn-primary" style="width:100%;text-align:center;margin-top:16px;display:block;">Apply for This Tier</a>
+        </div>
+      </div>
+
+      <!-- Midsize Sedan -->
+      <div class="fleet-card">
+        <div class="slideshow">
+          <div class="slide active"><div class="slide-bg slide-2a"></div><div class="car-label"><span class="car-icon">🚙</span><span class="car-label-big">Midsize</span><span class="car-label-sub">Sedan</span></div></div>
+        </div>
+        <div class="fleet-card__body">
+          <div class="fleet-card__make">Midsize</div>
+          <div class="fleet-card__name">Midsize Sedan</div>
+          <div style="font-size:0.8rem;color:#888;margin-bottom:16px;line-height:1.6;">Sedan · 4-door · Uber/Lyft/DoorDash approved</div>
+          <div class="fleet-card__price-row">
+            <div class="price-weekly">$400 <span>/ week</span></div>
+            <div class="availability availability--open">Available</div>
+          </div>
+          <a href="apply.html" class="btn btn-primary" style="width:100%;text-align:center;margin-top:16px;display:block;">Apply for This Tier</a>
+        </div>
+      </div>
+
+      <!-- Premium Sedan -->
+      <div class="fleet-card">
+        <div class="slideshow">
+          <div class="slide active"><div class="slide-bg slide-3a"></div><div class="car-label"><span class="car-icon">🏎️</span><span class="car-label-big">Premium</span><span class="car-label-sub">Sedan</span></div></div>
+        </div>
+        <div class="fleet-card__body">
+          <div class="fleet-card__make">Premium</div>
+          <div class="fleet-card__name">Premium Sedan</div>
+          <div style="font-size:0.8rem;color:#888;margin-bottom:16px;line-height:1.6;">Sedan · 4-door · Uber/Lyft/DoorDash approved</div>
+          <div class="fleet-card__price-row">
+            <div class="price-weekly">$420 <span>/ week</span></div>
+            <div class="availability availability--open">Available</div>
+          </div>
+          <a href="apply.html" class="btn btn-primary" style="width:100%;text-align:center;margin-top:16px;display:block;">Apply for This Tier</a>
+        </div>
+      </div>
+
+      <!-- SUV -->
+      <div class="fleet-card">
+        <div class="slideshow">
+          <div class="slide active"><div class="slide-bg slide-4a"></div><div class="car-label"><span class="car-icon">🚐</span><span class="car-label-big">SUV</span><span class="car-label-sub">Standard</span></div></div>
+        </div>
+        <div class="fleet-card__body">
+          <div class="fleet-card__make">SUV</div>
+          <div class="fleet-card__name">SUV</div>
+          <div style="font-size:0.8rem;color:#888;margin-bottom:16px;line-height:1.6;">SUV · 4-door · Seats 5–7 · Uber/Lyft/DoorDash approved</div>
+          <div class="fleet-card__price-row">
+            <div class="price-weekly">$420 <span>/ week</span></div>
+            <div class="availability availability--open">Available</div>
+          </div>
+          <a href="apply.html" class="btn btn-primary" style="width:100%;text-align:center;margin-top:16px;display:block;">Apply for This Tier</a>
+        </div>
+      </div>
+
+      <!-- Premium SUV -->
+      <div class="fleet-card">
+        <div class="slideshow">
+          <div class="slide active"><div class="slide-bg slide-1b"></div><div class="car-label"><span class="car-icon">🛻</span><span class="car-label-big">Premium</span><span class="car-label-sub">SUV</span></div></div>
+        </div>
+        <div class="fleet-card__body">
+          <div class="fleet-card__make">Premium</div>
+          <div class="fleet-card__name">Premium SUV</div>
+          <div style="font-size:0.8rem;color:#888;margin-bottom:16px;line-height:1.6;">SUV · 4-door · Seats 5–7 · Uber/Lyft/DoorDash approved</div>
+          <div class="fleet-card__price-row">
+            <div class="price-weekly">$490 <span>/ week</span></div>
+            <div class="availability availability--open">Available</div>
+          </div>
+          <a href="apply.html" class="btn btn-primary" style="width:100%;text-align:center;margin-top:16px;display:block;">Apply for This Tier</a>
+        </div>
+      </div>
+
+    </div>
 
     <!-- All-app approved note -->
     <div style="margin-top:48px;background:var(--gray-light);border-radius:8px;padding:28px 36px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
@@ -169,71 +245,5 @@
 </footer>
 
 <script src="js/main.js"></script>
-<script>
-const STATUS_LABEL = {
-  available: { text: 'Available', cls: 'availability--open' },
-  reserved: { text: 'Reserved', cls: 'availability--limited' },
-  rented: { text: 'Rented', cls: 'availability--limited' },
-  maintenance: { text: 'In Service', cls: 'availability--limited' },
-};
-
-function vehicleType(v) {
-  const model = (v.model || '').toLowerCase();
-  if (model.includes('accord')) return 'accord';
-  if (model.includes('camry')) return 'camry';
-  return (v.make || '').toLowerCase();
-}
-
-function renderFleetCard(v) {
-  const status = STATUS_LABEL[v.status] || STATUS_LABEL.available;
-  const photoSlide = v.photo_path
-    ? `<div class="slide active" style="background-size:cover;background-position:center;background-image:url('${API_BASE_URL}/uploads/${v.photo_path}');"></div>`
-    : `<div class="slide active"><div class="slide-bg slide-1a"></div><div class="car-label"><span class="car-icon">🚗</span><span class="car-label-big">${v.make}</span><span class="car-label-sub">${v.year}</span></div></div>`;
-
-  return `
-    <div class="fleet-card" data-type="${vehicleType(v)}" data-status="${v.status === 'available' ? 'available' : 'limited'}">
-      <div class="slideshow">${photoSlide}</div>
-      <div class="fleet-card__body">
-        <div class="fleet-card__make">${v.make}</div>
-        <div class="fleet-card__name">${v.model} — ${v.year}</div>
-        <div style="font-size:0.8rem;color:#888;margin-bottom:16px;line-height:1.6;">Sedan · 4-door · Seats 5 · Uber/Lyft/DoorDash approved</div>
-        <div class="fleet-card__price-row">
-          <div class="price-weekly">$${v.weekly_rate} <span>/ week</span></div>
-          <div class="availability ${status.cls}">${status.text}</div>
-        </div>
-        <a href="apply.html?vehicle_id=${v.id}&make=${encodeURIComponent(v.make)}&model=${encodeURIComponent(v.model)}&year=${v.year}&rate=${v.weekly_rate}" class="btn btn-primary" style="width:100%;text-align:center;margin-top:16px;display:block;">Apply for This Car</a>
-      </div>
-    </div>
-  `;
-}
-
-(async () => {
-  const grid = document.getElementById('fleet-grid');
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/vehicles/public`);
-    if (!res.ok) throw new Error('Failed to load fleet');
-    const vehicles = await res.json();
-    grid.innerHTML = vehicles.length
-      ? vehicles.map(renderFleetCard).join('')
-      : '<p style="color:#888;grid-column:1/-1;">No vehicles available right now — check back soon.</p>';
-  } catch (err) {
-    grid.innerHTML = '<p style="color:#888;grid-column:1/-1;">Unable to load the fleet right now. Please try again shortly.</p>';
-  }
-
-  // Fleet filter
-  document.querySelectorAll('.filter-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.filter-btn').forEach(b => { b.classList.remove('btn-primary'); b.classList.add('btn-outline'); });
-      btn.classList.add('btn-primary'); btn.classList.remove('btn-outline');
-      const filter = btn.dataset.filter;
-      document.querySelectorAll('.fleet-card').forEach(card => {
-        if (filter === 'all') { card.style.display = ''; return; }
-        if (filter === 'available') { card.style.display = card.dataset.status === 'available' ? '' : 'none'; return; }
-        card.style.display = card.dataset.type === filter ? '' : 'none';
-      });
-    });
-  });
-})();
-</script>
 </body>
 </html>
