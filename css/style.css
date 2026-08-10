@@ -837,3 +837,13 @@ h3 { font-size: clamp(1.2rem, 2.5vw, 1.75rem); }
 .tier-card__desc { font-size: 0.75rem; opacity: 0.65; line-height: 1.4; }
 .tier-card.selected .tier-card__desc,
 .tier-card.selected .tier-card__price span { opacity: 0.8; }
+
+/* Fleet Preview Section */
+.fleet-preview__grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 60px; align-items: center; }
+.fleet-preview__bullets { display: flex; gap: 28px; flex-wrap: wrap; margin-top: 28px; }
+.fleet-preview__bullets li { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.03em; color: rgba(255,255,255,0.85); }
+.fleet-preview__bullets li::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--white); flex-shrink: 0; }
+.fleet-preview__skyline { position: relative; border-radius: 6px; overflow: hidden; }
+.fleet-preview__skyline img { width: 100%; height: auto; display: block; }
+.fleet-preview__credit { display: none; }
+@media (max-width: 900px) { .fleet-preview__grid { grid-template-columns: 1fr; gap: 40px; } }
