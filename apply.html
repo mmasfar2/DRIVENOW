@@ -58,12 +58,7 @@
       </div>
       <div style="width:40px;height:1px;background:var(--gray-border);align-self:center;"></div>
       <div style="display:flex;align-items:center;gap:8px;">
-        <div style="width:28px;height:28px;background:var(--black);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:800;">3</div>
-        <span style="font-size:0.78rem;font-weight:700;">Platform Details</span>
-      </div>
-      <div style="width:40px;height:1px;background:var(--gray-border);align-self:center;"></div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <div style="width:28px;height:28px;background:var(--gray-border);color:#999;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:800;">4</div>
+        <div style="width:28px;height:28px;background:var(--gray-border);color:#999;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:800;">3</div>
         <span style="font-size:0.78rem;font-weight:700;color:#999;">Submit</span>
       </div>
     </div>
@@ -149,11 +144,11 @@
             <div class="tier-card__desc">Great for everyday driving & rideshare</div>
           </div>
 
-          <div class="tier-card" data-tier="Midsize Sedan" data-rate="400" onclick="selectTier(this)">
+          <div class="tier-card" data-tier="Midsize Sedan" data-rate="380" onclick="selectTier(this)">
             <div class="tier-card__icon">🚙</div>
             <div class="tier-card__name">Midsize Sedan</div>
-            <div class="tier-card__price">$400<span>/wk</span></div>
-            <div class="tier-card__desc">More comfort & space for longer shifts</div>
+            <div class="tier-card__price">$380<span>/wk</span></div>
+            <div class="tier-card__desc">More comfort & space</div>
           </div>
 
           <div class="tier-card" data-tier="Premium Sedan" data-rate="420" onclick="selectTier(this)">
@@ -163,11 +158,18 @@
             <div class="tier-card__desc">Luxury finish, higher-tier ride platforms</div>
           </div>
 
+          <div class="tier-card" data-tier="Economy SUV" data-rate="380" onclick="selectTier(this)">
+            <div class="tier-card__icon">🚐</div>
+            <div class="tier-card__name">Economy SUV</div>
+            <div class="tier-card__price">$380<span>/wk</span></div>
+            <div class="tier-card__desc">Extra space, great value</div>
+          </div>
+
           <div class="tier-card" data-tier="SUV" data-rate="420" onclick="selectTier(this)">
             <div class="tier-card__icon">🚐</div>
             <div class="tier-card__name">SUV</div>
             <div class="tier-card__price">$420<span>/wk</span></div>
-            <div class="tier-card__desc">Extra room for passengers & deliveries</div>
+            <div class="tier-card__desc">Room for everyone</div>
           </div>
 
           <div class="tier-card" data-tier="Premium SUV" data-rate="490" onclick="selectTier(this)">
@@ -225,25 +227,6 @@
             <div class="upload-box__filename"></div>
           </div>
           <input type="file" id="insurance-upload" name="insurance" accept="image/*,.pdf,.doc,.docx,.xls,.csv" hidden>
-        </div>
-
-        <!-- Section 4: Platform Info -->
-        <div class="form-section-title">Gig Platform Details</div>
-        <div class="form-group">
-          <label for="platforms">Which platforms do you drive for? *</label>
-          <select id="platforms" name="platforms" required>
-            <option value="">Select primary platform</option>
-            <option value="uber">Uber</option>
-            <option value="lyft">Lyft</option>
-            <option value="doordash">DoorDash</option>
-            <option value="multiple">Multiple platforms</option>
-            <option value="new">New — not yet active</option>
-            <option value="amazon-flex">Amazon Flex</option>
-            <option value="walmart-spark">Walmart Spark</option>
-            <option value="instacart">Instacart</option>
-            <option value="personal">Personal Use (not for gig work)</option>
-            <option value="other">Other</option>
-          </select>
         </div>
 
         <!-- Section 5: Additional -->
