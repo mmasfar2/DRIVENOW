@@ -23,8 +23,8 @@
     <div class="stat-card"><div class="stat-card__label">Rejected</div><div class="stat-card__value orange" id="stat-rejected">—</div></div>
   </div>
 
-  <div class="panel">
-    <div class="panel-title">
+  <div class="panel" style="overflow-x:auto;">
+    <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
       <select id="leads-mode" style="font-family:inherit;font-weight:700;font-size:0.95rem;border:1.5px solid var(--gray-border);border-radius:4px;padding:4px 8px;background:#fff;">
         <option value="new">New Leads</option>
         <option value="former">Former Leads</option>
@@ -54,42 +54,72 @@
 
 <script src="js/admin-common.js"></script>
 <script>
+const RENTAL_DURATION_LABELS = {
+  '1-4wk': '1–4 weeks',
+  '1-3mo': '1–3 months',
+  '3-6mo': '3–6 months',
+  '6mo+': '6+ months',
+  'ongoing': 'Ongoing',
+};
+
 async function loadLeads() {
   const mode = document.getElementById('leads-mode').value;
   const leads = mode === 'former'
     ? await api('/api/applications?decided=1')
     : await api('/api/applications?stage=1&status=active');
 
-  // Oldest first — first received (or first processed, for Former Leads) at the top
   if (mode === 'former') {
     leads.sort((a, b) => new Date(a.lead_decided_at) - new Date(b.lead_decided_at));
   } else {
     leads.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   }
 
-  document.getElementById('new-leads-list').innerHTML = leads.length
-    ? leads.map(l => `
-        <div class="cd-booking-row" style="cursor:default;">
-          <a href="customer-detail.html?email=${encodeURIComponent(l.email)}" style="display:flex;align-items:center;gap:12px;flex:1;text-decoration:none;color:inherit;">
-            <div class="cd-booking-row__icon">${icon('users', 16)}</div>
-            <div style="flex:1;">
-              <div><strong>${l.first_name} ${l.last_name}</strong> ${mode === 'former' ? `<span class="badge ${l.lead_decision === 'approved' ? 'badge-completed' : 'badge-rejected'}">${l.lead_decision === 'approved' ? 'Approved' : 'Rejected'}</span>` : ''}</div>
-              <div style="color:var(--text-muted);font-size:0.8rem;">${l.vehicle_make ? `${l.vehicle_year} ${l.vehicle_make} ${l.vehicle_model}` : 'No vehicle selected'} &middot; ${l.has_own_insurance ? 'Personal Insurance' : 'No Insurance'} &middot; ${mode === 'former' ? `Processed ${fmtDate(l.lead_decided_at)}` : `Applied ${fmtDate(l.created_at)}`}</div>
-            </div>
-          </a>
-          ${mode === 'new' ? `
-            <div style="display:flex;gap:8px;flex-shrink:0;">
-              <button class="lead-action-btn lead-approve" data-id="${l.id}" title="Move to Potential Arrivals" style="width:32px;height:32px;border-radius:50%;border:1.5px solid #2e7d32;color:#2e7d32;background:#fff;font-weight:800;cursor:pointer;">✓</button>
-              <button class="lead-action-btn lead-reject" data-id="${l.id}" title="Move to Former Leads" style="width:32px;height:32px;border-radius:50%;border:1.5px solid #c62828;color:#c62828;background:#fff;font-weight:800;cursor:pointer;">✕</button>
-            </div>
-          ` : `
-            <div style="display:flex;gap:8px;flex-shrink:0;">
-              <button class="lead-action-btn lead-undo" data-id="${l.id}" title="Send back to New Leads" style="width:32px;height:32px;border-radius:50%;border:1.5px solid #888;color:#555;background:#fff;font-weight:800;cursor:pointer;">↺</button>
-            </div>
-          `}
-        </div>
-      `).join('')
-    : `<p style="color:#888;font-size:0.85rem;">${mode === 'former' ? 'No former leads.' : 'No new leads right now.'}</p>`;
+  if (!leads.length) {
+    document.getElementById('new-leads-list').innerHTML =
+      `<p style="color:#888;font-size:0.85rem;padding:16px 0;">${mode === 'former' ? 'No former leads.' : 'No new leads right now.'}</p>`;
+    return;
+  }
+
+  const rows = leads.map(l => {
+    const tier = l.vehicle_tier || (l.vehicle_make ? `${l.vehicle_year} ${l.vehicle_make} ${l.vehicle_model}` : '—');
+    const duration = RENTAL_DURATION_LABELS[l.rental_duration] || l.rental_duration || '—';
+    const insurance = l.has_own_insurance ? `<span style="color:#2e7d32;font-weight:600;">Yes</span>` : `<span style="color:#c62828;font-weight:600;">No</span>`;
+    const decisionBadge = mode === 'former'
+      ? `<span class="badge ${l.lead_decision === 'approved' ? 'badge-completed' : 'badge-rejected'}" style="margin-left:8px;">${l.lead_decision === 'approved' ? 'Approved' : 'Rejected'}</span>`
+      : '';
+    const actionBtns = mode === 'new'
+      ? `<div style="display:flex;gap:8px;">
+           <button class="lead-action-btn lead-approve" data-id="${l.id}" title="Move to Potential Arrivals" style="width:32px;height:32px;border-radius:50%;border:1.5px solid #2e7d32;color:#2e7d32;background:#fff;font-weight:800;cursor:pointer;">✓</button>
+           <button class="lead-action-btn lead-reject" data-id="${l.id}" title="Reject" style="width:32px;height:32px;border-radius:50%;border:1.5px solid #c62828;color:#c62828;background:#fff;font-weight:800;cursor:pointer;">✕</button>
+         </div>`
+      : `<button class="lead-action-btn lead-undo" data-id="${l.id}" title="Send back to New Leads" style="width:32px;height:32px;border-radius:50%;border:1.5px solid #888;color:#555;background:#fff;font-weight:800;cursor:pointer;">↺</button>`;
+
+    return `
+      <tr style="border-bottom:1px solid var(--gray-border);">
+        <td style="padding:14px 12px;">
+          <a href="customer-detail.html?email=${encodeURIComponent(l.email)}" style="font-weight:600;color:var(--black);text-decoration:none;">${l.first_name} ${l.last_name}</a>${decisionBadge}
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">${mode === 'former' ? fmtDate(l.lead_decided_at) : fmtDate(l.created_at)}</div>
+        </td>
+        <td style="padding:14px 12px;font-size:0.88rem;">${tier}</td>
+        <td style="padding:14px 12px;font-size:0.88rem;">${duration}</td>
+        <td style="padding:14px 12px;font-size:0.88rem;">${insurance}</td>
+        <td style="padding:14px 12px;">${actionBtns}</td>
+      </tr>`;
+  }).join('');
+
+  document.getElementById('new-leads-list').innerHTML = `
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="border-bottom:2px solid var(--gray-border);">
+          <th style="padding:10px 12px;text-align:left;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);font-weight:700;">Applicant</th>
+          <th style="padding:10px 12px;text-align:left;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);font-weight:700;">Vehicle Tier</th>
+          <th style="padding:10px 12px;text-align:left;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);font-weight:700;">Rental Duration</th>
+          <th style="padding:10px 12px;text-align:left;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);font-weight:700;">Insurance</th>
+          <th style="padding:10px 12px;"></th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
 
   document.querySelectorAll('.lead-approve').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -106,26 +136,14 @@ async function loadLeads() {
   document.querySelectorAll('.lead-reject').forEach(btn => {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
-      try {
-        await api(`/api/applications/${btn.dataset.id}/reject-lead`, { method: 'POST' });
-      } catch (err) {
-        alert(err.message || 'Could not reject this lead.');
-        btn.disabled = false;
-        return;
-      }
+      await api(`/api/applications/${btn.dataset.id}/reject-lead`, { method: 'POST' });
       await loadLeads();
     });
   });
   document.querySelectorAll('.lead-undo').forEach(btn => {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
-      try {
-        await api(`/api/applications/${btn.dataset.id}/undo-lead-decision`, { method: 'POST' });
-      } catch (err) {
-        alert(err.message || 'Could not undo this decision.');
-        btn.disabled = false;
-        return;
-      }
+      await api(`/api/applications/${btn.dataset.id}/undo-lead-decision`, { method: 'POST' });
       await loadLeads();
     });
   });

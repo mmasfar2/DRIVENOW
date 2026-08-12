@@ -1,73 +1,10 @@
 const express = require('express');
 const multer = require('multer');
-const { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo } = require('../db');
+const { db, logActivity, queueMessage, upsertCustomer } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
-const { computeCharge, computeOwed, SWIPE_FEE_RATE } = require('../billing');
-const { todayStr } = require('../timezone');
-
-// Rental payments: 'card' carries a customer-facing processing_fee surcharge,
-// 'swipe' carries an absorbed processor cut logged as a Business Expense —
-// everything else (cash, and the instant peer-to-peer apps) is treated like
-// cash, with no fee logic attached. Deposits never allow 'swipe' — a held
-// deposit isn't revenue, so the absorbed-fee-as-expense logic doesn't apply.
-const PAYMENT_METHODS = ['cash', 'card', 'swipe', 'cash_app', 'apple_pay', 'zelle'];
-const DEPOSIT_METHODS = ['cash', 'card', 'cash_app', 'apple_pay', 'zelle'];
 
 const router = express.Router();
-
-// A customer's contact info can be edited later from their profile
-// (Customer Detail), but each application row is a frozen snapshot taken at
-// intake time. Any query that displays a booking's customer info joins in
-// the canonical `customers` row and prefers it, so an edit to a customer's
-// name/phone/address shows up on their existing bookings instead of only
-// applying to future ones. Primarily joins on applications.customer_id —
-// set once, directly, at booking-creation time (see upsertCustomer's call
-// sites below) — rather than re-guessing the link by matching email/name/
-// address every time it's displayed. The email-or-name+address match is
-// kept only as a fallback for older rows from before that column existed
-// (backfilled on startup in db.js), then name+phone — two different people
-// essentially never share both an exact full name and a phone number, so
-// this is as safe as name+address. Not restricted to "no address on either
-// side" — a customer who has an address on file from a different visit than
-// this booking (or who simply moved) is still the same person. Deliberately
-// never matches by phone alone without a name match too — two different
-// people (family, a shared business line) can share one phone number, which
-// would incorrectly merge them.
-const CUSTOMER_JOIN = `
-  LEFT JOIN customers c ON
-    c.id = a.customer_id
-    OR (
-      a.customer_id IS NULL AND (
-        (a.email != '' AND c.email IS NOT NULL AND lower(c.email) = lower(a.email))
-        OR (
-          c.address IS NOT NULL AND c.address != '' AND a.address IS NOT NULL AND a.address != ''
-          AND lower(trim(c.first_name)) = lower(trim(a.first_name))
-          AND lower(trim(c.last_name)) = lower(trim(a.last_name))
-          AND lower(trim(c.address)) = lower(trim(a.address))
-        )
-        OR (
-          lower(trim(c.first_name)) = lower(trim(a.first_name))
-          AND lower(trim(c.last_name)) = lower(trim(a.last_name))
-          AND c.phone IS NOT NULL AND c.phone != '' AND a.phone IS NOT NULL AND a.phone != ''
-          AND replace(replace(replace(replace(replace(c.phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') =
-              replace(replace(replace(replace(replace(a.phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '')
-        )
-      )
-    )
-`;
-const CUSTOMER_SYNC_COLUMNS = `
-  c.id as customer_id,
-  COALESCE(c.first_name, a.first_name) as first_name,
-  COALESCE(c.last_name, a.last_name) as last_name,
-  COALESCE(c.phone, a.phone) as phone,
-  COALESCE(c.address, a.address) as address,
-  COALESCE(c.city, a.city) as city,
-  COALESCE(c.state, a.state) as state,
-  COALESCE(c.zip_code, a.zip_code) as zip_code,
-  COALESCE(c.dob, a.dob) as dob,
-  COALESCE(c.license_number, a.license_number) as license_number
-`;
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -81,7 +18,7 @@ const upload = multer({
 
 // ── PUBLIC: Stage 1 — Customer Application Submission ──
 router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (req, res) => {
-  const { first_name, last_name, phone, email, address, city, state, zip_code, dob, occupation, use_type, license_number, consent_background, vehicle_id, has_own_insurance, rental_duration, notes } = req.body;
+  const { first_name, last_name, phone, email, address, city, state, zip_code, dob, occupation, use_type, license_number, consent_background, vehicle_id, has_own_insurance, rental_duration, vehicle_tier, notes } = req.body;
 
   if (!first_name || !last_name || !phone || !email) {
     return res.status(400).json({ error: 'First name, last name, phone, and email are required' });
@@ -99,32 +36,23 @@ router.post('/', upload.fields([{ name: 'license' }, { name: 'insurance' }]), (r
     return res.status(400).json({ error: 'ZIP code must contain exactly 5 digits' });
   }
 
-  // Stored digits-only (not however the customer happened to type it —
-  // dashes, parens, spaces) so matching the same person by phone
-  // (upsertCustomer, applications<->customers) works regardless of
-  // formatting differences between visits.
-  const normalizedPhone = phone.replace(/\D/g, '');
   const licensePath = req.files?.license?.[0]?.filename || null;
   const insurancePath = req.files?.insurance?.[0]?.filename || null;
   const assignedVehicleId = vehicle_id ? Number(vehicle_id) : null;
 
   const result = db.prepare(`
     INSERT INTO applications
-      (first_name, last_name, phone, email, address, city, state, zip_code, dob, occupation, use_type, license_number, license_path, insurance_path, consent_background, has_own_insurance, assigned_vehicle_id, rental_duration, notes, stage)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, 1)
-  `).run(first_name, last_name, normalizedPhone, email, address || null, city || null, state || null, zip_code || null, dob || null, occupation || null, use_type || null, license_number || null, licensePath, insurancePath, has_own_insurance === 'yes' ? 1 : 0, assignedVehicleId, rental_duration || null, notes || null);
+      (first_name, last_name, phone, email, address, city, state, zip_code, dob, occupation, use_type, license_number, license_path, insurance_path, consent_background, has_own_insurance, assigned_vehicle_id, rental_duration, vehicle_tier, notes, stage)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, 1)
+  `).run(first_name, last_name, phone, email, address || null, city || null, state || null, zip_code || null, dob || null, occupation || null, use_type || null, license_number || null, licensePath, insurancePath, has_own_insurance === 'yes' ? 1 : 0, assignedVehicleId, rental_duration || null, vehicle_tier || null, notes || null);
 
   const appId = result.lastInsertRowid;
   if (assignedVehicleId) {
     db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ? AND status = 'available'").run(assignedVehicleId);
   }
-  const customerId = upsertCustomer({ email, first_name, last_name, phone: normalizedPhone, address, city, state, zip_code, dob, license_number });
-  db.prepare('UPDATE applications SET customer_id = ? WHERE id = ?').run(customerId, appId);
-  if (has_own_insurance === 'yes' || insurancePath) {
-    upsertInsuranceRecord(customerId, 'private', { document_path: insurancePath });
-  }
+  upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob });
   logActivity(appId, `New application submitted by ${first_name} ${last_name}`);
-  queueMessage(appId, 'sms', normalizedPhone, "We've received your application and are currently reviewing it.");
+  queueMessage(appId, 'sms', phone, "We've received your application and are currently reviewing it.");
 
   res.status(201).json({ id: appId, message: 'Application received' });
 });
@@ -201,10 +129,9 @@ router.post('/:id/undo-lead-decision', requireAuth, (req, res) => {
 router.get('/', requireAuth, (req, res) => {
   const { stage, status, decided } = req.query;
   let query = `
-    SELECT a.*, v.make as vehicle_make, v.model as vehicle_model, v.year as vehicle_year, ${CUSTOMER_SYNC_COLUMNS}
+    SELECT a.*, v.make as vehicle_make, v.model as vehicle_model, v.year as vehicle_year
     FROM applications a
     LEFT JOIN vehicles v ON v.id = a.assigned_vehicle_id
-    ${CUSTOMER_JOIN}
     WHERE 1=1
   `;
   const params = [];
@@ -218,12 +145,7 @@ router.get('/', requireAuth, (req, res) => {
 
 // ── AUTHED: Get single application + its activity log ──
 router.get('/:id', requireAuth, (req, res) => {
-  const app = db.prepare(`
-    SELECT a.*, ${CUSTOMER_SYNC_COLUMNS}
-    FROM applications a
-    ${CUSTOMER_JOIN}
-    WHERE a.id = ?
-  `).get(req.params.id);
+  const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(req.params.id);
   if (!app) return res.status(404).json({ error: 'Not found' });
   const activity = db.prepare('SELECT * FROM activity_log WHERE application_id = ? ORDER BY created_at DESC').all(req.params.id);
   res.json({ ...app, activity });
@@ -292,18 +214,10 @@ router.post('/:id/background-check', requireAuth, (req, res) => {
 router.post('/:id/insurance-quote', requireAuth, (req, res) => {
   const { insurance_quote_amount, insurance_notes } = req.body;
   const id = req.params.id;
-  const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
   db.prepare(`
     UPDATE applications SET insurance_quote_amount = ?, insurance_notes = ?, stage = 5, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(insurance_quote_amount, insurance_notes || null, id);
-  if (app) {
-    // A quote here means DriveNow is covering this customer under its own
-    // policy — reflect that in the Insurance panel right away.
-    const customerId = upsertCustomer(app);
-    if (!app.customer_id) db.prepare('UPDATE applications SET customer_id = ? WHERE id = ?').run(customerId, id);
-    upsertInsuranceRecord(customerId, 'our_policy', { notes: insurance_notes });
-  }
   logActivity(id, `Insurance quote received: $${insurance_quote_amount}`);
   res.json({ ok: true });
 });
@@ -312,15 +226,6 @@ router.post('/:id/insurance-quote', requireAuth, (req, res) => {
 router.post('/:id/quote', requireAuth, (req, res) => {
   const { assigned_vehicle_id, weekly_rate, total_due_at_pickup } = req.body;
   const id = req.params.id;
-  if (assigned_vehicle_id) {
-    const current = db.prepare('SELECT assigned_vehicle_id FROM applications WHERE id = ?').get(id);
-    const vehicle = db.prepare('SELECT status FROM vehicles WHERE id = ?').get(assigned_vehicle_id);
-    if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
-    const alreadyAssignedHere = current && Number(current.assigned_vehicle_id) === Number(assigned_vehicle_id);
-    if (!alreadyAssignedHere && vehicle.status !== 'available') {
-      return res.status(400).json({ error: 'That vehicle is not available — it may already be reserved or rented' });
-    }
-  }
   db.prepare(`
     UPDATE applications SET assigned_vehicle_id = ?, weekly_rate = ?, total_due_at_pickup = ?, stage = 6, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
@@ -392,221 +297,37 @@ router.get('/:id/payments', requireAuth, (req, res) => {
   res.json(rows);
 });
 
-// "Payment through Swipe" is a card payment where the processor's real cut
-// (SWIPE_FEE_RATE) is absorbed by the business rather than billed to the
-// customer — unlike the Card method's processing_fee, which is a
-// customer-facing surcharge added to what they owe. The absorbed cost still
-// has to show up somewhere, so it's auto-logged as a Business Expense (see
-// business-expenses.js) tied back to this specific payment via payment_id,
-// so editing or deleting the payment keeps that expense entry in sync
-// instead of leaving a stale one behind. Dated to paidAt — the same real
-// calendar date the card was actually charged on — not the rental night(s)
-// the payment happens to apply to; the processor takes its cut once, at
-// charge time, not spread across a stay the way rental revenue is earned.
-function syncSwipeExpense(paymentId, applicationId, method, amount, app, customerName, paidAt) {
-  const existing = db.prepare('SELECT id FROM business_expenses WHERE payment_id = ?').get(paymentId);
-  if (method === 'swipe') {
-    const fee = Math.round(Number(amount) * SWIPE_FEE_RATE * 100) / 100;
-    const expenseDate = (paidAt || todayStr()).slice(0, 10);
-    const notes = `Swipe processing fee — payment on reservation #${applicationId} (${customerName})`;
-    if (existing) {
-      db.prepare('UPDATE business_expenses SET amount = ?, expense_date = ?, notes = ?, vehicle_id = ? WHERE id = ?')
-        .run(fee, expenseDate, notes, app.assigned_vehicle_id || null, existing.id);
-    } else {
-      db.prepare('INSERT INTO business_expenses (category, amount, expense_date, notes, payment_id, vehicle_id) VALUES (?, ?, ?, ?, ?, ?)')
-        .run('Card Processing Fee', fee, expenseDate, notes, paymentId, app.assigned_vehicle_id || null);
-    }
-  } else if (existing) {
-    db.prepare('DELETE FROM business_expenses WHERE id = ?').run(existing.id);
-  }
-}
-
 router.post('/:id/payments', requireAuth, (req, res) => {
-  const { amount, paid_at, method, processing_fee } = req.body;
+  const { amount, paid_at } = req.body;
   const id = req.params.id;
   const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
   if (!app) return res.status(404).json({ error: 'Not found' });
   if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'A valid amount is required' });
 
-  const paymentMethod = PAYMENT_METHODS.includes(method) ? method : 'cash';
-  const fee = paymentMethod === 'card' ? Math.max(0, Number(processing_fee) || 0) : 0;
-  const paidAt = paid_at || todayStr();
-
-  const result = db.prepare('INSERT INTO payments (application_id, amount, paid_at, method, processing_fee) VALUES (?, ?, ?, ?, ?)')
-    .run(id, amount, paidAt, paymentMethod, fee);
-  if (paymentMethod === 'swipe') {
-    syncSwipeExpense(result.lastInsertRowid, id, paymentMethod, amount, app, `${app.first_name} ${app.last_name}`, paidAt);
-  }
-  logActivity(id, `Payment of $${amount} recorded (${paymentMethod}${fee ? `, +$${fee} processing fee` : ''})`);
+  db.prepare('INSERT INTO payments (application_id, amount, paid_at) VALUES (?, ?, ?)')
+    .run(id, amount, paid_at || new Date().toISOString().slice(0, 10));
+  logActivity(id, `Payment of $${amount} recorded`);
   res.status(201).json({ ok: true });
-});
-
-router.put('/:id/payments/:paymentId', requireAuth, (req, res) => {
-  const { amount, paid_at, method, processing_fee } = req.body;
-  const id = req.params.id;
-  const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
-  const existing = db.prepare('SELECT * FROM payments WHERE id = ? AND application_id = ?').get(req.params.paymentId, id);
-  if (!existing) return res.status(404).json({ error: 'Not found' });
-  if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'A valid amount is required' });
-
-  const paymentMethod = PAYMENT_METHODS.includes(method) ? method : 'cash';
-  const fee = paymentMethod === 'card' ? Math.max(0, Number(processing_fee) || 0) : 0;
-  const paidAt = paid_at || existing.paid_at;
-  const linkedExpense = db.prepare('SELECT * FROM business_expenses WHERE payment_id = ?').get(existing.id);
-
-  logUndo('payment_edit', `Edited a payment on reservation #${id}`, { previous: existing, previousExpense: linkedExpense });
-  db.prepare('UPDATE payments SET amount = ?, paid_at = ?, method = ?, processing_fee = ? WHERE id = ?')
-    .run(amount, paidAt, paymentMethod, fee, existing.id);
-  syncSwipeExpense(existing.id, id, paymentMethod, amount, app, `${app.first_name} ${app.last_name}`, paidAt);
-  logActivity(id, `Payment edited — now $${amount} (${paymentMethod}${fee ? `, +$${fee} processing fee` : ''})`);
-  res.json({ ok: true });
-});
-
-router.delete('/:id/payments/:paymentId', requireAuth, (req, res) => {
-  const id = req.params.id;
-  const existing = db.prepare('SELECT * FROM payments WHERE id = ? AND application_id = ?').get(req.params.paymentId, id);
-  if (!existing) return res.status(404).json({ error: 'Not found' });
-  const linkedExpense = db.prepare('SELECT * FROM business_expenses WHERE payment_id = ?').get(existing.id);
-
-  logUndo('payment_delete', `Deleted a payment on reservation #${id}`, { payment: existing, linkedExpense });
-  if (linkedExpense) db.prepare('DELETE FROM business_expenses WHERE id = ?').run(linkedExpense.id);
-  db.prepare('DELETE FROM payments WHERE id = ?').run(existing.id);
-  logActivity(id, `Payment of $${existing.amount} deleted`);
-  res.json({ ok: true });
-});
-
-// ── AUTHED: Security Deposits — held separately from rental payments so they
-// never flow into rent balances or revenue reporting. A deposit is collected
-// as 'held', then later resolved into some refunded amount and/or some
-// forfeited amount (see /:id/deposits/:depositId/resolve for how forfeited
-// amounts are reported). ──
-router.get('/:id/deposits', requireAuth, (req, res) => {
-  const rows = db.prepare('SELECT * FROM deposits WHERE application_id = ? ORDER BY collected_at DESC, id DESC').all(req.params.id);
-  res.json(rows);
-});
-
-router.post('/:id/deposits', requireAuth, (req, res) => {
-  const { amount, collected_at, method, processing_fee } = req.body;
-  const id = req.params.id;
-  const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
-  if (!app) return res.status(404).json({ error: 'Not found' });
-  if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'A valid amount is required' });
-
-  const depositMethod = DEPOSIT_METHODS.includes(method) ? method : 'cash';
-  const fee = depositMethod === 'card' ? Math.max(0, Number(processing_fee) || 0) : 0;
-
-  db.prepare('INSERT INTO deposits (application_id, amount, method, processing_fee, collected_at) VALUES (?, ?, ?, ?, ?)')
-    .run(id, amount, depositMethod, fee, collected_at || todayStr());
-  logActivity(id, `Security deposit of $${amount} collected (${depositMethod}${fee ? `, +$${fee} processing fee` : ''})`);
-  res.status(201).json({ ok: true });
-});
-
-router.put('/:id/deposits/:depositId', requireAuth, (req, res) => {
-  const { amount, collected_at, method, processing_fee } = req.body;
-  const id = req.params.id;
-  const existing = db.prepare('SELECT * FROM deposits WHERE id = ? AND application_id = ?').get(req.params.depositId, id);
-  if (!existing) return res.status(404).json({ error: 'Not found' });
-  if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'A valid amount is required' });
-
-  const depositMethod = DEPOSIT_METHODS.includes(method) ? method : 'cash';
-  const fee = depositMethod === 'card' ? Math.max(0, Number(processing_fee) || 0) : 0;
-  const collectedAt = collected_at || existing.collected_at;
-  // Changing the amount on an already-resolved deposit can leave its
-  // refund/forfeit split no longer adding up to the new total (and a stale
-  // forfeited amount still counted as revenue for a number that no longer
-  // exists) — reset it back to held so it has to be resolved again, rather
-  // than silently leaving a mismatched split. Editing collected_at/method
-  // alone doesn't touch the split.
-  const amountChanged = Math.round(Number(amount) * 100) !== Math.round(Number(existing.amount) * 100);
-  const staysResolved = existing.status === 'resolved' && !amountChanged;
-
-  logUndo('deposit_edit', `Edited a security deposit on reservation #${id}`, { previous: existing });
-  db.prepare(`
-    UPDATE deposits SET amount = ?, method = ?, processing_fee = ?, collected_at = ?,
-      status = ?, refunded_amount = ?, forfeited_amount = ?, resolved_at = ?
-    WHERE id = ?
-  `).run(
-    amount, depositMethod, fee, collectedAt,
-    staysResolved ? 'resolved' : 'held',
-    staysResolved ? existing.refunded_amount : 0,
-    staysResolved ? existing.forfeited_amount : 0,
-    staysResolved ? existing.resolved_at : null,
-    existing.id
-  );
-  logActivity(id, `Security deposit edited — now $${amount} (${depositMethod}${fee ? `, +$${fee} processing fee` : ''})${!staysResolved && existing.status === 'resolved' ? ', resolution reset — needs to be resolved again' : ''}`);
-  res.json({ ok: true });
-});
-
-router.delete('/:id/deposits/:depositId', requireAuth, (req, res) => {
-  const id = req.params.id;
-  const existing = db.prepare('SELECT * FROM deposits WHERE id = ? AND application_id = ?').get(req.params.depositId, id);
-  if (!existing) return res.status(404).json({ error: 'Not found' });
-
-  logUndo('deposit_delete', `Deleted a security deposit on reservation #${id}`, { deposit: existing });
-  db.prepare('DELETE FROM deposits WHERE id = ?').run(existing.id);
-  logActivity(id, `Security deposit of $${existing.amount} deleted`);
-  res.json({ ok: true });
-});
-
-router.post('/:id/deposits/:depositId/resolve', requireAuth, (req, res) => {
-  const { refund_amount, forfeit_amount, resolved_at, notes } = req.body;
-  const id = req.params.id;
-  const deposit = db.prepare('SELECT * FROM deposits WHERE id = ? AND application_id = ?').get(req.params.depositId, id);
-  if (!deposit) return res.status(404).json({ error: 'Not found' });
-
-  const refund = Math.max(0, Number(refund_amount) || 0);
-  const forfeit = Math.max(0, Number(forfeit_amount) || 0);
-  if (Math.round((refund + forfeit) * 100) !== Math.round(deposit.amount * 100)) {
-    return res.status(400).json({ error: 'Refund + forfeited amount must equal the deposit amount' });
-  }
-
-  // Callable again on an already-resolved deposit — lets the front desk
-  // correct/adjust a prior refund-vs-forfeit split (e.g. after double-clicking
-  // it) instead of being locked in after the first resolution. resolved_at
-  // moves to now each time, so revenue reports attribute the forfeited
-  // portion to whenever it was last actually decided.
-  const wasHeld = deposit.status === 'held';
-  const resolvedAt = resolved_at || todayStr();
-  db.prepare(`
-    UPDATE deposits SET status = 'resolved', refunded_amount = ?, forfeited_amount = ?, resolved_at = ?, notes = ?
-    WHERE id = ?
-  `).run(refund, forfeit, resolvedAt, notes || null, deposit.id);
-
-  // Forfeited amounts are booked as their own revenue category (see
-  // computeForfeitedDeposits in db.js, used by the dashboard, reports, and
-  // Vehicle Detail) rather than inserted into `payments`, since `payments`
-  // also drives the booking's rent balance — a forfeiture isn't rent and
-  // shouldn't shrink what the customer owes.
-  logActivity(id, `Security deposit ${wasHeld ? 'resolved' : 'adjusted'} — refunded $${refund}${forfeit ? `, forfeited $${forfeit}` : ''}`);
-  res.json({ ok: true });
 });
 
 // ── AUTHED: Full reservation detail (booking + vehicle + payments + notes) ──
 router.get('/:id/detail', requireAuth, (req, res) => {
   const row = db.prepare(`
-    SELECT a.*, v.id as vehicle_id, v.make, v.model, v.year, v.status as vehicle_status, v.mileage as vehicle_mileage,
-           v.gas_level as vehicle_gas_level, v.vin, v.license_plate, v.color, v.fuel_type, v.transmission, ${CUSTOMER_SYNC_COLUMNS}
+    SELECT a.*, v.id as vehicle_id, v.make, v.model, v.year, v.status as vehicle_status,
+           v.vin, v.license_plate, v.color, v.fuel_type, v.transmission
     FROM applications a
     LEFT JOIN vehicles v ON v.id = a.assigned_vehicle_id
-    ${CUSTOMER_JOIN}
     WHERE a.id = ?
   `).get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
 
   const payments = db.prepare('SELECT * FROM payments WHERE application_id = ? ORDER BY paid_at DESC, id DESC').all(req.params.id);
-  const deposits = db.prepare('SELECT * FROM deposits WHERE application_id = ? ORDER BY collected_at DESC, id DESC').all(req.params.id);
   const notes = db.prepare('SELECT * FROM booking_notes WHERE application_id = ? ORDER BY created_at DESC').all(req.params.id);
   const paidTotal = Math.round(payments.reduce((sum, p) => sum + Number(p.amount), 0) * 100) / 100;
-  const feesTotal = Math.round(payments.reduce((sum, p) => sum + Number(p.processing_fee || 0), 0) * 100) / 100;
-  const depositsHeld = Math.round(deposits.filter(d => d.status === 'held').reduce((sum, d) => sum + Number(d.amount), 0) * 100) / 100;
-  // `charge`/`owed` (signed — negative means the customer has a credit) are
-  // computed once here and echoed back as-is everywhere else that shows this
-  // booking's balance (reservations list, customer profile), so the number
-  // can't drift depending on which page you're looking at.
-  const charge = computeCharge(row);
-  const owed = computeOwed(row, paidTotal);
+  const charge = row.invoice_amount || row.total_due_at_pickup || 0;
+  const owed = row.status === 'active' ? Math.max(0, Math.round((charge - paidTotal) * 100) / 100) : 0;
 
-  res.json({ ...row, payments, paid_total: paidTotal, fees_total: feesTotal, deposits, deposits_held: depositsHeld, charge, owed, notes });
+  res.json({ ...row, payments, paid_total: paidTotal, owed, notes });
 });
 
 // ── AUTHED: Booking notes (internal, VA/owner only) ──
@@ -627,7 +348,7 @@ router.post('/:id/notes', requireAuth, (req, res) => {
 
 // ── AUTHED: General notes / edit ──
 router.patch('/:id', requireAuth, (req, res) => {
-  const allowed = ['first_name', 'last_name', 'phone', 'email', 'address', 'occupation', 'intended_use', 'pickup_scheduled_at', 'rental_end_at', 'odometer_out', 'odometer_in', 'gas_level_out', 'gas_level_in', 'pickup_location', 'dropoff_location'];
+  const allowed = ['first_name', 'last_name', 'phone', 'email', 'address', 'occupation', 'intended_use', 'pickup_scheduled_at', 'rental_end_at', 'odometer_out', 'odometer_in', 'pickup_location', 'dropoff_location'];
   const updates = [];
   const params = [];
   for (const key of allowed) {
@@ -636,71 +357,24 @@ router.patch('/:id', requireAuth, (req, res) => {
       params.push(req.body[key]);
     }
   }
-  const hasInvoiceTotal = req.body.invoice_total !== undefined;
-  if (updates.length === 0 && !hasInvoiceTotal) return res.status(400).json({ error: 'No valid fields to update' });
-  if (updates.length > 0) {
-    params.push(req.params.id);
-    db.prepare(`UPDATE applications SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...params);
-  }
+  if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update' });
+  params.push(req.params.id);
+  db.prepare(`UPDATE applications SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...params);
 
-  // Changing the pickup or return date changes how much is owed — recompute
-  // the exact charge from billing.js's computeCharge (the same formula used
-  // everywhere else: Highway Tax, Sales Tax, Admin/Travel/Insurance/
-  // Processing Fee, all of it) rather than a separate hand-rolled Lease
-  // Rate + Sales Tax-only formula that silently went stale every time a new
-  // fee type was added elsewhere.
+  // Changing the pickup or return date changes how much is owed — recompute the exact
+  // charge from the weekly rate rather than leaving the original quote's total stale.
   if (req.body.rental_end_at !== undefined || req.body.pickup_scheduled_at !== undefined) {
     const id = req.params.id;
-    const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
+    const app = db.prepare('SELECT pickup_scheduled_at, rental_end_at, weekly_rate FROM applications WHERE id = ?').get(id);
     if (app && app.pickup_scheduled_at && app.rental_end_at && app.weekly_rate) {
-      // Null out the previously-frozen total/invoice so computeCharge falls
-      // through to a fresh calculation from the new dates instead of just
-      // handing back the very value we're trying to replace.
-      const total = computeCharge({ ...app, total_due_at_pickup: null, invoice_amount: null });
-      // manual-booking seeds invoice_amount = total_due_at_pickup at creation
-      // time, and computeCharge checks invoice_amount FIRST — so updating
-      // only total_due_at_pickup (as this used to) never actually took
-      // effect on any booking created through the wizard; invoice_amount
-      // kept winning and stayed stuck at its original value forever.
-      if (app.invoice_amount) {
-        db.prepare('UPDATE applications SET total_due_at_pickup = ?, invoice_amount = ? WHERE id = ?').run(total, total, id);
-      } else {
-        db.prepare('UPDATE applications SET total_due_at_pickup = ? WHERE id = ?').run(total, id);
-      }
+      const days = Math.round((new Date(app.rental_end_at) - new Date(app.pickup_scheduled_at)) / 86400000);
+      const dailyRateExact = app.weekly_rate / 7;
+      const subtotal = Math.round(dailyRateExact * days * 100) / 100;
+      const salesTax = Math.round(subtotal * 0.0725 * 100) / 100;
+      const total = Math.round((subtotal + salesTax) * 100) / 100;
+      db.prepare('UPDATE applications SET total_due_at_pickup = ? WHERE id = ?').run(total, id);
       logActivity(id, `Reservation dates updated (${app.pickup_scheduled_at} → ${app.rental_end_at}) — balance recalculated to $${total}`);
     }
-  }
-
-  // The Financials tab's Invoice Adjustments panel has its own "Save
-  // Adjustments" action, separate from "Send Invoice" — that one also texts
-  // the customer and advances their pipeline stage, which isn't wanted for
-  // a purely internal correction (e.g. applying a Discount or Insurance Fee
-  // checkbox). This persists whatever total the checked/edited rows
-  // currently add up to, the same way a date change recomputes and persists
-  // a new total. Every toggleable row (Discount/Admin Fee/Travel Fee/
-  // Insurance Fee/Processing Fee/Miscellaneous/Tolls) is saved as its own
-  // column too (unchecked -> 0) so its checkbox reflects what was actually
-  // saved instead of resetting to whatever the booking's original rate
-  // happened to be on the next reload — computeCharge picks these up on any
-  // future recompute too (e.g. a later date change), so they aren't
-  // silently lost. Add any new row to extraFields below too, or it'll have
-  // this same bug.
-  if (hasInvoiceTotal) {
-    const id = req.params.id;
-    const total = Math.round(Number(req.body.invoice_total) * 100) / 100;
-    const extraFields = { discount: 'discount', admin_fee_rate: 'admin_fee_rate', travel_fee: 'travel_fee', insurance_fee_rate: 'insurance_fee_rate', processing_fee: 'processing_fee', misc_fee: 'misc_fee', toll_fee: 'toll_fee' };
-    const setCols = ['total_due_at_pickup = ?', 'invoice_amount = ?'];
-    const setParams = [total, total];
-    for (const [bodyKey, column] of Object.entries(extraFields)) {
-      if (req.body[bodyKey] !== undefined) {
-        setCols.push(`${column} = ?`);
-        setParams.push(Math.round(Number(req.body[bodyKey]) * 100) / 100);
-      }
-    }
-    setCols.push('updated_at = CURRENT_TIMESTAMP');
-    setParams.push(id);
-    db.prepare(`UPDATE applications SET ${setCols.join(', ')} WHERE id = ?`).run(...setParams);
-    logActivity(id, `Invoice adjustments saved — total set to $${total}`);
   }
 
   res.json({ ok: true });
@@ -732,246 +406,44 @@ router.post('/:id/revert-arrival', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── AUTHED: Check Out (pickup) — the vehicle leaves the lot. Records the
-// odometer as it goes out, pre-filled from the vehicle's current mileage so
-// it starts from the truth the last checkout/check-in left behind. Odometer
-// and gas level are both optional — this is a free-form stage toggle, not a
-// gated pipeline, so it's always callable regardless of the booking's state. ──
-router.post('/:id/check-in', requireAuth, (req, res) => {
-  const { odometer_out, gas_level } = req.body;
-  const id = req.params.id;
-  const app = db.prepare('SELECT assigned_vehicle_id, status FROM applications WHERE id = ?').get(id);
-  if (!app) return res.status(404).json({ error: 'Not found' });
-  if (!app.assigned_vehicle_id) return res.status(400).json({ error: 'This booking has no vehicle assigned' });
-
-  db.prepare(`
-    UPDATE applications SET status = 'active', odometer_out = COALESCE(?, odometer_out),
-      gas_level_out = COALESCE(?, gas_level_out), updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(odometer_out || null, gas_level || null, id);
-  db.prepare("UPDATE vehicles SET status = 'rented' WHERE id = ?").run(app.assigned_vehicle_id);
-  if (odometer_out != null && odometer_out !== '') {
-    db.prepare("UPDATE vehicles SET mileage = ?, mileage_updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(odometer_out, app.assigned_vehicle_id);
-  }
-  // Carries forward the same way mileage does — the vehicle's recorded gas
-  // level is always whatever reading was taken most recently, so the next
-  // Check Out (on this or a future booking) starts from the truth left behind.
-  if (gas_level) {
-    db.prepare('UPDATE vehicles SET gas_level = ? WHERE id = ?').run(gas_level, app.assigned_vehicle_id);
-  }
-  logActivity(id, `Checked out — vehicle left the lot${odometer_out ? ` at ${odometer_out} mi` : ''}${gas_level ? `, ${gas_level} tank` : ''}`);
-  res.json({ ok: true });
-});
-
-// ── AUTHED: Undo — hands the vehicle back to Reservation stage and reopens
-// the booking if it had been completed. Always allowed; doesn't touch any
-// odometer/gas readings already recorded (re-checking out/in later just
-// re-confirms or edits them). ──
-router.post('/:id/revert-check-in', requireAuth, (req, res) => {
-  const id = req.params.id;
-  const app = db.prepare('SELECT assigned_vehicle_id, status FROM applications WHERE id = ?').get(id);
-  if (!app) return res.status(404).json({ error: 'Not found' });
-  db.prepare("UPDATE applications SET status = 'active', checked_in_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
-  if (app.assigned_vehicle_id) {
-    db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ?").run(app.assigned_vehicle_id);
-  }
-  logActivity(id, 'Reverted to Reservation stage');
-  res.json({ ok: true });
-});
-
-// ── AUTHED: Check In (return) — the vehicle comes back and the rental wraps
-// up. Previously the only way to free up a vehicle was deleting the entire
-// reservation (which also wipes its payment/deposit history) — this keeps
-// the booking's records intact and just marks it done. Odometer is optional
-// and this is always callable, not gated behind a prior stage. ──
-router.post('/:id/complete-rental', requireAuth, (req, res) => {
-  const { odometer_in, gas_level_in } = req.body;
-  const id = req.params.id;
-  const app = db.prepare('SELECT assigned_vehicle_id, status FROM applications WHERE id = ?').get(id);
-  if (!app) return res.status(404).json({ error: 'Not found' });
-
-  db.prepare(`
-    UPDATE applications SET status = 'completed', odometer_in = COALESCE(?, odometer_in),
-      gas_level_in = COALESCE(?, gas_level_in), checked_in_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(odometer_in || null, gas_level_in || null, id);
-  if (app.assigned_vehicle_id) {
-    db.prepare("UPDATE vehicles SET status = 'available' WHERE id = ?").run(app.assigned_vehicle_id);
-    // The vehicle's recorded mileage is only ever moved forward by an actual
-    // odometer reading taken at this moment — keeps Fleet Management/Reports
-    // showing the same current mileage this booking just registered.
-    if (odometer_in != null && odometer_in !== '') {
-      db.prepare("UPDATE vehicles SET mileage = ?, mileage_updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(odometer_in, app.assigned_vehicle_id);
-    }
-    if (gas_level_in) {
-      db.prepare('UPDATE vehicles SET gas_level = ? WHERE id = ?').run(gas_level_in, app.assigned_vehicle_id);
-    }
-  }
-  logActivity(id, `Rental completed — vehicle checked back in and now available${gas_level_in ? `, ${gas_level_in} tank` : ''}`);
-  res.json({ ok: true });
-});
-
-// ── AUTHED: Check Out / Check In photos — condition photos tied to a
-// specific stage of this booking (not the vehicle's general gallery in
-// Fleet Management), so a dispute over damage can be checked against what
-// the car actually looked like at pickup vs. return. ──
-router.get('/:id/checkin-photos', requireAuth, (req, res) => {
-  res.json(db.prepare('SELECT * FROM checkin_photos WHERE application_id = ? ORDER BY created_at ASC').all(req.params.id));
-});
-
-router.post('/:id/checkin-photos', requireAuth, upload.array('photos', 20), (req, res) => {
-  const { stage } = req.body;
-  if (stage !== 'checkout' && stage !== 'checkin') return res.status(400).json({ error: 'stage must be "checkout" or "checkin"' });
-  const files = req.files && req.files.length ? req.files : (req.file ? [req.file] : []);
-  if (!files.length) return res.status(400).json({ error: 'No photo uploaded' });
-  const insert = db.prepare('INSERT INTO checkin_photos (application_id, stage, photo_path) VALUES (?, ?, ?)');
-  for (const file of files) insert.run(req.params.id, stage, file.filename);
-  res.json({ ok: true });
-});
-
-router.delete('/:id/checkin-photos/:photoId', requireAuth, (req, res) => {
-  const photo = db.prepare('SELECT * FROM checkin_photos WHERE id = ? AND application_id = ?').get(req.params.photoId, req.params.id);
-  if (!photo) return res.status(404).json({ error: 'Not found' });
-  logUndo('checkin_photo_delete', 'Removed check-in/check-out photo', photo);
-  db.prepare('DELETE FROM checkin_photos WHERE id = ? AND application_id = ?').run(req.params.photoId, req.params.id);
-  res.json({ ok: true });
-});
-
-// ── AUTHED: Delete a reservation/booking entirely ──
-router.delete('/:id', requireAuth, (req, res) => {
-  const id = req.params.id;
-  const application = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
-  if (!application) return res.status(404).json({ error: 'Not found' });
-
-  const payments = db.prepare('SELECT * FROM payments WHERE application_id = ?').all(id);
-  const deposits = db.prepare('SELECT * FROM deposits WHERE application_id = ?').all(id);
-  const activity = db.prepare('SELECT * FROM activity_log WHERE application_id = ?').all(id);
-  const messages = db.prepare('SELECT * FROM messages_outbox WHERE application_id = ?').all(id);
-  const notes = db.prepare('SELECT * FROM booking_notes WHERE application_id = ?').all(id);
-  const checkinPhotos = db.prepare('SELECT * FROM checkin_photos WHERE application_id = ?').all(id);
-  // Any swipe-linked business expenses tied to this booking's payments need
-  // to go with them — otherwise they'd be left behind pointing at a
-  // payment_id that no longer exists.
-  const paymentIds = payments.map(p => p.id);
-  const linkedExpenses = paymentIds.length
-    ? db.prepare(`SELECT * FROM business_expenses WHERE payment_id IN (${paymentIds.map(() => '?').join(',')})`).all(...paymentIds)
-    : [];
-
-  // If this was the customer's only actual booking (an application that had a
-  // vehicle assigned — not just a lead/inquiry that never went anywhere),
-  // their customer profile and insurance records get cleaned up with it.
-  // Leads are untouched either way, since Leads reads straight from the
-  // applications table and never touches customers/insurance_records.
-  // Checked via application.customer_id — the direct link, not email —
-  // since most walk-ins have no email at all, and an email-based check
-  // could undercount a customer's other bookings (missing ones linked via
-  // customer_id with a different or blank email) and wrongly delete a
-  // profile still tied to another real booking.
-  let customer = null;
-  let insuranceRecords = [];
-  if (application.customer_id) {
-    const otherBookings = db.prepare(`
-      SELECT COUNT(*) as c FROM applications
-      WHERE customer_id = ? AND id != ? AND assigned_vehicle_id IS NOT NULL
-    `).get(application.customer_id, id).c;
-    if (otherBookings === 0) {
-      customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(application.customer_id);
-      if (customer) insuranceRecords = db.prepare('SELECT * FROM insurance_records WHERE customer_id = ?').all(customer.id);
-    }
-  }
-
-  logUndo('application_delete', `Removed reservation for ${application.first_name} ${application.last_name}`, {
-    application, payments, deposits, activity, messages, notes, checkinPhotos, customer, insuranceRecords, linkedExpenses,
-  });
-
-  if (application.assigned_vehicle_id) {
-    db.prepare("UPDATE vehicles SET status = 'available' WHERE id = ? AND status IN ('reserved', 'rented')").run(application.assigned_vehicle_id);
-  }
-  if (paymentIds.length) {
-    db.prepare(`DELETE FROM business_expenses WHERE payment_id IN (${paymentIds.map(() => '?').join(',')})`).run(...paymentIds);
-  }
-  db.prepare('DELETE FROM payments WHERE application_id = ?').run(id);
-  db.prepare('DELETE FROM deposits WHERE application_id = ?').run(id);
-  db.prepare('DELETE FROM activity_log WHERE application_id = ?').run(id);
-  db.prepare('DELETE FROM messages_outbox WHERE application_id = ?').run(id);
-  db.prepare('DELETE FROM booking_notes WHERE application_id = ?').run(id);
-  db.prepare('DELETE FROM checkin_photos WHERE application_id = ?').run(id);
-  db.prepare('DELETE FROM applications WHERE id = ?').run(id);
-
-  if (customer) {
-    db.prepare('DELETE FROM insurance_records WHERE customer_id = ?').run(customer.id);
-    db.prepare('DELETE FROM customers WHERE id = ?').run(customer.id);
-  }
-
-  res.json({ ok: true });
-});
-
 // ── AUTHED: Bookings/Reservations — applications that have an assigned vehicle ──
 router.get('/bookings/all', requireAuth, (req, res) => {
   const rows = db.prepare(`
-    SELECT a.id, a.email, a.weekly_rate, a.total_due_at_pickup,
-           a.admin_fee_rate, a.travel_fee, a.insurance_fee_rate, a.processing_fee, a.discount,
+    SELECT a.id, a.first_name, a.last_name, a.phone, a.email, a.weekly_rate, a.total_due_at_pickup,
            a.payment_status, a.invoice_amount, a.invoice_sent_at, a.pickup_scheduled_at, a.rental_end_at, a.status, a.updated_at,
            v.id as vehicle_id, v.make, v.model, v.year, v.status as vehicle_status,
-           COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.application_id = a.id), 0) as paid_total,
-           c.id as customer_id,
-           COALESCE(c.first_name, a.first_name) as first_name,
-           COALESCE(c.last_name, a.last_name) as last_name,
-           COALESCE(c.phone, a.phone) as phone
+           COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.application_id = a.id), 0) as paid_total
     FROM applications a
     JOIN vehicles v ON v.id = a.assigned_vehicle_id
-    ${CUSTOMER_JOIN}
     WHERE a.assigned_vehicle_id IS NOT NULL
     ORDER BY a.updated_at DESC
   `).all();
 
-  // Bucket mirrors the same Reservation/Check Out/Check In stage shown on the
-  // reservation detail page, so a booking always lands in the same place
-  // here as its stage control shows there — no separate/parallel status logic.
-  // The one exception: a booking that's checked out and due back today (or
-  // whose return date has already passed without a check-in) moves into
-  // Pending Check In, a subset of On Lease flagging what needs handling now.
-  const today = todayStr();
   const bookings = rows.map(r => {
-    const charge = computeCharge(r);
-    const owed = computeOwed(r, r.paid_total);
+    const charge = r.invoice_amount || r.total_due_at_pickup || 0;
+    const owed = r.status === 'active' ? Math.max(0, Math.round((charge - r.paid_total) * 100) / 100) : 0;
     let bucket;
-    if (r.status === 'completed') bucket = 'completed';
-    else if (r.vehicle_status === 'rented') {
-      const returnDate = r.rental_end_at ? r.rental_end_at.slice(0, 10) : null;
-      bucket = (returnDate && returnDate <= today) ? 'pending_check_in' : 'on_rental';
-    }
-    else bucket = 'potential_arrival';
+    if (r.payment_status === 'unpaid' && r.invoice_amount) bucket = 'potential_arrival';
+    else if (r.vehicle_status === 'rented') bucket = 'on_rental';
+    else if (r.vehicle_status === 'reserved') bucket = 'upcoming';
+    else bucket = 'completed';
     return { ...r, owed, bucket };
   });
 
   const totalBookings = bookings.length;
-  // Field name kept as `upcoming` for the existing stat tile — it now counts
-  // Potential Arrivals (reservations not yet checked out).
-  const upcoming = bookings.filter(b => b.bucket === 'potential_arrival').length;
-  // "On Lease" as a stat counts every checked-out vehicle, whether or not
-  // it's also due back today (pending_check_in is a subset of on-lease).
-  const onRental = bookings.filter(b => b.bucket === 'on_rental' || b.bucket === 'pending_check_in').length;
-  // Individual bookings can show a credit (negative owed), but the aggregate
-  // "outstanding balance" stat should only total up what's actually still
-  // owed — a credit on one booking shouldn't net against another's debt.
-  const outstandingBalance = bookings.reduce((sum, b) => sum + Math.max(0, b.owed), 0);
+  const upcoming = bookings.filter(b => b.bucket === 'upcoming').length;
+  const onRental = bookings.filter(b => b.bucket === 'on_rental').length;
+  const outstandingBalance = bookings.reduce((sum, b) => sum + b.owed, 0);
 
   res.json({ bookings, stats: { totalBookings, upcoming, onRental, outstandingBalance } });
 });
 
 // ── AUTHED: Search existing customers by name/phone/email (for manual booking) ──
-// Searches the deduped `customers` table, not raw applications — picking a
-// result here has to land on the one canonical record for that person, or
-// selecting "Existing Customer" for a repeat renter whose email varies
-// slightly across past bookings (typo, etc.) would carry over the wrong
-// email and upsertCustomer (below) would create a brand new duplicate
-// customer instead of reusing the real one.
 router.get('/customers/search', requireAuth, (req, res) => {
   const term = `%${(req.query.q || '').toLowerCase()}%`;
   const rows = db.prepare(`
     SELECT id, first_name, last_name, phone, email, license_number, address, dob
-    FROM customers
+    FROM applications
     WHERE lower(first_name) LIKE ? OR lower(last_name) LIKE ? OR lower(email) LIKE ? OR lower(phone) LIKE ?
     ORDER BY created_at DESC LIMIT 10
   `).all(term, term, term, term);
@@ -991,16 +463,14 @@ const uploadManual = multer({
 
 router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
   const {
-    customer_id, first_name, last_name, phone, email,
+    first_name, last_name, phone, email,
     assigned_vehicle_id, weekly_rate, total_due_at_pickup,
-    admin_fee_rate, travel_fee, insurance_fee_rate, processing_fee, security_deposit,
     pickup_scheduled_at, rental_end_at, source,
-    dob, license_number, address, city, state, zip_code,
-    insurance_carrier, insurance_policy_number, insurance_coverage_type,
+    dob, license_number, address,
   } = req.body;
 
-  if (!first_name || !last_name || !phone) {
-    return res.status(400).json({ error: 'First name, last name, and phone are required' });
+  if (!first_name || !last_name || !phone || !email) {
+    return res.status(400).json({ error: 'First name, last name, phone, and email are required' });
   }
   if (!assigned_vehicle_id || !weekly_rate || !pickup_scheduled_at || !rental_end_at) {
     return res.status(400).json({ error: 'Vehicle, weekly rate, and dates are required' });
@@ -1008,15 +478,8 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
 
   const vehicle = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(assigned_vehicle_id);
   if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
-  if (vehicle.status !== 'available') {
-    return res.status(400).json({ error: 'That vehicle is not available — it may already be reserved or rented' });
-  }
 
   const bookingSource = source === 'online' ? 'manual_booking_online' : 'manual_booking_in_person';
-  // Stored digits-only, same reasoning as the public application route —
-  // matching the same person by phone shouldn't depend on how the front
-  // desk happened to type it in.
-  const normalizedPhone = phone.replace(/\D/g, '');
   const licensePath = req.files?.license?.[0]?.filename || null;
   const insurancePrivatePath = req.files?.insurance_private?.[0]?.filename || null;
   const insurancePolicyPath = req.files?.insurance_policies?.[0]?.filename || null;
@@ -1025,57 +488,18 @@ router.post('/manual-booking', requireAuth, uploadManual, (req, res) => {
     INSERT INTO applications
       (first_name, last_name, phone, email, consent_background, stage, status,
        assigned_vehicle_id, weekly_rate, total_due_at_pickup, invoice_amount, payment_status, pickup_scheduled_at, rental_end_at, source,
-       admin_fee_rate, travel_fee, insurance_fee_rate, processing_fee,
-       dob, license_number, address, city, state, zip_code, license_path, insurance_path, insurance_private_path)
-    VALUES (?, ?, ?, ?, 1, 6, 'active', ?, ?, ?, ?, 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       dob, license_number, address, license_path, insurance_path, insurance_private_path)
+    VALUES (?, ?, ?, ?, 1, 6, 'active', ?, ?, ?, ?, 'unpaid', ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    first_name, last_name, normalizedPhone, email || '', assigned_vehicle_id, weekly_rate, total_due_at_pickup || null, total_due_at_pickup || null,
+    first_name, last_name, phone, email, assigned_vehicle_id, weekly_rate, total_due_at_pickup || null, total_due_at_pickup || null,
     pickup_scheduled_at, rental_end_at, bookingSource,
-    admin_fee_rate || null, travel_fee || null, insurance_fee_rate || null, processing_fee || null,
-    dob || null, license_number || null, address || null, city || null, state || null, zip_code || null,
-    licensePath, insurancePolicyPath, insurancePrivatePath
+    dob || null, license_number || null, address || null, licensePath, insurancePolicyPath, insurancePrivatePath
   );
 
   const appId = result.lastInsertRowid;
   db.prepare("UPDATE vehicles SET status = 'reserved' WHERE id = ?").run(assigned_vehicle_id);
-  // Picking a result in the wizard's "Existing Customer" search means a
-  // human already identified who this is — use that id directly instead of
-  // re-guessing via upsertCustomer's email/name+address matching, which
-  // can't always tell two people apart from sparse info alone. Falls back
-  // to the normal matching/create path for the "New Customer" tab, or if
-  // the id somehow doesn't resolve to a real row.
-  const existingCustomer = customer_id ? db.prepare('SELECT id FROM customers WHERE id = ?').get(customer_id) : null;
-  let customerId;
-  if (existingCustomer) {
-    db.prepare(`
-      UPDATE customers SET
-        email = COALESCE(?, email), city = COALESCE(city, ?), state = COALESCE(state, ?),
-        zip_code = COALESCE(zip_code, ?), address = COALESCE(address, ?), dob = COALESCE(dob, ?),
-        phone = COALESCE(phone, ?), license_number = COALESCE(license_number, ?)
-      WHERE id = ?
-    `).run((email || '').trim() || null, city || null, state || null, zip_code || null, address || null, dob || null, normalizedPhone || null, license_number || null, existingCustomer.id);
-    customerId = existingCustomer.id;
-  } else {
-    customerId = upsertCustomer({ email, first_name, last_name, phone: normalizedPhone, address, city, state, zip_code, dob, license_number });
-  }
-  db.prepare('UPDATE applications SET customer_id = ? WHERE id = ?').run(customerId, appId);
-  if (insurancePrivatePath || insurance_carrier || insurance_policy_number || insurance_coverage_type) {
-    upsertInsuranceRecord(customerId, 'private', {
-      document_path: insurancePrivatePath, carrier: insurance_carrier,
-      protection_type: insurance_coverage_type, policy_number: insurance_policy_number,
-    });
-  }
-  if (insurancePolicyPath) upsertInsuranceRecord(customerId, 'our_policy', { document_path: insurancePolicyPath });
+  upsertCustomer({ email, first_name, last_name, phone, address, dob });
   logActivity(appId, `Manual reservation created for ${first_name} ${last_name} — ${vehicle.make} ${vehicle.model} at $${weekly_rate}/week`);
-
-  // A deposit amount entered in the wizard seeds a held deposit right away,
-  // so it's already sitting in the reservation's Security Deposit panel
-  // instead of requiring a separate "Collect Deposit" click afterward.
-  if (security_deposit && Number(security_deposit) > 0) {
-    db.prepare('INSERT INTO deposits (application_id, amount, method, collected_at) VALUES (?, ?, ?, ?)')
-      .run(appId, security_deposit, 'cash', pickup_scheduled_at.slice(0, 10));
-    logActivity(appId, `Security deposit of $${security_deposit} collected (cash)`);
-  }
 
   res.status(201).json({ id: appId, message: 'Reservation created' });
 });
