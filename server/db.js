@@ -2,6 +2,7 @@ const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const { DATA_DIR } = require('./paths');
+const { SALES_TAX_RATE, HIGHWAY_TAX_RATE } = require('./billing');
 
 const db = new Database(path.join(DATA_DIR, 'data.db'));
 db.pragma('journal_mode = WAL');
@@ -118,6 +119,21 @@ CREATE TABLE IF NOT EXISTS vehicle_maintenance (
   FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
 );
 
+-- General business overhead that isn't tied to any one vehicle (card
+-- processing fees absorbed rather than billed to the customer, software
+-- subscriptions, insurance premiums, etc.) — kept separate from
+-- vehicle_maintenance on purpose, since that table only ever means
+-- "spent on this specific car." category is free text, not an enum, so
+-- new expense types don't need a code change to start using.
+CREATE TABLE IF NOT EXISTS business_expenses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  category TEXT NOT NULL,
+  amount REAL NOT NULL,
+  expense_date TEXT NOT NULL,
+  notes TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS waitlist (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   first_name TEXT NOT NULL,
@@ -136,6 +152,24 @@ CREATE TABLE IF NOT EXISTS payments (
   application_id INTEGER NOT NULL,
   amount REAL NOT NULL,
   paid_at TEXT NOT NULL,
+  method TEXT NOT NULL DEFAULT 'cash', -- cash | card | swipe
+  processing_fee REAL NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (application_id) REFERENCES applications(id)
+);
+
+CREATE TABLE IF NOT EXISTS deposits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  application_id INTEGER NOT NULL,
+  amount REAL NOT NULL,
+  method TEXT NOT NULL DEFAULT 'cash', -- cash | card
+  processing_fee REAL NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'held', -- held | resolved
+  collected_at TEXT NOT NULL,
+  refunded_amount REAL NOT NULL DEFAULT 0,
+  forfeited_amount REAL NOT NULL DEFAULT 0,
+  resolved_at TEXT,
+  notes TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (application_id) REFERENCES applications(id)
 );
@@ -147,6 +181,15 @@ CREATE TABLE IF NOT EXISTS maintenance_photos (
   caption TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (maintenance_id) REFERENCES vehicle_maintenance(id)
+);
+
+CREATE TABLE IF NOT EXISTS checkin_photos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  application_id INTEGER NOT NULL,
+  stage TEXT NOT NULL, -- checkout | checkin
+  photo_path TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (application_id) REFERENCES applications(id)
 );
 
 CREATE TABLE IF NOT EXISTS vehicle_photos (
@@ -166,6 +209,17 @@ if (!existingCols.includes('license_number')) {
 if (!existingCols.includes('license_state')) {
   db.exec('ALTER TABLE applications ADD COLUMN license_state TEXT');
 }
+if (!existingCols.includes('customer_id')) {
+  // A direct link, set once at booking-creation time (see upsertCustomer's
+  // call sites in applications.js) instead of re-guessing which customer a
+  // booking belongs to by matching email/name/address every time it's
+  // displayed. Guessing at read time meant a booking with neither an email
+  // nor an address on file (common on a quick walk-in) could never be
+  // found again even though a customer record for it definitely exists —
+  // this is set once, right when we actually know the answer, and never
+  // needs to be re-derived.
+  db.exec('ALTER TABLE applications ADD COLUMN customer_id INTEGER REFERENCES customers(id)');
+}
 if (!existingCols.includes('rental_end_at')) {
   db.exec('ALTER TABLE applications ADD COLUMN rental_end_at TEXT');
 }
@@ -182,8 +236,14 @@ if (!existingCols.includes('insurance_private_path')) {
 if (!existingCols.includes('odometer_out')) {
   db.exec('ALTER TABLE applications ADD COLUMN odometer_out REAL');
 }
+if (!existingCols.includes('gas_level_out')) {
+  db.exec('ALTER TABLE applications ADD COLUMN gas_level_out TEXT');
+}
 if (!existingCols.includes('odometer_in')) {
   db.exec('ALTER TABLE applications ADD COLUMN odometer_in REAL');
+}
+if (!existingCols.includes('gas_level_in')) {
+  db.exec('ALTER TABLE applications ADD COLUMN gas_level_in TEXT');
 }
 if (!existingCols.includes('pickup_location')) {
   db.exec('ALTER TABLE applications ADD COLUMN pickup_location TEXT');
@@ -222,7 +282,61 @@ if (!existingCols.includes('zip_code')) {
   db.exec('ALTER TABLE applications ADD COLUMN zip_code TEXT');
 }
 if (!existingCols.includes('vehicle_tier')) {
+  // A free-text vehicle class/tier the applicant expressed interest in on
+  // the public apply form (e.g. "Sedan", "SUV") — captured for leads that
+  // haven't been assigned an actual vehicle yet, shown on the Leads list
+  // alongside rental duration and insurance status.
   db.exec('ALTER TABLE applications ADD COLUMN vehicle_tier TEXT');
+}
+if (!existingCols.includes('admin_fee_rate')) {
+  db.exec('ALTER TABLE applications ADD COLUMN admin_fee_rate REAL'); // daily rate
+}
+if (!existingCols.includes('travel_fee')) {
+  db.exec('ALTER TABLE applications ADD COLUMN travel_fee REAL'); // flat, one-time
+}
+if (!existingCols.includes('insurance_fee_rate')) {
+  db.exec('ALTER TABLE applications ADD COLUMN insurance_fee_rate REAL'); // daily rate
+}
+if (!existingCols.includes('security_deposit')) {
+  // Not a fee — an amount to collect and hold as a refundable liability at
+  // pickup. If set when a booking is created, a `deposits` row is seeded
+  // automatically (see POST /manual-booking) so it shows up in the
+  // reservation's Security Deposit panel ready to resolve, without the front
+  // desk having to separately click "Collect Deposit" after the fact.
+  db.exec('ALTER TABLE applications ADD COLUMN security_deposit REAL');
+}
+if (!existingCols.includes('processing_fee')) {
+  db.exec('ALTER TABLE applications ADD COLUMN processing_fee REAL'); // flat, one-time — 2.75% of the invoice when enabled
+}
+if (!existingCols.includes('discount')) {
+  // Stored (not session-only) so the Financials tab's Discount checkbox
+  // reflects what was actually saved instead of resetting to unchecked/0 on
+  // every reload — a positive dollar amount, subtracted from the charge.
+  db.exec('ALTER TABLE applications ADD COLUMN discount REAL');
+}
+if (!existingCols.includes('misc_fee')) {
+  // Flat, one-time, same shape as travel_fee. Counts toward revenue like
+  // Admin/Travel Fee — a generic catch-all charge, not a pass-through cost.
+  db.exec('ALTER TABLE applications ADD COLUMN misc_fee REAL');
+}
+if (!existingCols.includes('toll_fee')) {
+  // Flat, one-time — a toll billed to the customer on this specific
+  // invoice (separate from the vehicle_maintenance toll log used for
+  // fleet-wide toll tracking). Excluded from revenue, same "surplus, not
+  // profit" treatment as every other toll and Insurance Fee.
+  db.exec('ALTER TABLE applications ADD COLUMN toll_fee REAL');
+}
+if (!existingCols.includes('checked_in_at')) {
+  // Set exactly once, only by the Check In (complete-rental) action — unlike
+  // updated_at, which the general edit endpoint also touches for any later
+  // change to a completed booking (fixing a typo'd phone number, etc.).
+  // Reports/late_returns_overage needs a date that means "the vehicle
+  // actually came back," not "this row was last saved," so it reads this
+  // column instead. Backfilled from the existing updated_at for bookings
+  // already completed before this column existed — the best information
+  // available for history that predates this fix.
+  db.exec('ALTER TABLE applications ADD COLUMN checked_in_at TEXT');
+  db.exec("UPDATE applications SET checked_in_at = updated_at WHERE status = 'completed' AND checked_in_at IS NULL");
 }
 
 const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);
@@ -259,13 +373,90 @@ if (!vehicleCols.includes('purchase_price')) {
 if (!vehicleCols.includes('mileage')) {
   db.exec('ALTER TABLE vehicles ADD COLUMN mileage REAL');
 }
+if (!vehicleCols.includes('mileage_updated_at')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN mileage_updated_at TEXT');
+}
+if (!vehicleCols.includes('gas_level')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN gas_level TEXT');
+}
 if (!vehicleCols.includes('next_service_at')) {
   db.exec('ALTER TABLE vehicles ADD COLUMN next_service_at TEXT');
+}
+if (!vehicleCols.includes('purchase_mileage')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN purchase_mileage REAL');
+}
+if (!vehicleCols.includes('sale_amount')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN sale_amount REAL');
+}
+if (!vehicleCols.includes('sale_date')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN sale_date TEXT');
 }
 
 const maintenanceCols = db.prepare("PRAGMA table_info(vehicle_maintenance)").all().map(c => c.name);
 if (!maintenanceCols.includes('category')) {
   db.exec('ALTER TABLE vehicle_maintenance ADD COLUMN category TEXT');
+}
+if (!maintenanceCols.includes('odometer_at_service')) {
+  // The odometer reading at the moment this specific service happened —
+  // distinct from vehicles.mileage (the vehicle's latest known reading,
+  // updated independently whenever someone punches in a fresh number). The
+  // Oil Change due-in-3,000-miles countdown is meant to reset only when an
+  // actual oil change is logged, not whenever mileage happens to get
+  // updated, so it has to anchor to this snapshot rather than to whatever
+  // vehicles.mileage says right now.
+  db.exec('ALTER TABLE vehicle_maintenance ADD COLUMN odometer_at_service REAL');
+}
+
+const businessExpenseCols = db.prepare("PRAGMA table_info(business_expenses)").all().map(c => c.name);
+if (!businessExpenseCols.includes('payment_id')) {
+  // Set only on expense rows auto-generated from a "Payment through Swipe"
+  // payment, so editing/deleting that payment can find and keep its
+  // absorbed-fee expense entry in sync instead of leaving it orphaned.
+  db.exec('ALTER TABLE business_expenses ADD COLUMN payment_id INTEGER');
+}
+if (!businessExpenseCols.includes('vehicle_id')) {
+  // Set automatically for swipe-triggered expenses (traced through
+  // payment -> application -> assigned_vehicle_id), so that specific cost
+  // can show up against the vehicle it actually came from in Vehicle
+  // Detail / Revenue by Vehicle, not just the fleet-wide total. Left null
+  // for manually-logged expenses that aren't tied to one car (most of
+  // them — subscriptions, misc overhead, etc.).
+  db.exec('ALTER TABLE business_expenses ADD COLUMN vehicle_id INTEGER');
+}
+// Backfill vehicle_id on swipe-triggered expenses created before that column
+// existed — traces the same payment -> application -> assigned_vehicle_id
+// path syncSwipeExpense now sets automatically going forward. Only ever
+// touches rows still missing it, so this is a no-op once caught up.
+db.exec(`
+  UPDATE business_expenses
+  SET vehicle_id = (
+    SELECT a.assigned_vehicle_id
+    FROM payments p JOIN applications a ON a.id = p.application_id
+    WHERE p.id = business_expenses.payment_id
+  )
+  WHERE vehicle_id IS NULL AND payment_id IS NOT NULL
+`);
+// Swipe-triggered expenses are dated to the same calendar day the underlying
+// payment was actually charged (payments.paid_at) — not a booking's rental
+// nights, and not whenever the expense row happened to be logged. Keeps
+// existing rows in sync if a payment's date is ever corrected after the
+// fact. applications.js's syncSwipeExpense sets this correctly at
+// creation/edit time; this just re-syncs it for every swipe-linked row on
+// every startup (cheap, and a no-op once already in sync).
+db.exec(`
+  UPDATE business_expenses
+  SET expense_date = (
+    SELECT substr(p.paid_at, 1, 10) FROM payments p WHERE p.id = business_expenses.payment_id
+  )
+  WHERE payment_id IS NOT NULL
+`);
+
+const paymentCols = db.prepare("PRAGMA table_info(payments)").all().map(c => c.name);
+if (!paymentCols.includes('method')) {
+  db.exec("ALTER TABLE payments ADD COLUMN method TEXT NOT NULL DEFAULT 'cash'");
+}
+if (!paymentCols.includes('processing_fee')) {
+  db.exec('ALTER TABLE payments ADD COLUMN processing_fee REAL NOT NULL DEFAULT 0');
 }
 
 db.exec(`
@@ -276,7 +467,18 @@ CREATE TABLE IF NOT EXISTS undo_log (
   payload TEXT NOT NULL,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Sessions live on the same persistent disk as the rest of the data, so a
+-- logged-in user stays logged in across a server restart/redeploy — the
+-- default express-session MemoryStore is wiped on every restart, which is
+-- what was producing stray "Not authenticated" errors mid-session.
+CREATE TABLE IF NOT EXISTS sessions (
+  sid TEXT PRIMARY KEY,
+  sess TEXT NOT NULL,
+  expires INTEGER NOT NULL
+);
 `);
+db.prepare('DELETE FROM sessions WHERE expires < ?').run(Date.now());
 
 function logUndo(entityType, label, payload) {
   db.prepare('DELETE FROM undo_log').run();
@@ -315,7 +517,30 @@ CREATE TABLE IF NOT EXISTS customer_tags (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (customer_id) REFERENCES customers(id)
 );
+
+-- A running, timestamped log (same shape as booking_notes) rather than the
+-- single internal_notes field it replaces in the UI — a front desk jotting
+-- something new shouldn't overwrite whatever the last person already wrote.
+CREATE TABLE IF NOT EXISTS customer_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id INTEGER NOT NULL,
+  note TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (customer_id) REFERENCES customers(id)
+);
 `);
+
+// One-time backfill: carry any pre-existing internal_notes text into the new
+// customer_notes log as that customer's first entry, so switching the UI
+// from a single field to a list doesn't make existing notes disappear.
+// Guarded on customer_notes being completely empty so it only ever runs
+// once — after the first real note is added (backfilled or new), this
+// block becomes a permanent no-op.
+if (db.prepare('SELECT COUNT(*) as c FROM customer_notes').get().c === 0) {
+  const legacyNotes = db.prepare("SELECT id, internal_notes FROM customers WHERE internal_notes IS NOT NULL AND trim(internal_notes) != ''").all();
+  const insertLegacyNote = db.prepare('INSERT INTO customer_notes (customer_id, note) VALUES (?, ?)');
+  legacyNotes.forEach(c => insertLegacyNote.run(c.id, c.internal_notes));
+}
 
 const customerCols = db.prepare("PRAGMA table_info(customers)").all().map(c => c.name);
 if (!customerCols.includes('city')) {
@@ -336,24 +561,332 @@ if (!customerCols.includes('blacklisted')) {
 if (!customerCols.includes('internal_notes')) {
   db.exec('ALTER TABLE customers ADD COLUMN internal_notes TEXT');
 }
+if (!customerCols.includes('license_number')) {
+  db.exec('ALTER TABLE customers ADD COLUMN license_number TEXT');
+}
+if (!customerCols.includes('insurance_company')) {
+  db.exec('ALTER TABLE customers ADD COLUMN insurance_company TEXT');
+}
+if (!customerCols.includes('insurance_policy_number')) {
+  db.exec('ALTER TABLE customers ADD COLUMN insurance_policy_number TEXT');
+}
 
-// Backfill: build a customers record for every distinct email already in
-// applications, so existing leads/bookings get a profile retroactively.
-const existingCustomerEmails = new Set(db.prepare('SELECT lower(email) as e FROM customers').all().map(r => r.e));
+// customers.email used to be NOT NULL, which forced a fake placeholder
+// address (walkin-<phone>@no-email.drivenow) onto walk-in customers who
+// never gave a real one — SQLite can't drop a NOT NULL constraint in place,
+// so rebuild the table without it. UNIQUE still holds; SQLite allows
+// multiple NULLs under a UNIQUE constraint, so any number of no-email
+// customers can coexist. Column list built from PRAGMA (not hardcoded) so
+// this can't silently shuffle data into the wrong columns if the schema
+// has drifted from what's read here.
+//
+// customer_tags, applications, and insurance_records all hold a live
+// foreign key into this table. With foreign key enforcement on (confirmed
+// this database has it on), DROP TABLE on a table something else still
+// references throws a constraint violation outright — which crashes this
+// entire synchronous startup sequence, taking the whole server down with
+// it. SQLite's own docs cover exactly this case: disable enforcement for
+// the duration of the rebuild, then turn it back on and verify nothing
+// actually broke via foreign_key_check before trusting the result.
+const emailColInfo = db.prepare("PRAGMA table_info(customers)").all().find(c => c.name === 'email');
+if (emailColInfo && emailColInfo.notnull) {
+  const cols = db.prepare("PRAGMA table_info(customers)").all().map(c => c.name).join(', ');
+  db.pragma('foreign_keys = OFF');
+  try {
+    // A previous deploy may have crashed mid-rebuild (before the FK fix
+    // below existed) and left customers_new sitting on disk half-migrated
+    // — CREATE TABLE would then fail with "table already exists" forever
+    // after, since the original customers table (still NOT NULL) never got
+    // swapped out. Clear any such leftover before starting fresh.
+    db.exec('DROP TABLE IF EXISTS customers_new');
+    db.exec(`
+      CREATE TABLE customers_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE,
+        first_name TEXT,
+        last_name TEXT,
+        phone TEXT,
+        address TEXT,
+        city TEXT,
+        state TEXT,
+        zip_code TEXT,
+        dob TEXT,
+        blacklisted INTEGER DEFAULT 0,
+        internal_notes TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        license_number TEXT,
+        insurance_company TEXT,
+        insurance_policy_number TEXT
+      );
+      INSERT INTO customers_new (${cols}) SELECT ${cols} FROM customers;
+      DROP TABLE customers;
+      ALTER TABLE customers_new RENAME TO customers;
+    `);
+    const violations = db.pragma('foreign_key_check');
+    if (violations.length) {
+      throw new Error(`customers table rebuild left dangling references: ${JSON.stringify(violations)}`);
+    }
+  } finally {
+    db.pragma('foreign_keys = ON');
+  }
+}
+// Any placeholder emails written before real NULL was possible (see #86) —
+// convert them back now that the column actually allows it.
+db.prepare("UPDATE customers SET email = NULL WHERE email LIKE 'walkin-%@no-email.drivenow'").run();
+
+// One-time backfill: strip punctuation/spacing from existing phone numbers.
+// Phone is no longer used to match/dedupe customers (two different people —
+// family, a shared business line — can share one phone number, which made
+// phone-based matching merge them together), but it's still worth keeping
+// clean for display and contact purposes. Cheap to re-run — already-clean
+// digits-only values are a no-op.
+db.exec(`
+  UPDATE customers SET phone = replace(replace(replace(replace(replace(phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '')
+  WHERE phone IS NOT NULL AND phone GLOB '*[^0-9]*'
+`);
+db.exec(`
+  UPDATE applications SET phone = replace(replace(replace(replace(replace(phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '')
+  WHERE phone IS NOT NULL AND phone GLOB '*[^0-9]*'
+`);
+
+// One-time cleanup: consolidate existing customer records that share the
+// same identity into one — likely genuine duplicates from before
+// upsertCustomer matched this way (e.g. the same walk-in registered twice
+// under slightly different emails, or with none at all, on separate
+// visits — or one visit had an address on file and a later one didn't).
+// Two passes: name+address (both non-blank), then name+phone — not
+// restricted to records with no address on file, since a mismatch there
+// (one has an address, the other doesn't, or they simply moved) doesn't
+// make it a different person. Two different people essentially never share
+// both an exact full name and a phone number, so this is just as safe a
+// signal as name+address. Keeps whichever record already has an
+// email (oldest, if more than one does), re-points customer_tags,
+// insurance_records, AND any application already directly linked via
+// customer_id to that survivor (skipping this would leave those bookings
+// pointing at a row that's about to be deleted, silently dropping them off
+// the customer's profile), fills in any fields the survivor is missing via
+// COALESCE, then removes the redundant rows. Safe to leave running on every
+// startup — once a group resolves to a single row, it has nothing left to
+// merge, so this is a no-op after the first pass.
+function mergeCustomerDuplicates(groups, findGroupRows) {
+  const updateSurvivor = db.prepare(`
+    UPDATE customers SET
+      email = COALESCE(email, ?), phone = COALESCE(phone, ?), address = COALESCE(address, ?),
+      city = COALESCE(city, ?), state = COALESCE(state, ?),
+      zip_code = COALESCE(zip_code, ?), dob = COALESCE(dob, ?), license_number = COALESCE(license_number, ?),
+      insurance_company = COALESCE(insurance_company, ?), insurance_policy_number = COALESCE(insurance_policy_number, ?)
+    WHERE id = ?
+  `);
+  for (const g of groups) {
+    const rows = findGroupRows(g);
+    const [survivor, ...duplicates] = rows;
+    for (const dup of duplicates) {
+      updateSurvivor.run(
+        dup.email, dup.phone, dup.address, dup.city, dup.state,
+        dup.zip_code, dup.dob, dup.license_number, dup.insurance_company, dup.insurance_policy_number,
+        survivor.id
+      );
+      db.prepare('UPDATE customer_tags SET customer_id = ? WHERE customer_id = ?').run(survivor.id, dup.id);
+      db.prepare('UPDATE insurance_records SET customer_id = ? WHERE customer_id = ?').run(survivor.id, dup.id);
+      db.prepare('UPDATE applications SET customer_id = ? WHERE customer_id = ?').run(survivor.id, dup.id);
+      db.prepare('DELETE FROM customers WHERE id = ?').run(dup.id);
+    }
+  }
+}
+
+mergeCustomerDuplicates(
+  db.prepare(`
+    SELECT lower(trim(first_name)) as fn, lower(trim(last_name)) as ln, lower(trim(address)) as addr
+    FROM customers
+    WHERE first_name IS NOT NULL AND first_name != '' AND last_name IS NOT NULL AND last_name != ''
+      AND address IS NOT NULL AND address != ''
+    GROUP BY fn, ln, addr
+    HAVING COUNT(*) > 1
+  `).all(),
+  (g) => db.prepare(`
+    SELECT * FROM customers
+    WHERE lower(trim(first_name)) = ? AND lower(trim(last_name)) = ? AND lower(trim(address)) = ?
+    ORDER BY (email IS NULL), created_at ASC
+  `).all(g.fn, g.ln, g.addr)
+);
+
+mergeCustomerDuplicates(
+  db.prepare(`
+    SELECT lower(trim(first_name)) as fn, lower(trim(last_name)) as ln,
+           replace(replace(replace(replace(replace(phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') as ph
+    FROM customers
+    WHERE first_name IS NOT NULL AND first_name != '' AND last_name IS NOT NULL AND last_name != ''
+      AND phone IS NOT NULL AND phone != ''
+    GROUP BY fn, ln, ph
+    HAVING COUNT(*) > 1
+  `).all(),
+  (g) => db.prepare(`
+    SELECT * FROM customers
+    WHERE lower(trim(first_name)) = ? AND lower(trim(last_name)) = ?
+      AND replace(replace(replace(replace(replace(phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') = ?
+    ORDER BY (email IS NULL), created_at ASC
+  `).all(g.fn, g.ln, g.ph)
+);
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS insurance_records (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id INTEGER NOT NULL,
+  type TEXT NOT NULL, -- 'private' | 'our_policy'
+  carrier TEXT,
+  protection_type TEXT,
+  policy_number TEXT,
+  agency_contact TEXT,
+  document_path TEXT,
+  last_verified_at TEXT,
+  next_payment_date TEXT,
+  notes TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (customer_id) REFERENCES customers(id)
+);
+`);
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS claims (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vehicle_id INTEGER NOT NULL,
+  application_id INTEGER, -- the booking during which the damage occurred, if known
+  insurance_record_id INTEGER, -- which policy this claim is filed against
+  assigned_to INTEGER, -- staff member (users.id) handling the claim
+  status TEXT NOT NULL DEFAULT 'initial_claim', -- initial_claim | pending_payment | closed | collections
+  detailed_status TEXT,
+  incident_type TEXT,
+  external_reference_id TEXT,
+  event_source TEXT,
+  damage_notes TEXT,
+  damage_reported_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  deductible_amount REAL,
+  max_out_of_pocket REAL,
+  insurance_payout REAL,
+  payout_date TEXT,
+  vehicle_location TEXT,
+  mark_vehicle_inactive INTEGER NOT NULL DEFAULT 0,
+  next_task TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (vehicle_id) REFERENCES vehicles(id),
+  FOREIGN KEY (application_id) REFERENCES applications(id),
+  FOREIGN KEY (insurance_record_id) REFERENCES insurance_records(id),
+  FOREIGN KEY (assigned_to) REFERENCES users(id)
+);
+`);
+
+const claimCols = db.prepare("PRAGMA table_info(claims)").all().map(c => c.name);
+if (!claimCols.includes('deductible_amount')) {
+  db.exec('ALTER TABLE claims ADD COLUMN deductible_amount REAL');
+}
+if (!claimCols.includes('max_out_of_pocket')) {
+  db.exec('ALTER TABLE claims ADD COLUMN max_out_of_pocket REAL');
+}
+if (!claimCols.includes('insurance_payout')) {
+  db.exec('ALTER TABLE claims ADD COLUMN insurance_payout REAL');
+}
+if (!claimCols.includes('payout_date')) {
+  db.exec('ALTER TABLE claims ADD COLUMN payout_date TEXT');
+}
+if (!claimCols.includes('vehicle_location')) {
+  db.exec('ALTER TABLE claims ADD COLUMN vehicle_location TEXT');
+}
+if (!claimCols.includes('mark_vehicle_inactive')) {
+  db.exec('ALTER TABLE claims ADD COLUMN mark_vehicle_inactive INTEGER NOT NULL DEFAULT 0');
+}
+
+const insuranceCols = db.prepare("PRAGMA table_info(insurance_records)").all().map(c => c.name);
+if (!insuranceCols.includes('status')) {
+  db.exec("ALTER TABLE insurance_records ADD COLUMN status TEXT NOT NULL DEFAULT 'Active'");
+}
+if (!insuranceCols.includes('agency_contact')) {
+  db.exec('ALTER TABLE insurance_records ADD COLUMN agency_contact TEXT');
+}
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS downtime_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vehicle_id INTEGER NOT NULL,
+  service_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open', -- open | in_progress | snoozed | closed
+  date_reported TEXT NOT NULL,
+  clearance_eta TEXT,
+  vendor TEXT,
+  est_cost REAL,
+  notes TEXT,
+  remove_from_availability INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
+);
+`);
+
+// Heal dangling links: if applications.customer_id points at a customer
+// row that no longer exists (e.g. deleted by an earlier dedup pass from
+// before that pass repointed applications too), every matching query below
+// treats a non-NULL customer_id as authoritative and never falls back to
+// re-deriving it — so a dangling reference stays broken forever instead of
+// self-healing. Reset it to NULL so it's picked back up by the same
+// backfill/matching logic as a legacy unlinked row.
+db.exec(`
+  UPDATE applications SET customer_id = NULL
+  WHERE customer_id IS NOT NULL AND customer_id NOT IN (SELECT id FROM customers)
+`);
+
+// Backfill: build a customers record for every distinct applicant that
+// isn't linked to one yet (grouped by email, or name+address, or — when
+// there's no address on file at all — name+phone, same identity rule as
+// upsertCustomer), so legacy leads/bookings that predate the customer_id
+// column get a profile retroactively. Scoped to customer_id IS NULL — every
+// application created since customer_id shipped already got linked directly
+// at creation time, so re-running upsertCustomer on those rows on every
+// startup would just mint a fresh duplicate customer for anyone with no
+// email and no address on file.
 const distinctApplicants = db.prepare(`
   SELECT first_name, last_name, phone, email, address, dob, MIN(created_at) as first_seen
   FROM applications
-  WHERE email IS NOT NULL AND email != ''
-  GROUP BY lower(email)
+  WHERE customer_id IS NULL
+  GROUP BY COALESCE(
+    NULLIF(lower(email), ''),
+    CASE WHEN address IS NOT NULL AND trim(address) != ''
+         THEN lower(trim(first_name)) || '|' || lower(trim(last_name)) || '|addr|' || lower(trim(address))
+         ELSE lower(trim(first_name)) || '|' || lower(trim(last_name)) || '|ph|' ||
+              replace(replace(replace(replace(replace(phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '')
+    END
+  )
 `).all();
-const insertCustomer = db.prepare(`
-  INSERT INTO customers (email, first_name, last_name, phone, address, dob, created_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
-`);
 for (const a of distinctApplicants) {
-  if (existingCustomerEmails.has(a.email.toLowerCase())) continue;
-  insertCustomer.run(a.email, a.first_name, a.last_name, a.phone, a.address || null, a.dob || null, a.first_seen);
+  upsertCustomer(a);
 }
+
+// Backfill: link every existing application directly to its customer via
+// the same email, or name+address, or name+phone matching rule (not
+// restricted to "no address on either side" — see upsertCustomer for why),
+// so the direct customer_id link (added above) isn't only populated for
+// bookings created after this shipped. Only touches rows still missing it.
+db.exec(`
+  UPDATE applications SET customer_id = (
+    SELECT c.id FROM customers c
+    WHERE (applications.email != '' AND c.email IS NOT NULL AND lower(c.email) = lower(applications.email))
+       OR (
+         c.address IS NOT NULL AND c.address != '' AND applications.address IS NOT NULL AND applications.address != ''
+         AND lower(trim(c.first_name)) = lower(trim(applications.first_name))
+         AND lower(trim(c.last_name)) = lower(trim(applications.last_name))
+         AND lower(trim(c.address)) = lower(trim(applications.address))
+       )
+       OR (
+         lower(trim(c.first_name)) = lower(trim(applications.first_name))
+         AND lower(trim(c.last_name)) = lower(trim(applications.last_name))
+         AND c.phone IS NOT NULL AND c.phone != '' AND applications.phone IS NOT NULL AND applications.phone != ''
+         AND replace(replace(replace(replace(replace(c.phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') =
+             replace(replace(replace(replace(replace(applications.phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '')
+       )
+    LIMIT 1
+  )
+  WHERE customer_id IS NULL
+`);
 
 // Backfill: fill in any missing contact details on existing customer records
 // from their most recent application, now that the apply form sends city/state/dob.
@@ -380,26 +913,106 @@ for (const c of customersMissingDetails) {
   updateCustomerDetails.run(app.city || null, app.state || null, app.dob || null, app.address || null, app.phone || null, app.zip_code || null, c.id);
 }
 
-function upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob }) {
-  if (!email) return;
-  const existing = db.prepare('SELECT id FROM customers WHERE lower(email) = lower(?)').get(email);
+// Digits only — kept clean for display/contact purposes, but not used to
+// match/dedupe customers (see upsertCustomer below): two different people
+// can share one phone number (family, a shared business line), which would
+// wrongly merge them.
+function normalizePhone(phone) {
+  return (phone || '').replace(/\D/g, '');
+}
+
+function normalizeText(s) {
+  return (s || '').trim().toLowerCase();
+}
+
+// Matches by email when given (customers.email is nullable — a walk-in with
+// no email at all just gets a NULL one instead of silently never being
+// registered as a client), otherwise by name + address together, then name +
+// phone. Phone alone is deliberately NOT used to match — two different
+// people (family, a shared business line) can share one phone number, and
+// matching on it would merge their bookings/billing together. But name +
+// phone together is a safe fallback regardless of whether either side has an
+// address on file: two different people sharing both an exact full name AND
+// a phone number essentially never happens. Not restricted to "no address on
+// either side" — a customer who had an address on file from an earlier visit
+// but not this one (or who simply moved) is still the same person, and
+// requiring both sides blank meant that exact case created a duplicate.
+function upsertCustomer({ email, first_name, last_name, phone, address, city, state, zip_code, dob, license_number }) {
+  const realEmail = (email || '').trim();
+  const firstKey = normalizeText(first_name);
+  const lastKey = normalizeText(last_name);
+  const addressKey = normalizeText(address);
+  const phoneKey = normalizePhone(phone);
+  const hasNameAddress = !!(firstKey && lastKey && addressKey);
+  const hasNamePhone = !!(firstKey && lastKey && phoneKey);
+  if (!first_name && !last_name) return; // no name at all — nothing to register
+
+  let existing = realEmail
+    ? db.prepare('SELECT id, email FROM customers WHERE lower(email) = lower(?)').get(realEmail)
+    : null;
+  if (!existing && hasNameAddress) {
+    existing = db.prepare(`
+      SELECT id, email FROM customers
+      WHERE lower(trim(first_name)) = ? AND lower(trim(last_name)) = ? AND lower(trim(address)) = ?
+    `).get(firstKey, lastKey, addressKey);
+  }
+  if (!existing && hasNamePhone) {
+    existing = db.prepare(`
+      SELECT id, email FROM customers
+      WHERE lower(trim(first_name)) = ? AND lower(trim(last_name)) = ?
+        AND replace(replace(replace(replace(replace(phone, '-', ''), '(', ''), ')', ''), ' ', ''), '.', '') = ?
+    `).get(firstKey, lastKey, phoneKey);
+  }
+  const finalEmail = realEmail || (existing ? existing.email : null);
+
   if (existing) {
     db.prepare(`
       UPDATE customers SET
+        email = COALESCE(?, email),
         city = COALESCE(city, ?),
         state = COALESCE(state, ?),
         zip_code = COALESCE(zip_code, ?),
         address = COALESCE(address, ?),
         dob = COALESCE(dob, ?),
-        phone = COALESCE(phone, ?)
+        phone = COALESCE(phone, ?),
+        license_number = COALESCE(license_number, ?)
       WHERE id = ?
-    `).run(city || null, state || null, zip_code || null, address || null, dob || null, phone || null, existing.id);
+    `).run(finalEmail, city || null, state || null, zip_code || null, address || null, dob || null, phone || null, license_number || null, existing.id);
     return existing.id;
   }
   const result = db.prepare(`
-    INSERT INTO customers (email, first_name, last_name, phone, address, city, state, zip_code, dob)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(email, first_name || null, last_name || null, phone || null, address || null, city || null, state || null, zip_code || null, dob || null);
+    INSERT INTO customers (email, first_name, last_name, phone, address, city, state, zip_code, dob, license_number)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(finalEmail, first_name || null, last_name || null, phone || null, address || null, city || null, state || null, zip_code || null, dob || null, license_number || null);
+  return result.lastInsertRowid;
+}
+
+// Keeps the Insurance panel in sync with intake — called whenever a public
+// application, manual booking, or insurance-quote submission includes an
+// insurance document/detail, so it shows up there without a separate manual
+// entry step. One record per (customer, type); re-submitting only fills in
+// gaps (via COALESCE) rather than overwriting anything an admin already
+// edited from the Insurance panel itself.
+function upsertInsuranceRecord(customerId, type, { document_path, notes, carrier, protection_type, policy_number } = {}) {
+  if (!customerId || !type) return;
+  const existing = db.prepare('SELECT id FROM insurance_records WHERE customer_id = ? AND type = ?').get(customerId, type);
+  if (existing) {
+    db.prepare(`
+      UPDATE insurance_records SET
+        document_path = COALESCE(?, document_path),
+        notes = COALESCE(notes, ?),
+        carrier = COALESCE(carrier, ?),
+        protection_type = COALESCE(protection_type, ?),
+        policy_number = COALESCE(policy_number, ?),
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(document_path || null, notes || null, carrier || null, protection_type || null, policy_number || null, existing.id);
+    return existing.id;
+  }
+  const result = db.prepare(`
+    INSERT INTO insurance_records (customer_id, type, document_path, notes, carrier, protection_type, policy_number)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(customerId, type, document_path || null, notes || null, carrier || null, protection_type || null, policy_number || null);
   return result.lastInsertRowid;
 }
 
@@ -417,12 +1030,17 @@ for (const v of vehiclesWithLegacyPhoto) {
 // Seed owner account if no users exist
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
 if (userCount === 0) {
-  const defaultEmail = process.env.OWNER_EMAIL || 'mmasfar2@gmail.com';
-  const defaultPassword = process.env.OWNER_PASSWORD || 'DriveNow2024!';
-  const hash = bcrypt.hashSync(defaultPassword, 10);
+  // No hardcoded fallback here on purpose — a default email/password baked
+  // into the source would (a) tie every fresh deployment's first login to
+  // whoever wrote this code and (b) be a known, guessable credential the
+  // moment this repo is public. Every new deployment must set its own.
+  if (!process.env.OWNER_EMAIL || !process.env.OWNER_PASSWORD) {
+    throw new Error('OWNER_EMAIL and OWNER_PASSWORD must be set (see .env.example) before first run — no owner account exists yet.');
+  }
+  const hash = bcrypt.hashSync(process.env.OWNER_PASSWORD, 10);
   db.prepare('INSERT INTO users (email, password_hash, name, role) VALUES (?, ?, ?, ?)')
-    .run(defaultEmail, hash, 'Owner', 'owner');
-  console.log(`Seeded owner account: ${defaultEmail} / ${defaultPassword} (change this password after first login)`);
+    .run(process.env.OWNER_EMAIL, hash, 'Owner', 'owner');
+  console.log(`Seeded owner account: ${process.env.OWNER_EMAIL} (change this password after first login)`);
 }
 
 // Seed fleet vehicles to match the public site if empty
@@ -440,6 +1058,224 @@ if (vehicleCount === 0) {
   seedVehicles.forEach(v => insert.run(...v));
 }
 
+// Forfeited deposit amounts count as revenue once resolved — a held deposit
+// stays a refundable liability, but the moment some (or all) of it is
+// forfeited, that portion is real revenue and needs to show up everywhere
+// revenue does (dashboard totals, Revenue reports, Vehicle Detail profit).
+// Attributed to the booking's own return date (rental_end_at) — not
+// resolved_at (whenever the resolve-deposit action actually happened, which
+// could be days after the return if it wasn't processed right away) and not
+// any check-in button click timestamp either. A booking's forfeiture always
+// belongs to when the rental itself ended, regardless of when staff got
+// around to marking it resolved in the system. Every revenue figure reads
+// from this single query so a forfeiture can't show up in one place and not
+// another.
+// The most recent Oil Change record with an odometer reading attached, per
+// vehicle — the baseline the 3,000-mile-due countdown is measured from.
+// Deliberately anchored to this snapshot rather than to vehicles.mileage
+// (which changes independently, any time someone updates the current
+// reading) so the countdown only resets when an oil change is actually
+// logged, not on an unrelated mileage update.
+function getLastOilChangeByVehicle() {
+  const rows = db.prepare(`
+    SELECT vehicle_id, odometer_at_service, performed_at
+    FROM vehicle_maintenance
+    WHERE category = 'Oil Change' AND odometer_at_service IS NOT NULL
+    ORDER BY performed_at DESC, id DESC
+  `).all();
+  const map = new Map();
+  for (const r of rows) {
+    if (!map.has(r.vehicle_id)) map.set(r.vehicle_id, r);
+  }
+  return map;
+}
+
+const OIL_CHANGE_INTERVAL_MILES = 3000;
+
+// Attaches oil-change-due status to a vehicle row — shared by both the
+// fleet list and a single vehicle's detail page so the two can never
+// disagree on whether a car is due.
+function withOilChangeStatus(vehicle, lastOilChangeByVehicle) {
+  const last = lastOilChangeByVehicle.get(vehicle.id);
+  const milesSinceOilChange = last && vehicle.mileage != null
+    ? Math.round((Number(vehicle.mileage) - Number(last.odometer_at_service)) * 10) / 10
+    : null;
+  return {
+    ...vehicle,
+    last_oil_change_mileage: last ? last.odometer_at_service : null,
+    last_oil_change_at: last ? last.performed_at : null,
+    miles_since_oil_change: milesSinceOilChange,
+    oil_change_due: milesSinceOilChange != null && milesSinceOilChange >= OIL_CHANGE_INTERVAL_MILES,
+  };
+}
+
+function getForfeitedDeposits() {
+  return db.prepare(`
+    SELECT d.id, d.application_id, a.assigned_vehicle_id as vehicle_id, d.forfeited_amount, a.rental_end_at
+    FROM deposits d JOIN applications a ON a.id = d.application_id
+    WHERE d.status = 'resolved' AND d.forfeited_amount > 0
+  `).all().map(d => ({
+    id: d.id, application_id: d.application_id, vehicle_id: d.vehicle_id,
+    forfeited_amount: d.forfeited_amount,
+    date: d.rental_end_at ? d.rental_end_at.slice(0, 10) : null,
+  }));
+}
+
+// Revenue as it's actually earned AND paid for — one row per calendar night
+// of every active/completed booking, dated to that night's own date (not
+// whenever a payment against it happened to be logged), at that booking's
+// own daily rate plus that night's admin fee, with the one-time travel/misc
+// fees (minus any discount) folded into the pickup night. A booking's
+// revenue for a given month is however many of its nights fall in that
+// month, so it reads the way a car's actual rental activity happened —
+// not lumped entirely into whichever month a big payment happened to land.
+// Sales tax, highway tax, insurance fee, processing fee, and tolls are
+// excluded — pass-through/ancillary, not earnings.
+//
+// A booking that's only partly paid has only earned the nights its
+// payments actually cover — allocated FIFO, oldest night first, like a
+// running tab: walk the booking chronologically and keep "spending" its
+// total paid-to-date against each night's full invoice cost (rate + its
+// share of tax + admin + insurance fee, plus travel/processing/misc/toll
+// fee and minus discount on the pickup night) until it runs out. Earlier
+// nights are marked fully earned before later ones get anything. This
+// means extending an active booking's return date further into the future
+// never moves a single dollar of already-recognized revenue — the
+// extension only adds new, as-yet-unpaid-for nights at the end of the
+// sequence; FIFO already spent the existing paid-to-date total on the
+// nights before them and has nothing left to reach forward with until an
+// actual new payment comes in.
+//
+// Each night's invoice cost is its own real, independently cent-rounded
+// charge — the same number it'd be if this booking had actually been
+// billed and paid night by night, rather than one lump total — so the
+// running ledger only ever spends whole cents. That means the sum of
+// every night's invoice can land a few cents away from the booking's
+// actual stored total (rounding many nights up/down independently doesn't
+// perfectly cancel out the way rounding one number once does); that's an
+// accepted tradeoff of treating each night as its own real charge.
+//
+// Each row also carries taxAmount — that same night's share of highway +
+// sales tax (only ever levied on the lease subtotal, never on admin/
+// travel/insurance/processing fees), collected using the identical FIFO
+// fraction as the night's revenue. This is what the Taxes Collected report
+// reads from, so "how much tax was collected" always uses the same
+// payment-allocation logic as "how much revenue was collected."
+//
+// A booking paid MORE than its full invoice (an overpayment — the same
+// thing computeOwed shows as a negative balance) still has that excess
+// classified the same way as everything else: split by the booking's own
+// revenue-vs-tax ratio and added to the last night's totals, rather than
+// left uncounted. That ratio (revenueShare below) is derived from this
+// exact nightCosts sequence — not computeCharge/computeRevenueEligible
+// (billing.js), which can disagree with it for a booking that's been
+// extended/renewed without its stored invoice_amount being regenerated to
+// match: computeCharge prefers that stored (and potentially stale,
+// too-small) figure, while computeRevenueEligible always recomputes fresh
+// from weekly_rate × the current pickup/return span. Feeding a
+// stale-vs-fresh mismatch into revenueShare could push it well past 1, and
+// every overpayment dollar would get multiplied by it — silently inflating
+// recognized revenue. Summing nightCosts keeps the ratio mathematically
+// bounded to [0, 1], since revenuePortion is always a subset of
+// fullDayInvoice.
+function getAccruedRevenueDays() {
+  const rows = db.prepare(`
+    SELECT id as application_id, assigned_vehicle_id as vehicle_id, status,
+           pickup_scheduled_at, rental_end_at, weekly_rate, admin_fee_rate, travel_fee, discount,
+           invoice_amount, total_due_at_pickup, insurance_fee_rate, processing_fee, misc_fee, toll_fee
+    FROM applications
+    WHERE status IN ('active', 'completed')
+      AND pickup_scheduled_at IS NOT NULL AND rental_end_at IS NOT NULL AND weekly_rate IS NOT NULL
+  `).all();
+  const paidByApp = new Map(db.prepare(`
+    SELECT application_id, COALESCE(SUM(amount), 0) as total FROM payments GROUP BY application_id
+  `).all().map(r => [r.application_id, r.total]));
+  const days = [];
+  rows.forEach(a => {
+    const start = new Date(a.pickup_scheduled_at.slice(0, 10));
+    // Revenue is capped to the booking's own scheduled dates, full stop —
+    // whether or not it's been checked in yet does not extend earnings.
+    // (Whether a car still shows as "on rent" past a missed return date is a
+    // separate, utilization-only concern handled in reports.js.)
+    const end = new Date(a.rental_end_at.slice(0, 10));
+    if (!(end > start)) return;
+    let remainingPaid = Math.max(0, paidByApp.get(a.application_id) || 0);
+    const dailyRate = a.weekly_rate / 7;
+    const dailyTaxedRate = dailyRate * (1 + HIGHWAY_TAX_RATE + SALES_TAX_RATE);
+    const dailyTaxPortion = Math.round((dailyRate * (HIGHWAY_TAX_RATE + SALES_TAX_RATE)) * 100) / 100;
+    const adminFeeRate = Number(a.admin_fee_rate) || 0;
+    const insuranceFeeRate = Number(a.insurance_fee_rate) || 0;
+    const travelFee = Math.round((Number(a.travel_fee) || 0) * 100) / 100;
+    const processingFee = Math.round((Number(a.processing_fee) || 0) * 100) / 100;
+    const miscFee = Math.round((Number(a.misc_fee) || 0) * 100) / 100;
+    const tollFee = Math.round((Number(a.toll_fee) || 0) * 100) / 100;
+    const discount = Math.round((Number(a.discount) || 0) * 100) / 100;
+
+    const nightCosts = [];
+    const cursor = new Date(start);
+    let firstDay = true;
+    while (cursor < end) {
+      const revenuePortion = Math.round((dailyRate + adminFeeRate + (firstDay ? travelFee + miscFee - discount : 0)) * 100) / 100;
+      const fullDayInvoice = Math.round((dailyTaxedRate + adminFeeRate + insuranceFeeRate + (firstDay ? travelFee + processingFee + miscFee + tollFee - discount : 0)) * 100) / 100;
+      nightCosts.push({ date: cursor.toISOString().slice(0, 10), revenuePortion, taxPortion: dailyTaxPortion, fullDayInvoice });
+      firstDay = false;
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    const totalNightRevenue = nightCosts.reduce((sum, n) => sum + n.revenuePortion, 0);
+    const totalNightInvoice = nightCosts.reduce((sum, n) => sum + n.fullDayInvoice, 0);
+    const revenueShare = totalNightInvoice > 0 ? totalNightRevenue / totalNightInvoice : 0;
+
+    let lastEntry = null;
+    nightCosts.forEach(night => {
+      let amount;
+      let taxAmount;
+      if (remainingPaid >= night.fullDayInvoice) {
+        amount = night.revenuePortion;
+        taxAmount = night.taxPortion;
+        remainingPaid = Math.round((remainingPaid - night.fullDayInvoice) * 100) / 100;
+      } else if (remainingPaid > 0) {
+        const fraction = night.fullDayInvoice > 0 ? remainingPaid / night.fullDayInvoice : 0;
+        amount = Math.round(night.revenuePortion * fraction * 100) / 100;
+        taxAmount = Math.round(night.taxPortion * fraction * 100) / 100;
+        remainingPaid = 0;
+      } else {
+        amount = 0;
+        taxAmount = 0;
+      }
+      lastEntry = { application_id: a.application_id, vehicle_id: a.vehicle_id, date: night.date, amount, taxAmount };
+      days.push(lastEntry);
+    });
+    // Every night's invoice is spent — anything still left in remainingPaid is
+    // an overpayment. Split it the same way as everything else and fold it
+    // into the last night rather than dropping it.
+    if (remainingPaid > 0 && lastEntry) {
+      const extraRevenue = Math.round(remainingPaid * revenueShare * 100) / 100;
+      const extraTax = Math.round((remainingPaid - extraRevenue) * 100) / 100;
+      lastEntry.amount = Math.round((lastEntry.amount + extraRevenue) * 100) / 100;
+      lastEntry.taxAmount = Math.round((lastEntry.taxAmount + extraTax) * 100) / 100;
+    }
+  });
+  return days;
+}
+
+// A swipe-payment's card-processing fee (the business_expenses row
+// syncSwipeExpense in applications.js creates, joined back via payment_id) —
+// one row per Swipe payment, its full fee amount, dated to when that
+// specific payment was actually charged (payments.paid_at). Unlike Revenue,
+// which is earned night by night as a booking's stay actually happens, the
+// processor takes its cut the moment the card is run — a real, one-time
+// event on a real calendar date, not something to spread across future
+// nights that haven't been paid for yet or haven't happened.
+function getSwipeFeeCharges() {
+  return db.prepare(`
+    SELECT p.application_id, a.assigned_vehicle_id as vehicle_id,
+           substr(p.paid_at, 1, 10) as date, be.amount
+    FROM business_expenses be
+    JOIN payments p ON p.id = be.payment_id
+    JOIN applications a ON a.id = p.application_id
+  `).all();
+}
+
 function logActivity(applicationId, message) {
   db.prepare('INSERT INTO activity_log (application_id, message) VALUES (?, ?)').run(applicationId, message);
 }
@@ -449,4 +1285,4 @@ function queueMessage(applicationId, channel, to, body) {
     .run(applicationId, channel, to, body);
 }
 
-module.exports = { db, logActivity, queueMessage, upsertCustomer, logUndo };
+module.exports = { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo, getForfeitedDeposits, getAccruedRevenueDays, getSwipeFeeCharges, getLastOilChangeByVehicle, withOilChangeStatus, OIL_CHANGE_INTERVAL_MILES };
