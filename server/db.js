@@ -221,6 +221,9 @@ if (!existingCols.includes('notes')) {
 if (!existingCols.includes('zip_code')) {
   db.exec('ALTER TABLE applications ADD COLUMN zip_code TEXT');
 }
+if (!existingCols.includes('vehicle_tier')) {
+  db.exec('ALTER TABLE applications ADD COLUMN vehicle_tier TEXT');
+}
 
 const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);
 if (!vehicleCols.includes('photo_path')) {
