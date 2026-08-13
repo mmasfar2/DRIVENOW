@@ -193,9 +193,32 @@ function render() {
   // that actually has a file, not just the most recent booking.
   const bookingWithLicense = customer.bookings.find(b => b.license_path) || latestBooking;
 
+  const licensePath = customer.license_path || bookingWithLicense?.license_path;
   document.getElementById('cd-license').innerHTML = `
-    <div class="info-row"><div class="info-row__label">License</div><div class="info-row__val">${filePreviewHtml(bookingWithLicense?.license_path)}</div></div>
+    <div class="info-row"><div class="info-row__label">License</div><div class="info-row__val">${filePreviewHtml(licensePath)}</div></div>
+    <label style="display:inline-flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;">
+      <input type="file" id="cd-license-file" accept="image/*,.pdf" style="display:none;">
+      <span style="padding:7px 16px;background:var(--black);color:#fff;border-radius:4px;font-size:0.8rem;font-weight:700;">${licensePath ? 'Replace License' : 'Upload License'}</span>
+    </label>
+    <span id="cd-license-status" style="font-size:0.8rem;color:#888;margin-left:8px;"></span>
   `;
+  document.getElementById('cd-license-file').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const statusEl = document.getElementById('cd-license-status');
+    statusEl.textContent = 'Uploading…';
+    const fd = new FormData();
+    fd.append('license', file);
+    try {
+      const token = localStorage.getItem('dn_token');
+      const resp = await fetch(`/api/customers/${customer.id}/license`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+      if (!resp.ok) { const j = await resp.json(); throw new Error(j.error || 'Upload failed'); }
+      statusEl.textContent = 'Uploaded!';
+      await load();
+    } catch (err) {
+      statusEl.textContent = err.message || 'Upload failed';
+    }
+  });
 
   // The Insurance panel — synced with the Insurance admin page (insurance.html /
   // insurance-detail.html), which is the single place these records are

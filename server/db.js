@@ -570,6 +570,9 @@ if (!customerCols.includes('insurance_company')) {
 if (!customerCols.includes('insurance_policy_number')) {
   db.exec('ALTER TABLE customers ADD COLUMN insurance_policy_number TEXT');
 }
+if (!customerCols.includes('license_path')) {
+  db.exec('ALTER TABLE customers ADD COLUMN license_path TEXT');
+}
 
 // customers.email used to be NOT NULL, which forced a fake placeholder
 // address (walkin-<phone>@no-email.drivenow) onto walk-in customers who

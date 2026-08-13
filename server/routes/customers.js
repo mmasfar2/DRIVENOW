@@ -1,7 +1,17 @@
 const express = require('express');
+const multer = require('multer');
 const { db, upsertCustomer, logUndo } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { computeCharge, computeOwed } = require('../billing');
+const { UPLOADS_DIR } = require('../paths');
+
+const licenseUpload = multer({
+  storage: multer.diskStorage({
+    destination: UPLOADS_DIR,
+    filename: (req, file, cb) => cb(null, `${Date.now()}-license-${file.originalname}`),
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
 
 const router = express.Router();
 
@@ -202,6 +212,14 @@ router.post('/', requireAuth, (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(first_name, last_name, normalizedPhone || null, email || null, address || null, city || null, state || null, zip_code || null, dob || null);
   res.status(201).json({ id: result.lastInsertRowid });
+});
+
+router.post('/:id/license', requireAuth, licenseUpload.single('license'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+  const customer = db.prepare('SELECT id FROM customers WHERE id = ?').get(req.params.id);
+  if (!customer) return res.status(404).json({ error: 'Customer not found.' });
+  db.prepare('UPDATE customers SET license_path = ? WHERE id = ?').run(req.file.filename, req.params.id);
+  res.json({ filename: req.file.filename });
 });
 
 router.post('/:id/notes', requireAuth, (req, res) => {
