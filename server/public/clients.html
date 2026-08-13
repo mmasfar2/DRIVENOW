@@ -13,7 +13,10 @@
 <div id="sidebar-root"></div>
 <div class="main-content">
 <div class="page">
-  <div class="page-title">Clients</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:4px;">
+    <div class="page-title" style="margin-bottom:0;">Clients</div>
+    <button id="add-customer-btn" class="btn-primary" style="padding:10px 20px;font-size:0.85rem;font-weight:700;border:none;border-radius:6px;cursor:pointer;background:var(--black);color:#fff;">+ Add Customer</button>
+  </div>
   <div class="page-sub">Look up any current or previous renter.</div>
 
   <div class="panel" style="display:flex;gap:24px;align-items:center;">
@@ -45,6 +48,67 @@
   </div>
 </div>
 </div>
+</div>
+
+<!-- Add Customer Modal -->
+<div id="add-customer-modal" class="simple-modal-overlay" style="display:none;">
+  <div class="simple-modal" style="width:480px;">
+    <div class="simple-modal__header">
+      <div class="simple-modal__title">Add Customer</div>
+      <button class="simple-modal__close" id="add-customer-close">&times;</button>
+    </div>
+    <div class="simple-modal__body">
+      <div id="add-customer-err" style="display:none;background:#fdecea;color:#c62828;padding:10px 14px;border-radius:6px;font-size:0.85rem;margin-bottom:16px;"></div>
+      <form id="add-customer-form" autocomplete="off">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <label style="font-size:0.78rem;font-weight:700;display:block;margin-bottom:4px;">First Name *</label>
+            <input name="first_name" placeholder="John" required style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:0.78rem;font-weight:700;display:block;margin-bottom:4px;">Last Name *</label>
+            <input name="last_name" placeholder="Smith" required style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:0.78rem;font-weight:700;display:block;margin-bottom:4px;">Phone</label>
+            <input name="phone" type="tel" placeholder="(704) 555-0000" style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:0.78rem;font-weight:700;display:block;margin-bottom:4px;">Email</label>
+            <input name="email" type="email" placeholder="john@email.com" style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:0.78rem;font-weight:700;display:block;margin-bottom:4px;">Date of Birth</label>
+            <input name="dob" type="date" style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;box-sizing:border-box;">
+          </div>
+          <div style="grid-column:1/-1;">
+            <label style="font-size:0.78rem;font-weight:700;display:block;margin-bottom:4px;">Street Address</label>
+            <input name="address" placeholder="123 Main St" style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:0.78rem;font-weight:700;display:block;margin-bottom:4px;">City</label>
+            <input name="city" placeholder="Charlotte" style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:0.78rem;font-weight:700;display:block;margin-bottom:4px;">State</label>
+            <select name="state" style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;box-sizing:border-box;">
+              <option value="">Select</option>
+              <option value="NC" selected>North Carolina</option>
+              <option value="SC">South Carolina</option>
+              <option value="VA">Virginia</option>
+              <option value="GA">Georgia</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:0.78rem;font-weight:700;display:block;margin-bottom:4px;">ZIP Code</label>
+            <input name="zip_code" placeholder="28202" maxlength="5" inputmode="numeric" style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;box-sizing:border-box;">
+          </div>
+        </div>
+        <button type="submit" style="margin-top:22px;width:100%;padding:12px;background:var(--black);color:#fff;border:none;border-radius:6px;font-family:inherit;font-size:0.9rem;font-weight:700;cursor:pointer;">Add Customer</button>
+      </form>
+    </div>
+  </div>
 </div>
 
 <script src="js/admin-common.js"></script>
@@ -103,6 +167,36 @@ async function load() {
 
 document.getElementById('c-search').addEventListener('input', render);
 document.getElementById('c-filter').addEventListener('change', render);
+
+const modal = document.getElementById('add-customer-modal');
+document.getElementById('add-customer-btn').addEventListener('click', () => {
+  document.getElementById('add-customer-form').reset();
+  document.getElementById('add-customer-err').style.display = 'none';
+  modal.style.display = 'flex';
+});
+document.getElementById('add-customer-close').addEventListener('click', () => { modal.style.display = 'none'; });
+modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
+
+document.getElementById('add-customer-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errEl = document.getElementById('add-customer-err');
+  errEl.style.display = 'none';
+  const data = Object.fromEntries(new FormData(e.target));
+  const submitBtn = e.target.querySelector('button[type=submit]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Adding…';
+  try {
+    await api('/api/customers', { method: 'POST', body: JSON.stringify(data) });
+    modal.style.display = 'none';
+    await load();
+  } catch (err) {
+    errEl.textContent = err.message || 'Could not add customer.';
+    errEl.style.display = 'block';
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Add Customer';
+  }
+});
 
 (async () => {
   renderSidebar('clients');

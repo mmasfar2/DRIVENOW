@@ -191,6 +191,19 @@ router.get('/:id/notes', requireAuth, (req, res) => {
   res.json(rows);
 });
 
+router.post('/', requireAuth, (req, res) => {
+  const { first_name, last_name, phone, email, address, city, state, zip_code, dob } = req.body;
+  if (!first_name || !last_name) return res.status(400).json({ error: 'First and last name are required.' });
+  const normalizedPhone = phone ? phone.replace(/\D/g, '') : null;
+  const existing = email ? db.prepare('SELECT id FROM customers WHERE lower(email)=lower(?)').get(email) : null;
+  if (existing) return res.status(400).json({ error: 'A customer with that email already exists.' });
+  const result = db.prepare(`
+    INSERT INTO customers (first_name, last_name, phone, email, address, city, state, zip_code, dob)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(first_name, last_name, normalizedPhone || null, email || null, address || null, city || null, state || null, zip_code || null, dob || null);
+  res.status(201).json({ id: result.lastInsertRowid });
+});
+
 router.post('/:id/notes', requireAuth, (req, res) => {
   const { note } = req.body;
   if (!note || !note.trim()) return res.status(400).json({ error: 'Note text is required' });
