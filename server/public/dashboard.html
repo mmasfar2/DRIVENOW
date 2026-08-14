@@ -13,42 +13,55 @@
 <div id="sidebar-root"></div>
 <div class="main-content">
 <div class="page">
-  <div class="page-title">Dashboard</div>
-  <div class="page-sub">Your fleet operations at a glance.</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:4px;">
+    <div>
+      <div class="page-title" style="margin-bottom:0;">Dashboard</div>
+      <div class="page-sub" style="margin-top:2px;">Your fleet operations at a glance.</div>
+    </div>
+    <button id="customize-btn" style="padding:8px 16px;font-size:0.8rem;font-weight:700;border:1.5px solid var(--gray-border);border-radius:6px;background:#fff;cursor:pointer;display:flex;align-items:center;gap:6px;">
+      ⚙ Customize
+    </button>
+  </div>
+
+  <!-- Customize panel -->
+  <div id="customize-panel" style="display:none;background:#f8f8f8;border:1.5px solid var(--gray-border);border-radius:8px;padding:18px 22px;margin-bottom:20px;">
+    <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:14px;">Show / Hide Cards</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;" id="customize-toggles"></div>
+  </div>
 
   <div class="cards-row" id="overview-cards-1">
-    <div class="stat-card">
+    <div class="stat-card" data-card="total-vehicles">
       <div class="stat-card__top"><div class="stat-card__label">Total Vehicles</div><div class="stat-card__icon icon-blue" id="icon-car"></div></div>
       <div class="stat-card__value" id="ov-total-vehicles">—</div><div class="stat-card__sub" id="ov-available-sub"></div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" data-card="rented-cars">
       <div class="stat-card__top"><div class="stat-card__label">Rented Cars</div><div class="stat-card__icon icon-purple" id="icon-trending"></div></div>
       <div class="stat-card__value" id="ov-rented">—</div><div class="stat-card__sub" id="ov-utilization-sub"></div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" data-card="revenue-earned">
       <div class="stat-card__top"><div class="stat-card__label">Revenue Earned</div><div class="stat-card__icon icon-green" id="icon-dollar"></div></div>
       <div class="stat-card__value green" id="ov-revenue">—</div><div class="stat-card__sub">this month, resets monthly</div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" data-card="overdue-balance">
       <div class="stat-card__top"><div class="stat-card__label">Overdue Balance</div><div class="stat-card__icon icon-red" id="icon-alert"></div></div>
       <div class="stat-card__value orange" id="ov-overdue">—</div><div class="stat-card__sub" id="ov-overdue-sub"></div>
     </div>
   </div>
 
   <div class="cards-row" id="overview-cards-2">
-    <div class="stat-card">
+    <div class="stat-card" data-card="utilization-rate">
       <div class="stat-card__top"><div class="stat-card__label">Utilization Rate</div><div class="stat-card__icon icon-blue" id="icon-clock"></div></div>
       <div class="stat-card__value" id="ov-util-rate">—</div><div class="stat-card__sub" id="ov-util-sub"></div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" data-card="customers">
       <div class="stat-card__top"><div class="stat-card__label">Customers</div><div class="stat-card__icon icon-purple" id="icon-users"></div></div>
       <div class="stat-card__value" id="ov-customers">—</div><div class="stat-card__sub" id="ov-customers-sub"></div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" data-card="active-bookings">
       <div class="stat-card__top"><div class="stat-card__label">Active Bookings</div><div class="stat-card__icon icon-green" id="icon-calendar"></div></div>
       <div class="stat-card__value" id="ov-bookings">—</div><div class="stat-card__sub">pending pickup or final payment</div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" data-card="maintenance-cost">
       <div class="stat-card__top"><div class="stat-card__label">Maintenance Cost</div><div class="stat-card__icon icon-orange" id="icon-wrench"></div></div>
       <div class="stat-card__value orange" id="ov-maint-cost">—</div><div class="stat-card__sub" id="ov-maint-sub"></div>
     </div>
@@ -100,6 +113,61 @@ function monthLabel(ym) {
   const [y, m] = ym.split('-').map(Number);
   return new Date(y, m - 1, 1).toLocaleString(undefined, { month: 'short' });
 }
+
+const CARD_LABELS = {
+  'total-vehicles': 'Total Vehicles',
+  'rented-cars': 'Rented Cars',
+  'revenue-earned': 'Revenue Earned',
+  'overdue-balance': 'Overdue Balance',
+  'utilization-rate': 'Utilization Rate',
+  'customers': 'Customers',
+  'active-bookings': 'Active Bookings',
+  'maintenance-cost': 'Maintenance Cost',
+};
+const PREF_KEY = 'dn_dash_hidden_cards';
+
+function getHidden() {
+  try { return JSON.parse(localStorage.getItem(PREF_KEY)) || []; } catch { return []; }
+}
+function saveHidden(hidden) {
+  localStorage.setItem(PREF_KEY, JSON.stringify(hidden));
+}
+function applyVisibility() {
+  const hidden = getHidden();
+  document.querySelectorAll('.stat-card[data-card]').forEach(card => {
+    card.style.display = hidden.includes(card.dataset.card) ? 'none' : '';
+  });
+}
+function buildToggles() {
+  const hidden = getHidden();
+  const container = document.getElementById('customize-toggles');
+  container.innerHTML = Object.entries(CARD_LABELS).map(([key, label]) => `
+    <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fff;border:1.5px solid var(--gray-border);border-radius:6px;cursor:pointer;user-select:none;">
+      <input type="checkbox" data-card-key="${key}" ${hidden.includes(key) ? '' : 'checked'} style="width:16px;height:16px;cursor:pointer;">
+      <span style="font-size:0.85rem;font-weight:600;">${label}</span>
+    </label>
+  `).join('');
+  container.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const key = cb.dataset.cardKey;
+      let hidden = getHidden();
+      if (cb.checked) hidden = hidden.filter(k => k !== key);
+      else if (!hidden.includes(key)) hidden.push(key);
+      saveHidden(hidden);
+      applyVisibility();
+    });
+  });
+}
+
+document.getElementById('customize-btn').addEventListener('click', () => {
+  const panel = document.getElementById('customize-panel');
+  const open = panel.style.display !== 'none';
+  if (!open) buildToggles();
+  panel.style.display = open ? 'none' : '';
+  document.getElementById('customize-btn').textContent = open ? '⚙ Customize' : '✕ Close';
+});
+
+applyVisibility();
 
 (async () => {
   renderSidebar('dashboard');
