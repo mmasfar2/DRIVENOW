@@ -29,7 +29,7 @@
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;" id="customize-toggles"></div>
   </div>
 
-  <div id="overview-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:24px;">
+  <div id="overview-cards" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;">
     <div class="stat-card" data-card="total-vehicles">
       <div class="stat-card__top"><div class="stat-card__label">Total Vehicles</div><div class="stat-card__icon icon-blue" id="icon-car"></div></div>
       <div class="stat-card__value" id="ov-total-vehicles">—</div><div class="stat-card__sub" id="ov-available-sub"></div>
@@ -134,6 +134,9 @@ function applyVisibility() {
   document.querySelectorAll('.stat-card[data-card]').forEach(card => {
     card.style.display = hidden.includes(card.dataset.card) ? 'none' : '';
   });
+  const visibleCount = document.querySelectorAll('.stat-card[data-card]:not([style*="none"])').length;
+  const cols = visibleCount <= 2 ? visibleCount : visibleCount <= 4 ? 4 : visibleCount <= 6 ? 3 : 4;
+  document.getElementById('overview-cards').style.gridTemplateColumns = `repeat(${cols},1fr)`;
 }
 function buildToggles() {
   const hidden = getHidden();
