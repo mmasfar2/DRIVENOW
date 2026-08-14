@@ -29,7 +29,7 @@
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;" id="customize-toggles"></div>
   </div>
 
-  <div class="cards-row" id="overview-cards-1">
+  <div id="overview-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:24px;">
     <div class="stat-card" data-card="total-vehicles">
       <div class="stat-card__top"><div class="stat-card__label">Total Vehicles</div><div class="stat-card__icon icon-blue" id="icon-car"></div></div>
       <div class="stat-card__value" id="ov-total-vehicles">—</div><div class="stat-card__sub" id="ov-available-sub"></div>
@@ -46,9 +46,6 @@
       <div class="stat-card__top"><div class="stat-card__label">Overdue Balance</div><div class="stat-card__icon icon-red" id="icon-alert"></div></div>
       <div class="stat-card__value orange" id="ov-overdue">—</div><div class="stat-card__sub" id="ov-overdue-sub"></div>
     </div>
-  </div>
-
-  <div class="cards-row" id="overview-cards-2">
     <div class="stat-card" data-card="utilization-rate">
       <div class="stat-card__top"><div class="stat-card__label">Utilization Rate</div><div class="stat-card__icon icon-blue" id="icon-clock"></div></div>
       <div class="stat-card__value" id="ov-util-rate">—</div><div class="stat-card__sub" id="ov-util-sub"></div>
