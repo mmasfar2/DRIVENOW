@@ -391,6 +391,9 @@ if (!vehicleCols.includes('sale_amount')) {
 if (!vehicleCols.includes('sale_date')) {
   db.exec('ALTER TABLE vehicles ADD COLUMN sale_date TEXT');
 }
+if (!vehicleCols.includes('last_oil_change_at')) {
+  db.exec('ALTER TABLE vehicles ADD COLUMN last_oil_change_at TEXT');
+}
 
 const maintenanceCols = db.prepare("PRAGMA table_info(vehicle_maintenance)").all().map(c => c.name);
 if (!maintenanceCols.includes('category')) {
@@ -1106,7 +1109,7 @@ function withOilChangeStatus(vehicle, lastOilChangeByVehicle) {
   return {
     ...vehicle,
     last_oil_change_mileage: last ? last.odometer_at_service : null,
-    last_oil_change_at: last ? last.performed_at : null,
+    last_oil_change_at: vehicle.last_oil_change_at || (last ? last.performed_at : null),
     miles_since_oil_change: milesSinceOilChange,
     oil_change_due: milesSinceOilChange != null && milesSinceOilChange >= OIL_CHANGE_INTERVAL_MILES,
   };
