@@ -511,22 +511,16 @@ document.getElementById('vd-mileage-save').addEventListener('click', async () =>
   await load();
 });
 
-// Quick-logs an Oil Change maintenance record with just a date — same
-// record the full "Log Service / Maintenance Record" form below creates,
-// just without re-typing description/category/odometer every time. Pinned
-// to the vehicle's current recorded mileage (Current Odometer Reading
-// above), since the 3,000-mile countdown is anchored to that reading.
+// Saves the last oil change date on the vehicle record only — does NOT
+// create a maintenance log entry. Log the actual expense separately using
+// the "Log Service / Maintenance Record" form below.
 document.getElementById('vd-oil-change-save').addEventListener('click', async () => {
   const performed_at = document.getElementById('vd-oil-change-input').value;
   if (!performed_at) { alert('Pick a date'); return; }
-  if (vehicle.mileage == null) { alert('Set Current Odometer Reading first, so the oil change has a mileage to anchor to'); return; }
   try {
-    await api('/api/maintenance', {
-      method: 'POST',
-      body: JSON.stringify({
-        vehicle_id: id, description: 'Oil Change', category: 'Oil Change',
-        performed_at, odometer_at_service: vehicle.mileage,
-      }),
+    await api(`/api/vehicles/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ last_oil_change_at: performed_at }),
     });
   } catch (err) {
     alert(err.message);

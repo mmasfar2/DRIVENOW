@@ -219,7 +219,7 @@ router.patch('/:id', requireAuth, (req, res) => {
   const allowed = [
     'make', 'model', 'year', 'weekly_rate', 'status', 'notes', 'vin', 'license_plate', 'color', 'fuel_type', 'transmission',
     'stock_number', 'vehicle_class', 'purchase_date', 'purchase_price', 'mileage', 'purchase_mileage', 'next_service_at',
-    'sale_amount', 'sale_date',
+    'sale_amount', 'sale_date', 'last_oil_change_at',
   ];
   const updates = [];
   const params = [];
