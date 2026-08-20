@@ -1174,28 +1174,32 @@ function renderBreakdown() {
     inp.addEventListener('input', () => {
       breakdownDirty = true;
       const value = Number(inp.value) || 0;
-      if (item.type === 'rate') {
-        item.rate = item.days > 0 ? Math.round((value / item.days) * 100) / 100 : value;
-        document.getElementById(`pb-label-${inp.dataset.i}`).textContent = getItemLabel(item);
-        recalcTaxes();
-        const highwayI = paymentBreakdownItems.findIndex(i => i.key === 'highway');
-        const salesI = paymentBreakdownItems.findIndex(i => i.key === 'sales');
-        document.getElementById(`pb-input-${highwayI}`).value = paymentBreakdownItems[highwayI].amount;
-        document.getElementById(`pb-input-${salesI}`).value = paymentBreakdownItems[salesI].amount;
-      } else if (item.type === 'dayrate') {
+      if (item.type === 'rate' || item.type === 'dayrate') {
         // While typing, the box holds the raw per-day rate as-typed (left
-        // untouched, no reformatting mid-keystroke) — it snaps to the
-        // computed extended total on blur, below.
+        // untouched, no reformatting mid-keystroke, thanks to the focus
+        // listener below already having swapped the box into rate view) —
+        // it snaps to the computed extended total on blur.
         item.rate = value;
         document.getElementById(`pb-label-${inp.dataset.i}`).textContent = getItemLabel(item);
+        if (item.key === 'daily') {
+          recalcTaxes();
+          const highwayI = paymentBreakdownItems.findIndex(i => i.key === 'highway');
+          const salesI = paymentBreakdownItems.findIndex(i => i.key === 'sales');
+          document.getElementById(`pb-input-${highwayI}`).value = paymentBreakdownItems[highwayI].amount;
+          document.getElementById(`pb-input-${salesI}`).value = paymentBreakdownItems[salesI].amount;
+        }
       } else {
         item.amount = value;
       }
       updateInvoiceTotals();
     });
-    if (item.type === 'dayrate') {
+    if (item.type === 'rate' || item.type === 'dayrate') {
       inp.addEventListener('focus', () => {
-        inp.value = item.rate || '';
+        // Rounded for display only — item.rate itself stays at whatever
+        // precision it already had (the Lease Rate row's daily rate is kept
+        // unrounded internally on purpose, see initBreakdown) unless the
+        // owner actually types a new value, which replaces it outright.
+        inp.value = item.rate ? Math.round(item.rate * 100) / 100 : '';
         inp.setSelectionRange(inp.value.length, inp.value.length);
       });
       inp.addEventListener('blur', () => {
