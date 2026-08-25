@@ -111,7 +111,7 @@ router.get('/summary', requireAuth, (req, res) => {
   // Overview tiles (iFleet-style dashboard) — a sold or totaled vehicle
   // isn't part of the fleet anymore, so both are excluded from Total
   // Vehicles (and, by extension, from the utilization rate's denominator too).
-  const totalVehicles = db.prepare("SELECT COUNT(*) as c FROM vehicles WHERE status NOT IN ('sold', 'totaled')").get().c;
+  const totalVehicles = db.prepare("SELECT COUNT(*) as c FROM vehicles WHERE status NOT IN ('sold', 'totaled', 'removed')").get().c;
   const availableVehicles = db.prepare("SELECT COUNT(*) as c FROM vehicles WHERE status = 'available'").get().c;
   const rentedVehicles = db.prepare("SELECT COUNT(*) as c FROM vehicles WHERE status = 'rented'").get().c;
   const utilizationRate = totalVehicles > 0 ? Math.round((rentedVehicles / totalVehicles) * 100) : 0;

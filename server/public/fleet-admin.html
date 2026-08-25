@@ -34,6 +34,7 @@
         <option value="maintenance">Maintenance</option>
         <option value="sold">Sold</option>
         <option value="totaled">Totaled</option>
+        <option value="removed">Removed from Fleet</option>
       </select>
       <input id="fleet-search" placeholder="Search by make, model, plate, or stock #…" style="flex:1;min-width:220px;padding:10px 14px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;">
     </div>
@@ -86,6 +87,7 @@
             <option value="maintenance">Maintenance</option>
             <option value="sold">Sold</option>
             <option value="totaled">Totaled</option>
+            <option value="removed">Removed from Fleet</option>
           </select>
         </div>
         <div class="field"><label>Daily Rate ($)</label><input id="v-rate" type="number" step="0.01" placeholder="54.29"></div>
@@ -124,6 +126,7 @@ function render() {
   const statusFilter = document.getElementById('fleet-status-filter').value;
   const search = document.getElementById('fleet-search').value.trim().toLowerCase();
   const filtered = vehicles.filter(v => {
+    if (!statusFilter && v.status === 'removed') return false;
     if (statusFilter && v.status !== statusFilter) return false;
     if (search) {
       const haystack = [v.stock_number, v.license_plate, v.vin, v.make, v.model, v.year, v.color]
