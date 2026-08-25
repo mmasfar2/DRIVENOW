@@ -28,13 +28,9 @@
     <div style="padding:18px 22px 0;display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
       <select id="fleet-status-filter" style="font-family:inherit;font-weight:700;font-size:0.95rem;border:1.5px solid var(--gray-border);border-radius:4px;padding:9px 10px;background:#fff;">
         <option value="">All Statuses</option>
-        <option value="available">Available</option>
         <option value="reserved">Reserved</option>
-        <option value="rented">Rented</option>
-        <option value="maintenance">Maintenance</option>
-        <option value="sold">Sold</option>
-        <option value="totaled">Totaled</option>
-        <option value="removed">Removed from Fleet</option>
+        <option value="in-maintenance">In Maintenance</option>
+        <option value="inactive">Removed from Fleet</option>
       </select>
       <input id="fleet-search" placeholder="Search by make, model, plate, or stock #…" style="flex:1;min-width:220px;padding:10px 14px;border:1.5px solid var(--gray-border);border-radius:4px;font-family:inherit;font-size:0.9rem;">
     </div>
@@ -122,12 +118,46 @@ async function load() {
   render();
 }
 
+const INACTIVE_STATUSES = ['sold', 'totaled', 'removed'];
+const ACTIVE_STATUSES = ['available', 'reserved', 'rented', 'maintenance'];
+
+function isInactive(v) { return INACTIVE_STATUSES.includes(v.status); }
+
+function updateFilterCounts() {
+  const active = vehicles.filter(v => ACTIVE_STATUSES.includes(v.status));
+  const reserved = vehicles.filter(v => v.status === 'reserved');
+  const maintenance = vehicles.filter(v => v.status === 'maintenance');
+  const inactive = vehicles.filter(isInactive);
+  const sel = document.getElementById('fleet-status-filter');
+  sel.options[0].text = `All Statuses (${active.length})`;
+  sel.options[1].text = `Reserved (${reserved.length})`;
+  sel.options[2].text = `In Maintenance (${maintenance.length})`;
+  sel.options[3].text = `Removed from Fleet (${inactive.length})`;
+}
+
+function statusLabel(v) {
+  if (v.status === 'removed') return 'Removed';
+  if (v.status === 'totaled') return 'Totaled';
+  if (v.status === 'sold') return 'Sold';
+  return v.status.charAt(0).toUpperCase() + v.status.slice(1);
+}
+
 function render() {
   const statusFilter = document.getElementById('fleet-status-filter').value;
   const search = document.getElementById('fleet-search').value.trim().toLowerCase();
+
+  updateFilterCounts();
+
   const filtered = vehicles.filter(v => {
-    if (!statusFilter && v.status === 'removed') return false;
-    if (statusFilter && v.status !== statusFilter) return false;
+    if (statusFilter === '') {
+      if (!ACTIVE_STATUSES.includes(v.status)) return false;
+    } else if (statusFilter === 'in-maintenance') {
+      if (v.status !== 'maintenance') return false;
+    } else if (statusFilter === 'inactive') {
+      if (!isInactive(v)) return false;
+    } else {
+      if (v.status !== statusFilter) return false;
+    }
     if (search) {
       const haystack = [v.stock_number, v.license_plate, v.vin, v.make, v.model, v.year, v.color]
         .filter(Boolean).join(' ').toLowerCase();
@@ -148,7 +178,7 @@ function render() {
       <td><strong>${v.year} ${v.make} ${v.model}</strong>${v.oil_change_due ? ` <span class="badge badge-rejected">Oil Change Due</span>` : ''}${v.color ? `<br><span style="color:#888;font-size:0.8rem;">${v.color}</span>` : ''}</td>
       <td>${v.license_plate || '—'}</td>
       <td>$${v.weekly_rate}/wk</td>
-      <td><span style="text-transform:capitalize;">${v.status}</span></td>
+      <td><span>${statusLabel(v)}</span></td>
       <td onclick="event.stopPropagation();"><button class="btn btn-sm btn-outline" onclick="removeVehicleFromRow(${v.id})">Remove</button></td>
     </tr>
   `).join('') : `<tr><td colspan="7" style="text-align:center;color:#888;padding:32px;">${vehicles.length ? 'No vehicles match your search.' : 'No vehicles yet.'}</td></tr>`;
