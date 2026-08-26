@@ -1223,16 +1223,16 @@ document.querySelectorAll('.rd-tab').forEach(tab => {
 // this page's memory until it's actually persisted — Send Invoice does that,
 // but it also texts the customer and advances their pipeline stage, which
 // isn't what you want for a purely internal correction. This saves the
-// current total, plus every toggleable row (Discount/Admin Fee/Travel Fee/
-// Insurance Fee/Processing Fee/Miscellaneous/Tolls) each as their own stored
-// field (unchecked -> 0) so their checkboxes reflect what was actually saved
-// on the next reload instead of resetting to whatever the booking's original
-// rate happened to be — initBreakdown derives each checkbox's starting state
-// from these same columns. Every row in the panel needs an entry here; a row
-// left out silently reverts on reload even though it affected the saved
-// total (this bit Admin/Travel/Insurance/Processing Fee once already, then
-// Miscellaneous/Tolls a second time — don't add a new row without adding it
-// here too).
+// current total, plus every toggleable row (Lease Rate/Discount/Admin Fee/
+// Travel Fee/Insurance Fee/Processing Fee/Miscellaneous/Tolls) each as their
+// own stored field (unchecked -> 0) so their checkboxes reflect what was
+// actually saved on the next reload instead of resetting to whatever the
+// booking's original rate happened to be — initBreakdown derives each
+// checkbox's starting state from these same columns. Every row in the panel
+// needs an entry here; a row left out silently reverts on reload even
+// though it affected the saved total (this bit Admin/Travel/Insurance/
+// Processing Fee once already, Miscellaneous/Tolls a second time, and Lease
+// Rate a third — don't add a new row without adding it here too).
 document.getElementById('rd-save-adjustments-btn').addEventListener('click', async () => {
   const total = getInvoiceTotal();
   const itemValue = (key, field) => {
@@ -1240,9 +1240,15 @@ document.getElementById('rd-save-adjustments-btn').addEventListener('click', asy
     if (!item || !item.checked) return 0;
     return Number(item[field]) || 0;
   };
+  // weekly_rate, not a per-day rate — item.rate here is the Lease Rate row's
+  // daily rate (see initBreakdown), so it has to be scaled back up to the
+  // weekly figure the applications table (and every other Revenue/billing
+  // calc) actually stores.
+  const weeklyRate = Math.round(itemValue('daily', 'rate') * 7 * 100) / 100;
   try {
     await api(`/api/applications/${id}`, { method: 'PATCH', body: JSON.stringify({
       invoice_total: total,
+      weekly_rate: weeklyRate,
       discount: itemValue('discount', 'amount'),
       admin_fee_rate: itemValue('admin', 'rate'),
       travel_fee: itemValue('travel', 'amount'),

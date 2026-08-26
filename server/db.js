@@ -594,6 +594,17 @@ if (!customerCols.includes('license_path')) {
 // it. SQLite's own docs cover exactly this case: disable enforcement for
 // the duration of the rebuild, then turn it back on and verify nothing
 // actually broke via foreign_key_check before trusting the result.
+// This whole block only ever runs once per database — on any DB that's
+// already been through it, customers.email is no longer NOT NULL and this
+// is skipped forever after. That means it only fires on a genuinely fresh
+// database (first-ever boot, a restored backup predating this migration),
+// not on one that's already live — so a column customers_new is missing
+// won't surface as a crash until someone stands up a new environment. Any
+// column added to customers above this point (see license_path, added
+// after this migration was written and initially left out here) needs to
+// be added to customers_new's CREATE TABLE below too, or table rebuild
+// throws "customers_new has no column named X" the next time this runs
+// fresh.
 const emailColInfo = db.prepare("PRAGMA table_info(customers)").all().find(c => c.name === 'email');
 if (emailColInfo && emailColInfo.notnull) {
   const cols = db.prepare("PRAGMA table_info(customers)").all().map(c => c.name).join(', ');
@@ -622,7 +633,8 @@ if (emailColInfo && emailColInfo.notnull) {
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         license_number TEXT,
         insurance_company TEXT,
-        insurance_policy_number TEXT
+        insurance_policy_number TEXT,
+        license_path TEXT
       );
       INSERT INTO customers_new (${cols}) SELECT ${cols} FROM customers;
       DROP TABLE customers;
