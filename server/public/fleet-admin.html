@@ -28,6 +28,7 @@
     <div style="padding:18px 22px 0;display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
       <select id="fleet-status-filter" style="font-family:inherit;font-weight:700;font-size:0.95rem;border:1.5px solid var(--gray-border);border-radius:4px;padding:9px 10px;background:#fff;">
         <option value="">All Statuses</option>
+        <option value="available">Available</option>
         <option value="reserved">Reserved</option>
         <option value="in-maintenance">In Maintenance</option>
         <option value="inactive">Removed from Fleet</option>
@@ -125,14 +126,16 @@ function isInactive(v) { return INACTIVE_STATUSES.includes(v.status); }
 
 function updateFilterCounts() {
   const active = vehicles.filter(v => ACTIVE_STATUSES.includes(v.status));
+  const available = vehicles.filter(v => v.status === 'available');
   const reserved = vehicles.filter(v => v.status === 'reserved');
   const maintenance = vehicles.filter(v => v.status === 'maintenance');
   const inactive = vehicles.filter(isInactive);
   const sel = document.getElementById('fleet-status-filter');
   sel.options[0].text = `All Statuses (${active.length})`;
-  sel.options[1].text = `Reserved (${reserved.length})`;
-  sel.options[2].text = `In Maintenance (${maintenance.length})`;
-  sel.options[3].text = `Removed from Fleet (${inactive.length})`;
+  sel.options[1].text = `Available (${available.length})`;
+  sel.options[2].text = `Reserved (${reserved.length})`;
+  sel.options[3].text = `In Maintenance (${maintenance.length})`;
+  sel.options[4].text = `Removed from Fleet (${inactive.length})`;
 }
 
 function statusLabel(v) {
