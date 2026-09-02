@@ -343,6 +343,13 @@ async function generateReport(key, label, columns) {
       : key === 'business_expense_by_period' ? 'business_expense'
       : key === 'maintenance_and_business_expense_by_period' ? 'combined'
       : null;
+    const numericCols = columns.filter(c => c.type === 'money' || c.type === 'number');
+    const hasTotals = numericCols.length > 0;
+    const totals = {};
+    if (hasTotals) {
+      numericCols.forEach(c => { totals[c.key] = 0; });
+      data.rows.forEach(r => { numericCols.forEach(c => { totals[c.key] = Math.round((totals[c.key] + (Number(r[c.key]) || 0)) * 100) / 100; }); });
+    }
     body.innerHTML = `
       <table>
         <thead><tr>${columns.map(c => `<th>${c.label}</th>`).join('')}</tr></thead>
@@ -353,6 +360,7 @@ async function generateReport(key, label, columns) {
             return `<tr>${columns.map(c => `<td>${fmtCell(r[c.key], c.type)}</td>`).join('')}</tr>`;
           }).join('')}
         </tbody>
+        ${hasTotals ? `<tfoot><tr style="font-weight:700;border-top:2px solid var(--border-color,#ddd);">${columns.map((c, i) => `<td style="padding:8px 12px;">${i === 0 ? 'Total' : (c.type === 'money' || c.type === 'number') ? fmtCell(totals[c.key], c.type) : ''}</td>`).join('')}</tr></tfoot>` : ''}
       </table>
     `;
     if (drillKind === 'vehicle') {
