@@ -150,11 +150,13 @@ router.get('/summary', requireAuth, (req, res) => {
 
   const activeBookings = db.prepare("SELECT COUNT(*) as c FROM applications WHERE status = 'active' AND stage >= 6").get().c;
 
-  // Average daily rate = average of (weekly_rate / 7) across vehicles currently rented out.
-  // Only includes the base daily rate — no taxes or fees.
+  // Average daily rate = average of (weekly_rate / 7 + admin_fee_rate) across active renters.
   const avgDailyRateRow = db.prepare(`
-    SELECT AVG(weekly_rate / 7.0) as adr FROM vehicles
-    WHERE status = 'rented' AND weekly_rate IS NOT NULL
+    SELECT AVG(v.weekly_rate / 7.0 + COALESCE(a.admin_fee_rate, 0)) as adr
+    FROM applications a
+    LEFT JOIN vehicles v ON v.id = a.assigned_vehicle_id
+    WHERE a.status = 'active' AND a.stage >= 6 AND v.status = 'rented'
+      AND v.weekly_rate IS NOT NULL
   `).get();
   const avgDailyRate = Math.round((avgDailyRateRow.adr || 0) * 100) / 100;
 
@@ -238,7 +240,7 @@ router.get('/summary', requireAuth, (req, res) => {
 router.get('/adr-breakdown', requireAuth, (req, res) => {
   const rows = db.prepare(`
     SELECT a.id, a.first_name, a.last_name, a.pickup_scheduled_at, a.rental_end_at,
-           a.weekly_rate as app_weekly_rate,
+           a.weekly_rate as app_weekly_rate, a.admin_fee_rate,
            v.year, v.make, v.model, v.license_plate, v.weekly_rate as veh_weekly_rate
     FROM applications a
     LEFT JOIN vehicles v ON v.id = a.assigned_vehicle_id
@@ -252,7 +254,8 @@ router.get('/adr-breakdown', requireAuth, (req, res) => {
     // Use the invoice amount (what they're actually being charged) divided by rental days.
     // Fall back to the vehicle's weekly rate / 7 if no invoice yet.
     const weekly = Number(r.app_weekly_rate || r.veh_weekly_rate) || 0;
-    const dailyRate = Math.round(weekly / 7 * 100) / 100;
+    const adminFee = Number(r.admin_fee_rate) || 0;
+    const dailyRate = Math.round((weekly / 7 + adminFee) * 100) / 100;
     return {
       name: `${r.first_name} ${r.last_name}`,
       vehicle: `${r.year} ${r.make} ${r.model}`,
