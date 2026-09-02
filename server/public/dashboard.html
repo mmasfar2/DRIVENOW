@@ -64,7 +64,7 @@
     </div>
     <div class="stat-card" data-card="avg-daily-rate">
       <div class="stat-card__top"><div class="stat-card__label">Avg Daily Rate</div><div class="stat-card__icon icon-green" id="icon-adr"></div></div>
-      <div class="stat-card__value green" id="ov-adr">—</div><div class="stat-card__sub">base daily rate, excl. taxes &amp; fees</div>
+      <div class="stat-card__value green" id="ov-adr">—</div><div class="stat-card__sub">currently rented vehicles only</div>
     </div>
   </div>
 
@@ -210,7 +210,7 @@ document.querySelector('[data-card="avg-daily-rate"]').addEventListener('click',
   document.getElementById('adr-modal-sub').textContent = '';
   try {
     const vehicles = await api('/api/vehicles');
-    const rows = vehicles.filter(v => v.weekly_rate && !['sold','totaled','removed'].includes(v.status));
+    const rows = vehicles.filter(v => v.weekly_rate && v.status === 'rented');
     rows.sort((a, b) => (b.weekly_rate / 7) - (a.weekly_rate / 7));
     const totalDaily = rows.reduce((s, v) => s + v.weekly_rate / 7, 0);
     const avg = rows.length ? totalDaily / rows.length : 0;
