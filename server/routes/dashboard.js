@@ -151,12 +151,13 @@ router.get('/summary', requireAuth, (req, res) => {
   const activeBookings = db.prepare("SELECT COUNT(*) as c FROM applications WHERE status = 'active' AND stage >= 6").get().c;
 
   // Average daily rate = average of (weekly_rate / 7 + admin_fee_rate) across active renters.
+  // Identical WHERE conditions as the /adr-breakdown endpoint so both show the same number.
   const avgDailyRateRow = db.prepare(`
-    SELECT AVG(v.weekly_rate / 7.0 + COALESCE(a.admin_fee_rate, 0)) as adr
+    SELECT AVG(COALESCE(a.weekly_rate, v.weekly_rate) / 7.0 + COALESCE(a.admin_fee_rate, 0)) as adr
     FROM applications a
     LEFT JOIN vehicles v ON v.id = a.assigned_vehicle_id
     WHERE a.status = 'active' AND a.stage >= 6 AND v.status = 'rented'
-      AND v.weekly_rate IS NOT NULL
+      AND a.pickup_scheduled_at IS NOT NULL AND a.rental_end_at IS NOT NULL
   `).get();
   const avgDailyRate = Math.round((avgDailyRateRow.adr || 0) * 100) / 100;
 
