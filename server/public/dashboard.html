@@ -108,6 +108,33 @@
 </div>
 </div>
 
+<!-- ADR drilldown modal -->
+<div id="adr-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;width:min(600px,95vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.18);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px 16px;border-bottom:1.5px solid var(--gray-border);">
+      <div>
+        <div style="font-size:1.05rem;font-weight:800;">Avg Daily Rate — Breakdown</div>
+        <div id="adr-modal-sub" style="font-size:0.82rem;color:#888;margin-top:2px;"></div>
+      </div>
+      <button onclick="document.getElementById('adr-modal').style.display='none'" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#888;line-height:1;">×</button>
+    </div>
+    <div style="overflow-y:auto;padding:0 24px 20px;">
+      <table style="width:100%;border-collapse:collapse;margin-top:16px;font-size:0.88rem;">
+        <thead>
+          <tr style="border-bottom:2px solid var(--gray-border);text-align:left;">
+            <th style="padding:6px 10px 8px;">Vehicle</th>
+            <th style="padding:6px 10px 8px;">License Plate</th>
+            <th style="padding:6px 10px 8px;text-align:right;">Weekly Rate</th>
+            <th style="padding:6px 10px 8px;text-align:right;">Daily Rate</th>
+          </tr>
+        </thead>
+        <tbody id="adr-table-body"></tbody>
+        <tfoot id="adr-table-foot"></tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
 <script src="js/admin-common.js"></script>
 <script>
 function monthLabel(ym) {
@@ -173,6 +200,37 @@ document.getElementById('customize-btn').addEventListener('click', () => {
 });
 
 applyVisibility();
+
+document.querySelector('[data-card="avg-daily-rate"]').style.cursor = 'pointer';
+document.querySelector('[data-card="avg-daily-rate"]').addEventListener('click', async () => {
+  const modal = document.getElementById('adr-modal');
+  modal.style.display = 'flex';
+  document.getElementById('adr-table-body').innerHTML = '<tr><td colspan="4" style="padding:16px;color:#888;">Loading…</td></tr>';
+  document.getElementById('adr-table-foot').innerHTML = '';
+  document.getElementById('adr-modal-sub').textContent = '';
+  try {
+    const vehicles = await api('/api/vehicles');
+    const rows = vehicles.filter(v => v.weekly_rate && !['sold','totaled','removed'].includes(v.status));
+    rows.sort((a, b) => (b.weekly_rate / 7) - (a.weekly_rate / 7));
+    const totalDaily = rows.reduce((s, v) => s + v.weekly_rate / 7, 0);
+    const avg = rows.length ? totalDaily / rows.length : 0;
+    document.getElementById('adr-modal-sub').textContent = `${rows.length} vehicle${rows.length !== 1 ? 's' : ''} · avg ${fmtMoney(Math.round(avg * 100) / 100)}/day`;
+    document.getElementById('adr-table-body').innerHTML = rows.map(v => `
+      <tr style="border-bottom:1px solid var(--gray-border);">
+        <td style="padding:8px 10px;">${v.year} ${v.make} ${v.model}</td>
+        <td style="padding:8px 10px;color:#888;">${v.license_plate || '—'}</td>
+        <td style="padding:8px 10px;text-align:right;">${fmtMoney(v.weekly_rate)}/wk</td>
+        <td style="padding:8px 10px;text-align:right;font-weight:600;">${fmtMoney(Math.round(v.weekly_rate / 7 * 100) / 100)}/day</td>
+      </tr>`).join('');
+    document.getElementById('adr-table-foot').innerHTML = `
+      <tr style="font-weight:800;border-top:2px solid var(--gray-border);">
+        <td style="padding:10px 10px 4px;" colspan="3">Average Daily Rate</td>
+        <td style="padding:10px 10px 4px;text-align:right;color:var(--green,#2e7d32);">${fmtMoney(Math.round(avg * 100) / 100)}/day</td>
+      </tr>`;
+  } catch (e) {
+    document.getElementById('adr-table-body').innerHTML = `<tr><td colspan="4" style="padding:16px;color:#c00;">${e.message || 'Failed to load'}</td></tr>`;
+  }
+});
 
 (async () => {
   renderSidebar('dashboard');
