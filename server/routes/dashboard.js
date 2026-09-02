@@ -150,6 +150,14 @@ router.get('/summary', requireAuth, (req, res) => {
 
   const activeBookings = db.prepare("SELECT COUNT(*) as c FROM applications WHERE status = 'active' AND stage >= 6").get().c;
 
+  // Average daily rate = average of (weekly_rate / 7) across active fleet vehicles
+  // (excludes sold, totaled, removed). Only includes the base daily rate — no taxes or fees.
+  const avgDailyRateRow = db.prepare(`
+    SELECT AVG(weekly_rate / 7.0) as adr FROM vehicles
+    WHERE status NOT IN ('sold', 'totaled', 'removed') AND weekly_rate IS NOT NULL
+  `).get();
+  const avgDailyRate = Math.round((avgDailyRateRow.adr || 0) * 100) / 100;
+
   const maintenanceCostThisMonth = db.prepare(`
     SELECT COALESCE(SUM(cost), 0) as total FROM vehicle_maintenance
     WHERE strftime('%Y-%m', COALESCE(performed_at, created_at)) = strftime('%Y-%m', 'now')
@@ -222,7 +230,7 @@ router.get('/summary', requireAuth, (req, res) => {
       customers, newCustomersThisMonth,
       activeBookings, pendingBookingsList,
       maintenanceCostThisMonth, maintenanceCostLastMonth,
-      monthlyRevenue,
+      monthlyRevenue, avgDailyRate,
     },
   });
 });

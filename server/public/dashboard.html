@@ -62,6 +62,10 @@
       <div class="stat-card__top"><div class="stat-card__label">Maintenance Cost</div><div class="stat-card__icon icon-orange" id="icon-wrench"></div></div>
       <div class="stat-card__value orange" id="ov-maint-cost">—</div><div class="stat-card__sub" id="ov-maint-sub"></div>
     </div>
+    <div class="stat-card" data-card="avg-daily-rate">
+      <div class="stat-card__top"><div class="stat-card__label">Avg Daily Rate</div><div class="stat-card__icon icon-green" id="icon-adr"></div></div>
+      <div class="stat-card__value green" id="ov-adr">—</div><div class="stat-card__sub">base daily rate, excl. taxes &amp; fees</div>
+    </div>
   </div>
 
   <div class="overview-grid">
@@ -120,6 +124,7 @@ const CARD_LABELS = {
   'customers': 'Customers',
   'active-bookings': 'Active Bookings',
   'maintenance-cost': 'Maintenance Cost',
+  'avg-daily-rate': 'Avg Daily Rate',
 };
 const PREF_KEY = 'dn_dash_hidden_cards';
 
@@ -183,6 +188,7 @@ applyVisibility();
   document.getElementById('icon-users').innerHTML = icon('users');
   document.getElementById('icon-calendar').innerHTML = icon('calendar');
   document.getElementById('icon-wrench').innerHTML = icon('wrench');
+  document.getElementById('icon-adr').innerHTML = icon('dollar');
   document.getElementById('title-trending').insertAdjacentHTML('afterbegin', icon('trending', 16));
   document.getElementById('title-car').insertAdjacentHTML('afterbegin', icon('car', 16));
   document.getElementById('title-alert').insertAdjacentHTML('afterbegin', icon('alert', 16));
@@ -204,6 +210,7 @@ applyVisibility();
   document.getElementById('ov-customers-sub').textContent = `+${ov.newCustomersThisMonth} new this period`;
   document.getElementById('ov-bookings').textContent = ov.activeBookings;
   document.getElementById('ov-maint-cost').textContent = fmtMoney(ov.maintenanceCostThisMonth);
+  document.getElementById('ov-adr').textContent = fmtMoney(ov.avgDailyRate);
   const maintDiff = ov.maintenanceCostThisMonth - ov.maintenanceCostLastMonth;
   document.getElementById('ov-maint-sub').textContent = maintDiff === 0 ? 'same as prev period' : `${maintDiff > 0 ? '+' : ''}${fmtMoney(maintDiff)} vs prev period`;
 
