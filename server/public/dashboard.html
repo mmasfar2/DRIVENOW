@@ -122,9 +122,9 @@
       <table style="width:100%;border-collapse:collapse;margin-top:16px;font-size:0.88rem;">
         <thead>
           <tr style="border-bottom:2px solid var(--gray-border);text-align:left;">
+            <th style="padding:6px 10px 8px;">Renter</th>
             <th style="padding:6px 10px 8px;">Vehicle</th>
             <th style="padding:6px 10px 8px;">License Plate</th>
-            <th style="padding:6px 10px 8px;text-align:right;">Weekly Rate</th>
             <th style="padding:6px 10px 8px;text-align:right;">Daily Rate</th>
           </tr>
         </thead>
@@ -209,23 +209,21 @@ document.querySelector('[data-card="avg-daily-rate"]').addEventListener('click',
   document.getElementById('adr-table-foot').innerHTML = '';
   document.getElementById('adr-modal-sub').textContent = '';
   try {
-    const vehicles = await api('/api/vehicles');
-    const rows = vehicles.filter(v => v.weekly_rate && v.status === 'rented');
-    rows.sort((a, b) => (b.weekly_rate / 7) - (a.weekly_rate / 7));
-    const totalDaily = rows.reduce((s, v) => s + v.weekly_rate / 7, 0);
-    const avg = rows.length ? totalDaily / rows.length : 0;
-    document.getElementById('adr-modal-sub').textContent = `${rows.length} vehicle${rows.length !== 1 ? 's' : ''} · avg ${fmtMoney(Math.round(avg * 100) / 100)}/day`;
-    document.getElementById('adr-table-body').innerHTML = rows.map(v => `
+    const rows = await api('/api/dashboard/adr-breakdown');
+    const totalDaily = rows.reduce((s, r) => s + r.daily_rate, 0);
+    const avg = rows.length ? Math.round(totalDaily / rows.length * 100) / 100 : 0;
+    document.getElementById('adr-modal-sub').textContent = `${rows.length} active renter${rows.length !== 1 ? 's' : ''} · avg ${fmtMoney(avg)}/day`;
+    document.getElementById('adr-table-body').innerHTML = rows.map(r => `
       <tr style="border-bottom:1px solid var(--gray-border);">
-        <td style="padding:8px 10px;">${v.year} ${v.make} ${v.model}</td>
-        <td style="padding:8px 10px;color:#888;">${v.license_plate || '—'}</td>
-        <td style="padding:8px 10px;text-align:right;">${fmtMoney(v.weekly_rate)}/wk</td>
-        <td style="padding:8px 10px;text-align:right;font-weight:600;">${fmtMoney(Math.round(v.weekly_rate / 7 * 100) / 100)}/day</td>
+        <td style="padding:8px 10px;font-weight:600;">${r.name}</td>
+        <td style="padding:8px 10px;">${r.vehicle}</td>
+        <td style="padding:8px 10px;color:#888;">${r.license_plate}</td>
+        <td style="padding:8px 10px;text-align:right;font-weight:600;">${fmtMoney(r.daily_rate)}/day</td>
       </tr>`).join('');
     document.getElementById('adr-table-foot').innerHTML = `
       <tr style="font-weight:800;border-top:2px solid var(--gray-border);">
         <td style="padding:10px 10px 4px;" colspan="3">Average Daily Rate</td>
-        <td style="padding:10px 10px 4px;text-align:right;color:var(--green,#2e7d32);">${fmtMoney(Math.round(avg * 100) / 100)}/day</td>
+        <td style="padding:10px 10px 4px;text-align:right;color:var(--green,#2e7d32);">${fmtMoney(avg)}/day</td>
       </tr>`;
   } catch (e) {
     document.getElementById('adr-table-body').innerHTML = `<tr><td colspan="4" style="padding:16px;color:#c00;">${e.message || 'Failed to load'}</td></tr>`;

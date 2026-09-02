@@ -235,4 +235,36 @@ router.get('/summary', requireAuth, (req, res) => {
   });
 });
 
+router.get('/adr-breakdown', requireAuth, (req, res) => {
+  const rows = db.prepare(`
+    SELECT a.id, a.first_name, a.last_name, a.pickup_scheduled_at, a.rental_end_at,
+           a.invoice_amount, a.weekly_rate as app_weekly_rate,
+           v.year, v.make, v.model, v.license_plate, v.weekly_rate as veh_weekly_rate
+    FROM applications a
+    LEFT JOIN vehicles v ON v.id = a.assigned_vehicle_id
+    WHERE a.status = 'active' AND a.stage >= 6
+      AND v.status = 'rented'
+      AND a.pickup_scheduled_at IS NOT NULL AND a.rental_end_at IS NOT NULL
+  `).all();
+
+  const result = rows.map(r => {
+    const days = Math.round((new Date(r.rental_end_at) - new Date(r.pickup_scheduled_at)) / 86400000);
+    // Use the invoice amount (what they're actually being charged) divided by rental days.
+    // Fall back to the vehicle's weekly rate / 7 if no invoice yet.
+    const weekly = Number(r.app_weekly_rate || r.veh_weekly_rate) || 0;
+    const dailyRate = r.invoice_amount && days > 0
+      ? Math.round(Number(r.invoice_amount) / days * 100) / 100
+      : Math.round(weekly / 7 * 100) / 100;
+    return {
+      name: `${r.first_name} ${r.last_name}`,
+      vehicle: `${r.year} ${r.make} ${r.model}`,
+      license_plate: r.license_plate || '—',
+      daily_rate: dailyRate,
+      days,
+    };
+  }).sort((a, b) => b.daily_rate - a.daily_rate);
+
+  res.json(result);
+});
+
 module.exports = router;
