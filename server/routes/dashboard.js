@@ -238,6 +238,65 @@ router.get('/summary', requireAuth, (req, res) => {
   });
 });
 
+router.get('/revenue-breakdown', requireAuth, (req, res) => {
+  const thisMonthStr = todayStr().slice(0, 7);
+
+  const accruedDays = getAccruedRevenueDays();
+  const forfeitedDeposits = getForfeitedDeposits();
+  const insurancePayouts = db.prepare(`
+    SELECT payout_date as date, insurance_payout as amount, incident_type FROM claims
+    WHERE insurance_payout IS NOT NULL AND payout_date IS NOT NULL
+  `).all();
+  const vehicleSales = db.prepare(`
+    SELECT sale_date as date, sale_amount as amount, year, make, model FROM vehicles
+    WHERE sale_amount IS NOT NULL AND sale_date IS NOT NULL
+  `).all();
+
+  // Group accrued rental revenue by booking
+  const bookingMap = new Map();
+  accruedDays.forEach(d => {
+    if (!d.date || d.date.slice(0, 7) !== thisMonthStr) return;
+    const key = d.application_id;
+    if (!bookingMap.has(key)) bookingMap.set(key, { application_id: key, amount: 0 });
+    bookingMap.get(key).amount = Math.round((bookingMap.get(key).amount + d.amount) * 100) / 100;
+  });
+
+  // Attach customer name to each booking
+  const appIds = [...bookingMap.keys()];
+  const appNames = appIds.length ? db.prepare(`
+    SELECT id, first_name, last_name, assigned_vehicle_id FROM applications WHERE id IN (${appIds.join(',')})
+  `).all() : [];
+  const vehicleNames = db.prepare(`SELECT id, year, make, model FROM vehicles`).all();
+  const vehicleMap = new Map(vehicleNames.map(v => [v.id, `${v.year} ${v.make} ${v.model}`]));
+  const nameMap = new Map(appNames.map(a => [a.id, { name: `${a.first_name} ${a.last_name}`, vehicle: vehicleMap.get(a.assigned_vehicle_id) || '—' }]));
+
+  const rentalRows = [...bookingMap.values()]
+    .map(b => ({
+      type: 'Rental',
+      label: nameMap.get(b.application_id)?.name || `Booking #${b.application_id}`,
+      vehicle: nameMap.get(b.application_id)?.vehicle || '—',
+      amount: b.amount,
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
+  const forfeitedRows = forfeitedDeposits
+    .filter(d => d.date && d.date.slice(0, 7) === thisMonthStr)
+    .map(d => ({ type: 'Forfeited Deposit', label: `Booking #${d.application_id}`, vehicle: '—', amount: Number(d.forfeited_amount) }));
+
+  const payoutRows = insurancePayouts
+    .filter(d => d.date && d.date.slice(0, 7) === thisMonthStr)
+    .map(d => ({ type: 'Insurance Payout', label: d.incident_type || 'Claim', vehicle: '—', amount: Number(d.amount) }));
+
+  const saleRows = vehicleSales
+    .filter(d => d.date && d.date.slice(0, 7) === thisMonthStr)
+    .map(d => ({ type: 'Vehicle Sale', label: `${d.year} ${d.make} ${d.model}`, vehicle: '—', amount: Number(d.amount) }));
+
+  const all = [...rentalRows, ...forfeitedRows, ...payoutRows, ...saleRows];
+  const total = Math.round(all.reduce((s, r) => s + r.amount, 0) * 100) / 100;
+
+  res.json({ month: thisMonthStr, total, rows: all });
+});
+
 router.get('/adr-breakdown', requireAuth, (req, res) => {
   const rows = db.prepare(`
     SELECT a.id, a.first_name, a.last_name, a.pickup_scheduled_at, a.rental_end_at,
