@@ -43,14 +43,20 @@ body { background: var(--gray-light); }
 .ra-charges tr.ra-total td { font-weight: 800; border-top: 2px solid #000; border-bottom: 2px solid #000; }
 
 .ra-terms { counter-reset: term; }
-.ra-term { display: flex; gap: 12px; padding: 5px 0; border-bottom: 1px solid #eee; break-inside: avoid; }
 .ra-term__body { flex: 1; }
 .ra-term__body::before { counter-increment: term; content: counter(term) ". "; font-weight: 800; }
 .ra-term__heading { font-weight: 800; }
-.ra-initial { flex-shrink: 0; width: 64px; text-align: center; font-size: 7pt; color: #555; }
-.ra-initial__box { height: 24px; border: 1px solid #000; margin-bottom: 2px; }
 
-.ra-condition { height: 70px; border: 1px solid #000; margin-top: 6px; }
+.ra-term { padding: 5px 0; border-bottom: 1px solid #eee; break-inside: avoid; }
+.ra-inspect { break-inside: avoid; }
+.ra-inspect__hint { font-size: 8.5pt; color: #444; margin-bottom: 4px; }
+.ra-car { display: block; width: 100%; height: auto; border: 1px solid #000; }
+.ra-inspect__row { display: grid; grid-template-columns: 3in 1fr; gap: 16px; margin-top: 10px; align-items: start; }
+.ra-fuel { display: block; width: 100%; height: auto; }
+.ra-inspect__label { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #444; margin-bottom: 4px; }
+.ra-notes { border: 1px solid #000; padding: 0 8px; }
+.ra-notes div { height: 24px; border-bottom: 1px solid #bbb; }
+.ra-notes div:last-child { border-bottom: none; }
 .ra-sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 18px; }
 .ra-sig-line { border-bottom: 1px solid #000; height: 34px; }
 .ra-sig-label { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #444; margin-top: 3px; margin-bottom: 12px; }
@@ -65,13 +71,11 @@ body { background: var(--gray-light); }
 .ra-tc__list--alpha { list-style-type: lower-alpha; }
 .ra-tc__caps { font-weight: 800; }
 .ra-tc__box { border: 1.5px solid #000; padding: 8px 10px; margin-top: 8px; break-inside: avoid; }
-.ra-tc__initials { display: flex; justify-content: flex-end; gap: 24px; margin-top: 14px; font-size: 8pt; font-weight: 700; text-transform: uppercase; }
-.ra-tc__initials span { display: inline-block; width: 120px; border-bottom: 1px solid #000; margin-left: 6px; }
 .ra-error { max-width: 8.5in; margin: 40px auto; padding: 24px; background: #fff; color: #c62828; }
 
 @media (max-width: 700px) {
   .ra-page { margin: 0; padding: 20px 16px; box-shadow: none; }
-  .ra-grid, .ra-sig-grid { grid-template-columns: 1fr; }
+  .ra-grid, .ra-sig-grid, .ra-inspect__row { grid-template-columns: 1fr; }
   .ra-head { flex-direction: column; }
   .ra-head__doc { text-align: left; }
 }
@@ -158,7 +162,7 @@ body { background: var(--gray-light); }
 
   <p>We cannot use the deposit on file to extend contracts. All our vehicles have GPS trackers to ensure the safety of our vehicles. Queen City Auto Rentals may exercise the right not to extend any vehicle after the contract expires. If the vehicle has to be repossessed or the renter refuses to return the vehicle, the renter's deposit is forfeited and criminal charges may be filed.</p>
 
-  <p>There is a travelling fee of $150 if the customer travels outside of NC or SC. The deposit will be lost automatically if the customer travels without letting us know. ALL CONTRACTS ARE NULL AND VOID AFTER THE RETURN TIME ON THE CONTRACT HAS PASSED.</p>
+  <p>There is a travelling fee of $200 if the customer travels outside of NC or SC. The deposit will be lost automatically if the customer travels without letting us know. ALL CONTRACTS ARE NULL AND VOID AFTER THE RETURN TIME ON THE CONTRACT HAS PASSED.</p>
 
   <p class="ra-tc__caps">DO NOT USE ANY TYPE OF ODOR SUPPRESSANTS, PERFUME, COLOGNE, OR ANY FORM OF DEODORIZERS IN THE VEHICLE! Your deposit will be retained if this policy is violated.</p>
 
@@ -191,7 +195,7 @@ const LESSOR = {
 // Standard security deposit — same amount the Terms and Conditions page states.
 const DEPOSIT_AMOUNT = 200;
 
-// Rules of the Agreement, one per initial box — [heading, text]. Edit the
+// Rules of the Agreement — [heading, text]. Edit the
 // wording here to change every agreement going forward.
 const TERMS = [
   ['Right to Refuse Service', 'Rental service may be refused to anyone when done in the best interest of the renting company or customer. Rates do not include gasoline.'],
@@ -205,8 +209,76 @@ const TERMS = [
   ['No Smoking', 'No smoking in the Vehicle. A $200 fee applies.'],
   ['Gas', 'Renter must replace all gas used during the rental.'],
   ['Tolls, Parking & Tickets', 'Customers are responsible for all tolls and parking/ticket violation expenses.'],
-  ['Travel', 'Travel within North Carolina and South Carolina is permitted. Travelling outside NC or SC carries a $150 travelling fee, and the deposit will be lost if the customer travels without letting us know.'],
+  ['Travel', 'Travel within North Carolina and South Carolina is permitted. Travelling outside NC or SC carries a $200 travelling fee, and the deposit will be lost if the customer travels without letting us know.'],
 ];
+
+// Blank car outline for marking damage by hand at check-out: driver side,
+// top, passenger side, front, and rear. Line art only — prints on any printer.
+const CAR_SIDE = `
+  <path d="M12,78 L12,58 Q14,46 40,43 L98,38 L142,12 Q150,6 165,6 L258,6 Q272,6 284,15 L322,40 L356,45 Q372,49 372,62 L372,78 L330,78 A28,28 0 0 0 274,78 L116,78 A28,28 0 0 0 60,78 Z"/>
+  <path d="M112,38 L148,14 L196,14 L196,38 Z"/>
+  <path d="M204,14 L256,14 Q266,14 274,21 L300,38 L204,38 Z"/>
+  <path d="M200,40 L200,76 M180,48 L190,48 M280,48 L290,48"/>
+  <rect x="358" y="50" width="10" height="7" rx="2"/><rect x="14" y="50" width="8" height="8" rx="2"/>
+  <circle cx="88" cy="80" r="22"/><circle cx="88" cy="80" r="9"/>
+  <circle cx="302" cy="80" r="22"/><circle cx="302" cy="80" r="9"/>`;
+const CAR_TOP = `
+  <rect x="6" y="10" width="368" height="140" rx="38"/>
+  <path d="M238,28 L282,38 L282,122 L238,132 Z"/>
+  <rect x="132" y="30" width="106" height="100" rx="10"/>
+  <path d="M92,38 L132,30 L132,130 L92,122 Z"/>
+  <path d="M300,30 Q330,80 300,130 M60,34 Q42,80 60,126 M185,10 L185,30 M185,130 L185,150"/>
+  <rect x="246" y="1" width="16" height="9" rx="3"/><rect x="246" y="150" width="16" height="9" rx="3"/>`;
+const CAR_FRONT = `
+  <path d="M15,100 L15,70 Q17,58 30,55 L45,22 Q50,14 62,14 L108,14 Q120,14 125,22 L140,55 Q153,58 155,70 L155,100 Z"/>
+  <path d="M50,52 L60,24 L110,24 L120,52 Z"/>
+  <rect x="22" y="64" width="30" height="12" rx="3"/><rect x="118" y="64" width="30" height="12" rx="3"/>
+  <rect x="60" y="68" width="50" height="16" rx="3"/><path d="M15,90 L155,90"/>
+  <rect x="22" y="100" width="26" height="18" rx="3"/><rect x="122" y="100" width="26" height="18" rx="3"/>`;
+const CAR_REAR = `
+  <path d="M15,100 L15,70 Q17,58 30,55 L45,22 Q50,14 62,14 L108,14 Q120,14 125,22 L140,55 Q153,58 155,70 L155,100 Z"/>
+  <path d="M52,50 L62,26 L108,26 L118,50 Z"/>
+  <rect x="20" y="62" width="26" height="14" rx="3"/><rect x="124" y="62" width="26" height="14" rx="3"/>
+  <rect x="65" y="70" width="40" height="14" rx="2"/><path d="M15,90 L155,90"/>
+  <rect x="22" y="100" width="26" height="18" rx="3"/><rect x="122" y="100" width="26" height="18" rx="3"/>`;
+const CAR_DIAGRAM_SVG = `
+<svg class="ra-car" viewBox="0 0 800 450" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Vehicle damage diagram">
+  <g font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#444" letter-spacing="1">
+    <text x="14" y="18">DRIVER SIDE</text>
+    <text x="14" y="148">TOP</text>
+    <text x="14" y="332">PASSENGER SIDE</text>
+    <text x="470" y="22">FRONT</text>
+    <text x="470" y="244">REAR</text>
+  </g>
+  <g fill="none" stroke="#000" stroke-width="1.6" stroke-linejoin="round">
+    <g transform="translate(10,24)">${CAR_SIDE}</g>
+    <g transform="translate(10,154)">${CAR_TOP}</g>
+    <g transform="translate(392,338) scale(-1,1)">${CAR_SIDE}</g>
+    <g transform="translate(500,30) scale(1.4)" stroke-width="1.15">${CAR_FRONT}</g>
+    <g transform="translate(500,252) scale(1.4)" stroke-width="1.15">${CAR_REAR}</g>
+  </g>
+</svg>`;
+
+// Fuel gauge from E to F in 1/8 steps — circle the level by hand at check-out.
+const FUEL_GAUGE_SVG = (() => {
+  const labels = ['E', '1/8', '1/4', '3/8', '1/2', '5/8', '3/4', '7/8', 'F'];
+  const cx = 150, cy = 150;
+  const pt = (r, deg) => [cx + r * Math.cos(deg * Math.PI / 180), cy - r * Math.sin(deg * Math.PI / 180)];
+  const marks = labels.map((label, i) => {
+    const deg = 180 - i * 22.5;
+    const [x1, y1] = pt(92, deg), [x2, y2] = pt(106, deg), [lx, ly] = pt(126, deg);
+    return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"/>`
+      + `<text x="${lx.toFixed(1)}" y="${(ly + 5).toFixed(1)}" text-anchor="middle" stroke="none" fill="#000" font-size="${label.length > 1 ? 14 : 18}" font-weight="700">${label}</text>`;
+  }).join('');
+  return `
+<svg class="ra-fuel" viewBox="0 0 300 165" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Fuel level gauge">
+  <g fill="none" stroke="#000" stroke-width="2" font-family="Arial, sans-serif">
+    <path d="M44,150 A106,106 0 0 1 256,150"/>
+    ${marks}
+    <text x="150" y="140" text-anchor="middle" stroke="none" fill="#444" font-size="13" font-weight="700" letter-spacing="2">FUEL</text>
+  </g>
+</svg>`;
+})();
 
 const id = new URLSearchParams(location.search).get('id');
 const blank = '&nbsp;';
@@ -316,36 +388,28 @@ function render(b, insurance) {
     </div>
 
     <div class="ra-section">
-      <div class="ra-section__title">Rules of the Agreement — Renter initials each</div>
+      <div class="ra-section__title">Rules of the Agreement</div>
       <p style="font-weight:700;margin-bottom:4px;">Failure to comply may result in early return and loss of Deposit.</p>
       <div class="ra-terms">
         ${TERMS.map(([heading, text]) => `
           <div class="ra-term">
             <div class="ra-term__body"><span class="ra-term__heading">${esc(heading)}.</span> ${esc(text)}</div>
-            <div class="ra-initial"><div class="ra-initial__box"></div>Initials</div>
           </div>`).join('')}
       </div>
     </div>
 
-    <div class="ra-section">
-      <div class="ra-section__title">Vehicle Condition at Pickup</div>
-      <div>Existing damage, scratches, dents, or notes (write "None" if none):</div>
-      <div class="ra-condition"></div>
-    </div>
-
-    <div class="ra-section">
-      <div class="ra-section__title">Signatures</div>
-      <p>By signing below, Renter agrees to all terms of this Agreement and acknowledges receiving the Vehicle in the condition noted above.</p>
-      <div class="ra-sig-grid">
+    <div class="ra-section ra-inspect">
+      <div class="ra-section__title">Vehicle Check-Out Inspection</div>
+      <div class="ra-inspect__hint">Mark any existing scratches, dents, chips, or other damage on the diagram (X = dent, / = scratch, O = chip).</div>
+      ${CAR_DIAGRAM_SVG}
+      <div class="ra-inspect__row">
         <div>
-          <div class="ra-sig-line"></div><div class="ra-sig-label">Renter Signature</div>
-          <div class="ra-sig-prefill">${esc(`${b.first_name || ''} ${b.last_name || ''}`.trim())}</div><div class="ra-sig-label">Renter Printed Name</div>
-          <div class="ra-sig-line"></div><div class="ra-sig-label">Date</div>
+          <div class="ra-inspect__label">Fuel Level Out — circle one</div>
+          ${FUEL_GAUGE_SVG}
         </div>
         <div>
-          <div class="ra-sig-line"></div><div class="ra-sig-label">Owner Representative Signature</div>
-          <div class="ra-sig-line"></div><div class="ra-sig-label">Printed Name &amp; Title</div>
-          <div class="ra-sig-line"></div><div class="ra-sig-label">Date</div>
+          <div class="ra-inspect__label">Vehicle Condition Notes at Check-Out</div>
+          <div class="ra-notes"><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
         </div>
       </div>
     </div>
@@ -354,9 +418,14 @@ function render(b, insurance) {
   </div>
   <div class="ra-page ra-page--tc">
     ${document.getElementById('ra-tc').innerHTML}
-    <div class="ra-tc__initials">
-      <div>Renter Initials<span></span></div>
-      <div>Date<span></span></div>
+    <div class="ra-section" style="margin-top:14px;">
+      <div class="ra-section__title">Signature</div>
+      <p>By signing below, Renter agrees to the Rules of the Agreement and all Terms and Conditions above, and acknowledges receiving the Vehicle in the condition and with the fuel level marked on the Vehicle Check-Out Inspection.</p>
+      <div class="ra-sig-grid">
+        <div><div class="ra-sig-line"></div><div class="ra-sig-label">Renter Signature</div></div>
+        <div><div class="ra-sig-line"></div><div class="ra-sig-label">Date</div></div>
+      </div>
+      <div class="ra-sig-prefill" style="max-width:50%;">${esc(`${b.first_name || ''} ${b.last_name || ''}`.trim())}</div><div class="ra-sig-label">Renter Printed Name</div>
     </div>
     <div class="ra-footer">Agreement #${esc(b.id)} · ${esc(LESSOR.name)} · Terms and Conditions</div>
   </div>`;
