@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rental Agreement — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+body { background: var(--gray-light); }
+.ra-toolbar {
+  position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px 16px; background: var(--black); color: #fff;
+}
+.ra-toolbar__title { font-weight: 800; margin-right: auto; }
+.ra-toolbar .btn { border-color: #fff; }
+.ra-toolbar .btn-outline { color: #fff; }
+.ra-toolbar .btn-outline:hover { background: #fff; color: var(--black); }
+.ra-toolbar__hint { width: 100%; font-size: 0.78rem; color: #bbb; }
+.ra-editing .ra-page { outline: 2px dashed #f2b705; outline-offset: 6px; }
+
+.ra-page {
+  max-width: 8.5in; margin: 24px auto; padding: 0.6in 0.7in; background: #fff;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08); font-size: 10.5pt; line-height: 1.45; color: #000;
+}
+.ra-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 16px; }
+.ra-head__biz { font-size: 9.5pt; }
+.ra-head__name { font-size: 18pt; font-weight: 900; letter-spacing: -0.01em; }
+.ra-head__doc { text-align: right; font-size: 9.5pt; }
+.ra-head__doctitle { font-size: 13pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+
+.ra-section { margin-bottom: 14px; break-inside: avoid; }
+.ra-section__title { font-size: 9pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; background: #000; color: #fff; padding: 3px 8px; margin-bottom: 6px; }
+.ra-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+.ra-field { display: flex; gap: 6px; padding: 4px 0; border-bottom: 1px solid #ccc; min-height: 26px; align-items: baseline; }
+.ra-field__label { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #444; white-space: nowrap; }
+.ra-field__val { flex: 1; text-align: right; }
+.ra-field--wide { grid-column: 1 / -1; }
+
+.ra-charges { display: table !important; width: 100% !important; white-space: normal !important; border-collapse: collapse; }
+.ra-charges td { padding: 4px 0; border-bottom: 1px solid #ccc; }
+.ra-charges td:last-child { text-align: right; white-space: nowrap; }
+.ra-charges tr.ra-total td { font-weight: 800; border-top: 2px solid #000; border-bottom: 2px solid #000; }
+
+.ra-terms { counter-reset: term; }
+.ra-term { display: flex; gap: 12px; padding: 5px 0; border-bottom: 1px solid #eee; break-inside: avoid; }
+.ra-term__body { flex: 1; }
+.ra-term__body::before { counter-increment: term; content: counter(term) ". "; font-weight: 800; }
+.ra-term__heading { font-weight: 800; }
+.ra-initial { flex-shrink: 0; width: 64px; text-align: center; font-size: 7pt; color: #555; }
+.ra-initial__box { height: 24px; border: 1px solid #000; margin-bottom: 2px; }
+
+.ra-condition { height: 70px; border: 1px solid #000; margin-top: 6px; }
+.ra-sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 18px; }
+.ra-sig-line { border-bottom: 1px solid #000; height: 34px; }
+.ra-sig-label { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #444; margin-top: 3px; margin-bottom: 12px; }
+.ra-sig-prefill { height: 34px; display: flex; align-items: flex-end; padding-bottom: 2px; border-bottom: 1px solid #000; }
+.ra-footer { margin-top: 18px; font-size: 8pt; color: #555; text-align: center; }
+.ra-page--tc { font-size: 8.5pt; line-height: 1.4; }
+.ra-page--tc p { margin-bottom: 6px; text-align: justify; }
+.ra-tc__title { font-size: 12pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.04em; text-align: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 8px; }
+.ra-tc__intro { font-style: italic; }
+.ra-tc__list { margin: 0 0 6px 22px; }
+.ra-tc__list li { margin-bottom: 1px; }
+.ra-tc__list--alpha { list-style-type: lower-alpha; }
+.ra-tc__caps { font-weight: 800; }
+.ra-tc__box { border: 1.5px solid #000; padding: 8px 10px; margin-top: 8px; break-inside: avoid; }
+.ra-tc__initials { display: flex; justify-content: flex-end; gap: 24px; margin-top: 14px; font-size: 8pt; font-weight: 700; text-transform: uppercase; }
+.ra-tc__initials span { display: inline-block; width: 120px; border-bottom: 1px solid #000; margin-left: 6px; }
+.ra-error { max-width: 8.5in; margin: 40px auto; padding: 24px; background: #fff; color: #c62828; }
+
+@media (max-width: 700px) {
+  .ra-page { margin: 0; padding: 20px 16px; box-shadow: none; }
+  .ra-grid, .ra-sig-grid { grid-template-columns: 1fr; }
+  .ra-head { flex-direction: column; }
+  .ra-head__doc { text-align: left; }
+}
+
+@page { size: letter; margin: 0.5in; }
+@media print {
+  body { background: #fff; }
+  .ra-toolbar { display: none; }
+  .ra-page { margin: 0; padding: 0 6px 0 0; max-width: none; box-shadow: none; outline: none !important; }
+  .ra-page--tc { break-before: page; }
+  .ra-section__title { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+</head>
+<body>
+<div class="ra-toolbar">
+  <div class="ra-toolbar__title">Rental Agreement</div>
+  <a class="btn btn-sm btn-outline" id="ra-back" href="reservations.html">Back to Reservation</a>
+  <button class="btn btn-sm btn-outline" id="ra-edit">Edit Before Printing</button>
+  <button class="btn btn-sm" onclick="window.print()">Print</button>
+  <div class="ra-toolbar__hint" id="ra-edit-hint" style="display:none;">Click anywhere on the agreement to change wording. Edits only apply to this printout — reloading the page restores the standard text.</div>
+</div>
+
+<div id="ra-root"></div>
+
+<!-- Terms and Conditions, printed on its own page after the agreement.
+     Plain HTML — edit the wording here to change every agreement. -->
+<template id="ra-tc">
+  <div class="ra-tc__title">Rental Agreement — Terms and Conditions</div>
+  <p class="ra-tc__intro">Rentor hereby rents to the Rentee identified on page 1 the vehicle described, subject to all the terms and provisions of this Agreement.</p>
+
+  <p><strong>1. DRIVERS.</strong> In no event shall the Vehicle be used, operated or driven by any person other than the Rentee or qualified licensed drivers at least 21 years of age who have Rentor's advance permission to use the Vehicle and whose names appear as additional drivers on Page 1 hereof.</p>
+
+  <p><strong>2. PROHIBITED USE.</strong> The Vehicle shall not be used:</p>
+  <ol class="ra-tc__list">
+    <li>for the transportation of persons for compensation;</li>
+    <li>in any race, test, or competitive event;</li>
+    <li>outside the United States without first obtaining Rentor's written permission;</li>
+    <li>by any person not specified in Paragraph 1 above;</li>
+    <li>in violation of any federal, state, or local laws;</li>
+    <li>while under the influence of intoxicants or drugs;</li>
+    <li>to push or tow;</li>
+    <li>to leave the keys in or not to properly lock up or secure the Vehicle (excluding valet parking);</li>
+    <li>if further use of the Vehicle would cause damage (i.e. warning light on, flat tire, steam rising from engine);</li>
+    <li>to carry hazardous or explosive substances;</li>
+    <li>to transport a total Vehicle and payload weight in excess of the gross Vehicle weight as specified on the Vehicle, but the Vehicle payload weight shall not exceed that which is specified on Page 1 hereof;</li>
+    <li>to drive in or through a structure where there is insufficient clearance, whether of height or width, or off regularly maintained roadways;</li>
+    <li>to drive the Vehicle if cargo is improperly secured or not secured.</li>
+  </ol>
+  <p>IN NO EVENT SHALL RENTEE SUBRENT OR RELEASE THE VEHICLE TO ANOTHER PERSON OR CORPORATION. If the Vehicle is obtained from Rentor by fraud or misrepresentation or is obtained or used in furtherance of an illegal purpose, all use of the Vehicle is WITHOUT RENTOR'S PERMISSION. The foregoing conditions are cumulative and each of them shall apply to every use, operation or driving of the Vehicle.</p>
+
+  <p><strong>3. RETURN OF VEHICLE.</strong> This Agreement is one of rental only. The Vehicle is the property of the Rentor and shall be returned to the Rentor's address or at a place designated by Rentor and on the date shown on Page 1 or earlier if demanded, together with all tires, tools, accessories, and equipment in the same condition as when received, ordinary wear and tear excepted. Failure to return the Vehicle to the place and on the date as set forth in this Agreement will terminate the Rentor's permission for the Rentee to use the Vehicle and thus will terminate the extension of all insurance coverage herein provided. If the rented Vehicle is returned to Rentor at any place other than that listed herein, Rentee agrees to pay all expenses incurred by Rentor to have the Vehicle returned. Rentor, or any of its agents or employees, may peacefully repossess the Vehicle without demand wherever found and terminate this Rental Agreement if the Vehicle is illegally parked, is used in violation of law or in violation of this Agreement, or was abandoned. Rentor shall not in any way be liable to Rentee for damages resulting from such repossession, nor shall it be responsible for the loss of or damage to any property of Rentee contained therein.</p>
+
+  <p><strong>4. AMOUNTS DUE RENTOR.</strong> Rentee shall pay Rentor on demand: (a) all time and mileage charges as computed on Page 1 of this Agreement, with mileage determined by reading the Vehicle odometer or hubodometer. Rentee shall NOT detach the odometer or hubodometer and shall pay for its repair or replacement if any seal has been broken, along with a mileage charge adjustment to the average charge developed from Rentor's experience; (b) basic or minimum rate, service and other charges shown on Page 1 hereof; (c) a refueling charge if the Vehicle is returned with less fuel than when rented and, as indicated on Page 1 hereof, the rate does not include fuel; (d) all state, sales, use, excise or other tax charges on Page 1 hereof, by Rentor as reimbursement for taxes paid. Rentee is responsible for fuel, weight, and road use permits; (e) all fines, fines for toll violations/evasions, penalties, forfeitures, citations, impound fees, towing and storage, court costs and out-of-pocket expenses, plus any other cost incurred by Rentor with respect to Rentee's use of the Vehicle, including parking, traffic, or other violations assessed against Rentor, the Vehicle, or Rentee, unless due to Rentor's fault; (f) Rentor's costs and expenses, including reasonable attorney fees (unless prohibited by law), incurred in collecting any payments due hereunder or in repossessing the Vehicle; (g) Rentor's costs and expenses resulting from loss of or damage to the Vehicle while on rental, whether or not due to Rentee's fault; (h) Rentee gives Rentor permission (direct, express consent, clear, definite and unequivocal) to contact Rentee using any existing technology (or as otherwise provided or limited by applicable law).</p>
+
+  <p><strong>5. VEHICLE INSURANCE.</strong> Rentor provides liability coverage for persons using the Vehicle with the permission of the Rentor, as provided for in Paragraph 1 hereof (and not otherwise), in accordance with the provisions of an automobile liability insurance policy with limits equal to the minimum requirements of any applicable state financial responsibility law or other similar law or statute. All coverages afforded under this Agreement are applicable only after all other valid and collectible insurance (whether primary, excess or contingent) has been paid and exhausted to the full limits of all such policies. Unless required by law, the policy does not include No-Fault, Supplemental No-Fault, Uninsured/Underinsured Motorists coverage or other optional coverages, and Rentee hereby rejects such coverage to the extent permitted by law. Where such coverages are required by law, they are provided at the minimum required limits.</p>
+  <p><strong>VEHICLE INSURANCE FOR MICHIGAN:</strong> If there is no violation of the contract, the Rentee and any authorized driver will be provided with liability insurance which is limited to the minimum financial responsibility limits required in the state. For the state of Michigan these limits are $20,000 Per Person Bodily Injury / $40,000 Per Accident Bodily Injury / $10,000 Per Accident Property Damage. Such insurance shall be excess over any and all other collectible insurance. Rentee waives uninsured and underinsured motorists, no-fault and all other optional coverages, but if such coverage cannot be excluded or waived, Rentee agrees such coverage shall be limited to the minimum requirements of the state.</p>
+  <p>RENTOR'S POLICY SHALL NOT PAY:</p>
+  <ol class="ra-tc__list">
+    <li>any obligation for which the Rentee or any driver of the Vehicle or the employer of either or any insurance carrier may be held liable under any Worker's Compensation or disability benefits or similar law;</li>
+    <li>any obligation assumed by the Rentee or any driver under any express or implied contract;</li>
+    <li>any liability of Rentee or any driver, or employer of either, arising while the Vehicle is being used in violation of the terms and provisions of this Agreement;</li>
+    <li>unless otherwise required by law, medical payments required by persons sustaining injuries while riding in, alighting from, or getting into or on the Vehicle;</li>
+    <li>Rentee warrants that any personal insurance policy relied upon for this rental is valid for the full rental period, including any extensions, and that any limitations on that coverage (including duration limits) have been disclosed to Rentor prior to signing. If Rentee's insurer denies a claim related to this rental for any reason, Rentee is personally liable for the uncovered amount, per Sections 4(g) and 6 of this Agreement.</li>
+  </ol>
+
+  <p><strong>6. INDEMNITY.</strong> Rentee releases and holds Rentor, its agents and employees, harmless from all claims for loss of or damage to any property of Rentee or any other person left in, on, or about the Vehicle, either before or after its return to the Rentor or on Rentor's premises, without regard to any negligence by Rentor or any of its agents or employees. Rentee shall defend, indemnify and hold harmless Rentor from and against any and all losses, liabilities, damages, injuries, claims, demands, costs and expenses arising out of the use or possession of the Vehicle, including but not limited to any and all fines, penalties, and forfeitures imposed under any Federal, State, Municipal, or other statute, law, ordinance, rule, regulation, or insurance policy provision, and, to the extent not covered by insurance, any claims of, or liabilities to, third persons arising out of the abandonment, conversion, secretion, concealment, or unauthorized sale of the Vehicle by Rentee or its drivers, agents or employees, or the confiscation of the Vehicle by any governmental authority for illegal or improper use of the Vehicle. Additionally, Rentee shall indemnify and hold Rentor harmless for all loss, liability and expense in excess of the limits of liability provided for herein as a result of bodily injury, death, or property damage arising out of the use or operation of the Vehicle.</p>
+
+  <p><strong>7. NO AGENCY.</strong> Neither Rentee nor any other driver of the Vehicle shall be or is deemed to be the agent, servant, or employee of the Rentor for any reason or for any purpose. During the term of this Agreement, Rentee shall completely assume full responsibility for the Vehicle to the public and any regulatory body having jurisdiction.</p>
+
+  <p><strong>8. REPAIRS.</strong> Rentee shall not permit any repairs to the Vehicle or suffer any lien to be placed upon it without Rentor's consent. Rentee shall be liable for any such repairs.</p>
+
+  <p><strong>9. ACCIDENTS.</strong> Rentee shall immediately report any accident to Rentor and deliver to Rentor or its insurer every process, pleading, notice, or paper of any kind received by Rentee or any driver of the Vehicle relating to any claim, suit or proceeding connected with any accident or event involving the Vehicle. Neither Rentee nor any driver of the Vehicle shall aid or abet the assertion of any such claim, suit or proceeding, and each shall cooperate fully with Rentor and its insurer in investigating and defending the same.</p>
+
+  <p><strong>10. CREDIT CHARGES.</strong> In the event Rentee directs Rentor to bill charges hereunder to any other person or organization, such person or organization and Rentee shall be jointly and severally liable for all such charges.</p>
+
+  <p><strong>11. PAYMENT.</strong> Failure to pay by 12:00 PM can result in the card on file being charged.</p>
+
+  <p class="ra-tc__caps">RENTEE EXPRESSLY AUTHORIZES RENTOR TO PROCESS A CREDIT CARD VOUCHER, IF ANY, IN HIS OR HER NAME FOR CHARGES MADE HEREUNDER.</p>
+
+  <p>Renter and additional driver hereby confirm that they are aware that, according to our laws, this motor vehicle only has to be insured against liability towards third parties. The deposit amount when renting is USD $200.00. The third-party liability insurance does not cover any damages sustained by the renter or occupants personally. Renter or additional driver shall, however, be fully liable for all damages of any nature if the vehicle described herein is operated in violation of any of the provisions of this rental agreement.</p>
+
+  <p>All vehicles must be extended by 12 noon on the day that the contract expires, or the vehicle must be returned by 12 noon on the day the contract ends. If you are late extending (making payment on) the rental vehicle, you will be charged a $35 late fee plus the full amount to extend the rental. If we do not hear from the customer, the debit/credit card on file will be charged the total amount due.</p>
+
+  <p>We cannot use the deposit on file to extend contracts. All our vehicles have GPS trackers to ensure the safety of our vehicles. Queen City Auto Rentals may exercise the right not to extend any vehicle after the contract expires. If the vehicle has to be repossessed or the renter refuses to return the vehicle, the renter's deposit is forfeited and criminal charges may be filed.</p>
+
+  <p>There is a travelling fee of $150 if the customer travels outside of NC or SC. The deposit will be lost automatically if the customer travels without letting us know. ALL CONTRACTS ARE NULL AND VOID AFTER THE RETURN TIME ON THE CONTRACT HAS PASSED.</p>
+
+  <p class="ra-tc__caps">DO NOT USE ANY TYPE OF ODOR SUPPRESSANTS, PERFUME, COLOGNE, OR ANY FORM OF DEODORIZERS IN THE VEHICLE! Your deposit will be retained if this policy is violated.</p>
+
+  <div class="ra-tc__box">
+    <p><strong>WHAT TO DO IN THE CASE OF AN ACCIDENT</strong></p>
+    <ol class="ra-tc__list ra-tc__list--alpha">
+      <li>If possible, call the rental car company immediately.</li>
+      <li>Call the police immediately, as you must have a police report for proof of loss.</li>
+      <li>If the damage occurs on private property and the police do not come to the scene, you must immediately go to the nearest police station and make a police report.</li>
+    </ol>
+    <p>If an accident occurs and a driver other than the person on the rental agreement was involved, the insurance company of the driver on the rental agreement is responsible for any and all damages.</p>
+    <p><strong>ROADSIDE ASSISTANCE — 24 Hour Hotline: (888) 628-5095</strong></p>
+  </div>
+</template>
+
+<script src="js/admin-common.js"></script>
+<script>
+// Lessor details printed in the agreement header. Each can still be
+// overridden with the window.DRIVENOW_BUSINESS_* values the public site's
+// js/config.js reads (set in an inline <script> above admin-common.js).
+const LESSOR = {
+  name: window.DRIVENOW_BUSINESS_NAME || 'QueenCity Auto-Rentals',
+  legalName: window.DRIVENOW_BUSINESS_LEGAL_NAME || '',
+  address: window.DRIVENOW_BUSINESS_ADDRESS || '3765 E Independence Blvd',
+  city: window.DRIVENOW_BUSINESS_CITY || 'Charlotte, NC',
+  phone: window.DRIVENOW_BUSINESS_PHONE_DISPLAY || '(704) 595-7070',
+  email: window.DRIVENOW_BUSINESS_EMAIL || '',
+};
+
+// Standard security deposit — same amount the Terms and Conditions page states.
+const DEPOSIT_AMOUNT = 200;
+
+// Rules of the Agreement, one per initial box — [heading, text]. Edit the
+// wording here to change every agreement going forward.
+const TERMS = [
+  ['Right to Refuse Service', 'Rental service may be refused to anyone when done in the best interest of the renting company or customer. Rates do not include gasoline.'],
+  ['Security Deposit', 'The deposit will be retained if any of the following rules are not adhered to while renting the Vehicle.'],
+  ['Accidents', 'If the Vehicle is involved in an accident at any point during the rental period, the deposit is retained and the Vehicle will be repossessed immediately.'],
+  ['Insurance', 'The Customer\'s personal policy is the primary insurance used in case of an accident. Renter is responsible for deductible repairs.'],
+  ['Suspended or Revoked License', 'If Renter\'s driver\'s license is found to be suspended or revoked at any point during the rental period, Renter will be responsible for any damages or any fees involved with the Vehicle.'],
+  ['Return Time / Payment', 'Return time and payment are due by 12:00 PM. Failure to return or pay on time may result in a late fee or loss of deposit.'],
+  ['Unauthorized Drivers', 'Drivers who are not on this contract are not permitted to drive the Vehicle.'],
+  ['Excessive Wear & Tear', 'Renter is responsible for excessive wear and tear on the Vehicle.'],
+  ['No Smoking', 'No smoking in the Vehicle. A $200 fee applies.'],
+  ['Gas', 'Renter must replace all gas used during the rental.'],
+  ['Tolls, Parking & Tickets', 'Customers are responsible for all tolls and parking/ticket violation expenses.'],
+  ['Travel', 'Travel within North Carolina and South Carolina is permitted. Travelling outside NC or SC carries a $150 travelling fee, and the deposit will be lost if the customer travels without letting us know.'],
+];
+
+const id = new URLSearchParams(location.search).get('id');
+const blank = '&nbsp;';
+
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function val(v) { return v === null || v === undefined || v === '' ? blank : esc(v); }
+function field(label, v, cls = '') {
+  return `<div class="ra-field ${cls}"><span class="ra-field__label">${label}</span><span class="ra-field__val">${val(v)}</span></div>`;
+}
+function fmtPhone(p) {
+  const d = String(p || '').replace(/\D/g, '');
+  return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : p;
+}
+function chargeRow(label, amount) {
+  return `<tr><td>${label}</td><td>${fmtExact(amount)}</td></tr>`;
+}
+
+function render(b, insurance) {
+  const days = b.pickup_scheduled_at && b.rental_end_at
+    ? Math.round((new Date(b.rental_end_at) - new Date(b.pickup_scheduled_at)) / 86400000)
+    : null;
+  const vehicle = b.make ? `${b.year} ${b.make} ${b.model}` : '';
+  const cityLine = [b.city, b.state].filter(Boolean).join(', ') + (b.zip_code ? ` ${b.zip_code}` : '');
+  const email = displayEmail(b.email) === 'No email on file' ? '' : b.email;
+  const privateIns = insurance.find(r => r.type === 'private') || {};
+
+  const charges = [];
+  if (b.weekly_rate) charges.push(chargeRow('Weekly rental rate', b.weekly_rate));
+  if (Number(b.admin_fee_rate)) charges.push(chargeRow('Admin fee (per day)', b.admin_fee_rate));
+  if (Number(b.insurance_fee_rate)) charges.push(chargeRow('Insurance fee (per day)', b.insurance_fee_rate));
+  if (Number(b.travel_fee)) charges.push(chargeRow('Delivery / travel fee', b.travel_fee));
+  if (Number(b.processing_fee)) charges.push(chargeRow('Processing fee', b.processing_fee));
+  if (Number(b.misc_fee)) charges.push(chargeRow('Miscellaneous', b.misc_fee));
+  if (Number(b.toll_fee)) charges.push(chargeRow('Tolls', b.toll_fee));
+  if (Number(b.discount)) charges.push(chargeRow('Discount', -b.discount));
+
+  const lessorLines = [LESSOR.legalName, LESSOR.address, LESSOR.city, LESSOR.phone, LESSOR.email].filter(Boolean).map(esc);
+
+  document.getElementById('ra-root').innerHTML = `
+  <div class="ra-page" id="ra-page">
+    <div class="ra-head">
+      <div class="ra-head__biz">
+        <div class="ra-head__name">${esc(LESSOR.name)}</div>
+        ${lessorLines.join('<br>') || 'Address: ______________________________<br>Phone: ________________'}
+      </div>
+      <div class="ra-head__doc">
+        <div class="ra-head__doctitle">Vehicle Rental Agreement</div>
+        Agreement #${esc(b.id)}<br>
+        Date: ${fmtDateOnly(todayStr())}
+      </div>
+    </div>
+
+    <p style="margin-bottom:14px;">This Vehicle Rental Agreement ("Agreement") is made between <strong>${esc(LESSOR.legalName || LESSOR.name)}</strong> ("Owner") and the renter named below ("Renter") for the rental of the vehicle described below ("Vehicle").</p>
+
+    <div class="ra-section">
+      <div class="ra-section__title">Renter</div>
+      <div class="ra-grid">
+        ${field('Name', `${b.first_name || ''} ${b.last_name || ''}`.trim())}
+        ${field('Date of Birth', b.dob ? fmtDateOnly(b.dob) : '')}
+        ${field('Address', b.address, 'ra-field--wide')}
+        ${field('City / State / ZIP', cityLine.trim())}
+        ${field('Phone', fmtPhone(b.phone))}
+        ${field('Email', email)}
+        ${field('Driver\'s License #', b.license_number)}
+        ${field('Insurance Carrier', privateIns.carrier)}
+        ${field('Policy #', privateIns.policy_number)}
+        ${field('Additional Driver(s)', '', 'ra-field--wide')}
+      </div>
+    </div>
+
+    <div class="ra-section">
+      <div class="ra-section__title">Vehicle</div>
+      <div class="ra-grid">
+        ${field('Year / Make / Model', vehicle)}
+        ${field('Color', b.color)}
+        ${field('VIN', b.vin)}
+        ${field('License Plate', b.license_plate)}
+        ${field('Odometer Out', b.odometer_out != null ? Number(b.odometer_out).toLocaleString() : '')}
+        ${field('Fuel Level Out', b.gas_level_out != null ? `${b.gas_level_out}%` : '')}
+        ${field('Odometer In', b.odometer_in != null ? Number(b.odometer_in).toLocaleString() : '')}
+        ${field('Fuel Level In', b.gas_level_in != null ? `${b.gas_level_in}%` : '')}
+      </div>
+    </div>
+
+    <div class="ra-section">
+      <div class="ra-section__title">Rental Period</div>
+      <div class="ra-grid">
+        ${field('Pickup Date', b.pickup_scheduled_at ? fmtDateOnly(b.pickup_scheduled_at) : '')}
+        ${field('Return Date', b.rental_end_at ? fmtDateOnly(b.rental_end_at) : '')}
+        ${field('Pickup Location', b.pickup_location)}
+        ${field('Return Location', b.dropoff_location)}
+        ${field('Rental Length', days > 0 ? `${days} day${days === 1 ? '' : 's'}` : '')}
+      </div>
+    </div>
+
+    <div class="ra-section">
+      <div class="ra-section__title">Charges</div>
+      <table class="ra-charges">
+        ${charges.join('')}
+        <tr class="ra-total"><td>Total Rental Charges${b.invoice_amount ? '' : ' (incl. taxes)'}</td><td>${b.charge ? fmtExact(b.charge) : blank}</td></tr>
+        <tr><td>Security Deposit (refundable)</td><td>${fmtExact(DEPOSIT_AMOUNT)}</td></tr>
+        <tr><td>Paid to Date</td><td>${fmtExact(b.paid_total)}</td></tr>
+        <tr><td><strong>Balance Due</strong></td><td><strong>${fmtExact(Math.max(0, b.owed || 0))}</strong></td></tr>
+      </table>
+    </div>
+
+    <div class="ra-section">
+      <div class="ra-section__title">Rules of the Agreement — Renter initials each</div>
+      <p style="font-weight:700;margin-bottom:4px;">Failure to comply may result in early return and loss of Deposit.</p>
+      <div class="ra-terms">
+        ${TERMS.map(([heading, text]) => `
+          <div class="ra-term">
+            <div class="ra-term__body"><span class="ra-term__heading">${esc(heading)}.</span> ${esc(text)}</div>
+            <div class="ra-initial"><div class="ra-initial__box"></div>Initials</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="ra-section">
+      <div class="ra-section__title">Vehicle Condition at Pickup</div>
+      <div>Existing damage, scratches, dents, or notes (write "None" if none):</div>
+      <div class="ra-condition"></div>
+    </div>
+
+    <div class="ra-section">
+      <div class="ra-section__title">Signatures</div>
+      <p>By signing below, Renter agrees to all terms of this Agreement and acknowledges receiving the Vehicle in the condition noted above.</p>
+      <div class="ra-sig-grid">
+        <div>
+          <div class="ra-sig-line"></div><div class="ra-sig-label">Renter Signature</div>
+          <div class="ra-sig-prefill">${esc(`${b.first_name || ''} ${b.last_name || ''}`.trim())}</div><div class="ra-sig-label">Renter Printed Name</div>
+          <div class="ra-sig-line"></div><div class="ra-sig-label">Date</div>
+        </div>
+        <div>
+          <div class="ra-sig-line"></div><div class="ra-sig-label">Owner Representative Signature</div>
+          <div class="ra-sig-line"></div><div class="ra-sig-label">Printed Name &amp; Title</div>
+          <div class="ra-sig-line"></div><div class="ra-sig-label">Date</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ra-footer">Agreement #${esc(b.id)} · ${esc(LESSOR.name)} · Renter received a copy: ________</div>
+  </div>
+  <div class="ra-page ra-page--tc">
+    ${document.getElementById('ra-tc').innerHTML}
+    <div class="ra-tc__initials">
+      <div>Renter Initials<span></span></div>
+      <div>Date<span></span></div>
+    </div>
+    <div class="ra-footer">Agreement #${esc(b.id)} · ${esc(LESSOR.name)} · Terms and Conditions</div>
+  </div>`;
+}
+
+document.getElementById('ra-edit').addEventListener('click', (e) => {
+  const pages = document.querySelectorAll('.ra-page');
+  if (!pages.length) return;
+  const on = pages[0].contentEditable !== 'true';
+  pages.forEach(p => { p.contentEditable = on ? 'true' : 'false'; });
+  document.body.classList.toggle('ra-editing', on);
+  document.getElementById('ra-edit-hint').style.display = on ? '' : 'none';
+  e.target.textContent = on ? 'Done Editing' : 'Edit Before Printing';
+});
+
+(async () => {
+  if (!(await requireLogin())) return;
+  const root = document.getElementById('ra-root');
+  if (!id) { root.innerHTML = '<div class="ra-error">No reservation selected.</div>'; return; }
+  document.getElementById('ra-back').href = `reservation-detail.html?id=${encodeURIComponent(id)}`;
+  try {
+    const b = await api(`/api/applications/${id}/detail`);
+    const insurance = b.customer_id ? await api(`/api/insurance/by-customer-id/${b.customer_id}`).catch(() => []) : [];
+    document.title = `Rental Agreement #${b.id} — ${b.first_name} ${b.last_name}`;
+    render(b, insurance);
+    if (new URLSearchParams(location.search).get('print') === '1') setTimeout(() => window.print(), 300);
+  } catch (err) {
+    root.innerHTML = `<div class="ra-error">Couldn't load this reservation: ${esc(err.message)}</div>`;
+  }
+})();
+</script>
+</body>
+</html>

@@ -75,6 +75,7 @@
     </div>
     <div style="display:flex;align-items:center;gap:12px;">
       <span class="badge" id="rd-status-badge"></span>
+      <a class="btn btn-sm" id="rd-create-agreement" target="_blank">Create Agreement</a>
     </div>
   </div>
 
@@ -398,6 +399,7 @@
 <script src="js/admin-common.js"></script>
 <script>
 const id = new URLSearchParams(window.location.search).get('id');
+document.getElementById('rd-create-agreement').href = `rental-agreement.html?id=${encodeURIComponent(id)}`;
 const HIGHWAY_TAX_RATE = 0.08;
 const SALES_TAX_RATE = 0.0725;
 const DEFAULT_CARD_FEE_RATE = 3; // % — editable per payment in the Add Payment modal
