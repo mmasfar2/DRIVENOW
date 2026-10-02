@@ -87,35 +87,33 @@ body { background: var(--gray-light); }
 
 <script src="js/admin-common.js"></script>
 <script>
-// Lessor details printed in the agreement header. Same window.DRIVENOW_BUSINESS_*
-// overrides the public site's js/config.js reads — set them in an inline
-// <script> above admin-common.js to brand a real deployment. Anything left
-// unset prints as a blank line to fill in by hand, never as placeholder text
-// on a document someone is signing.
+// Lessor details printed in the agreement header. Each can still be
+// overridden with the window.DRIVENOW_BUSINESS_* values the public site's
+// js/config.js reads (set in an inline <script> above admin-common.js).
 const LESSOR = {
-  name: window.DRIVENOW_BUSINESS_NAME || 'DriveNow',
+  name: window.DRIVENOW_BUSINESS_NAME || 'QueenCity Auto-Rentals',
   legalName: window.DRIVENOW_BUSINESS_LEGAL_NAME || '',
-  address: window.DRIVENOW_BUSINESS_ADDRESS || '',
-  city: window.DRIVENOW_BUSINESS_CITY || '',
-  phone: window.DRIVENOW_BUSINESS_PHONE_DISPLAY || '',
+  address: window.DRIVENOW_BUSINESS_ADDRESS || '3765 E Independence Blvd',
+  city: window.DRIVENOW_BUSINESS_CITY || 'Charlotte, NC',
+  phone: window.DRIVENOW_BUSINESS_PHONE_DISPLAY || '(704) 595-7070',
   email: window.DRIVENOW_BUSINESS_EMAIL || '',
 };
 
-// Standard terms, one per initial box. Edit the wording here to change every
-// agreement going forward — have it reviewed by an attorney licensed in your
-// state before relying on it.
+// Rules of the Agreement, one per initial box — [heading, text]. Edit the
+// wording here to change every agreement going forward.
 const TERMS = [
-  ['Authorized Driver', 'Only the Renter named above may operate the Vehicle. Renter must hold a valid driver\'s license at all times during the rental. Allowing any other person to drive the Vehicle is a material breach of this Agreement.'],
-  ['Permitted Use', 'The Vehicle may be used for personal use and for rideshare or delivery work (e.g. Uber, Lyft, DoorDash). The Vehicle may not be used for any illegal purpose, racing, towing, off-road driving, or while the driver is under the influence of alcohol or drugs, and may not be taken out of the state without the Owner\'s written permission.'],
-  ['Rental Payments', 'Renter agrees to pay the rental rate and fees listed above, in advance, on the schedule agreed with the Owner. Payments not received when due may result in a late fee and/or the Owner recovering the Vehicle without further notice.'],
-  ['Security Deposit', 'The security deposit listed above is held for the length of the rental and may be applied to unpaid rent, fees, tolls, tickets, cleaning, fuel, or damage. Any remaining balance is returned after the Vehicle is returned and inspected.'],
-  ['Insurance', 'Renter must keep the insurance coverage required by the Owner in effect for the entire rental and provide proof on request. Renter is responsible for any deductible and for any loss not covered by insurance.'],
-  ['Accidents, Damage & Theft', 'Renter must report any accident, damage, or theft to the Owner and, where required, to the police immediately. Renter is responsible for damage to the Vehicle, and for loss of use while it is being repaired, to the extent not covered by insurance.'],
-  ['Tickets, Tolls & Fines', 'Renter is responsible for all parking tickets, traffic violations, toll charges, and impound or towing fees incurred during the rental, plus any administrative fee the Owner incurs to process them.'],
-  ['Maintenance & Care', 'Renter will keep the Vehicle clean, check fluid levels, and bring the Vehicle in for scheduled maintenance when requested. Renter will not modify the Vehicle. Smoking and vaping in the Vehicle are prohibited and will result in a cleaning fee.'],
-  ['Fuel & Mileage', 'The Vehicle must be returned with the same fuel level recorded at pickup or Renter will be charged for the difference.'],
-  ['Return of Vehicle', 'Renter will return the Vehicle on the return date above, in the same condition as received apart from normal wear. The Owner may end this Agreement and recover the Vehicle at any time if Renter breaches any term of this Agreement.'],
-  ['Entire Agreement', 'This document is the entire agreement between Renter and Owner. Renter confirms they have read and understand every term, have received a copy, and accept the Vehicle in the condition noted.'],
+  ['Right to Refuse Service', 'Rental service may be refused to anyone when done in the best interest of the renting company or customer. Rates do not include gasoline.'],
+  ['Security Deposit', 'The deposit will be retained if any of the following rules are not adhered to while renting the Vehicle.'],
+  ['Accidents', 'If the Vehicle is involved in an accident at any point during the rental period, the deposit is retained and the Vehicle will be repossessed immediately.'],
+  ['Insurance', 'The Customer\'s personal policy is the primary insurance used in case of an accident. Renter is responsible for deductible repairs.'],
+  ['Suspended or Revoked License', 'If Renter\'s driver\'s license is found to be suspended or revoked at any point during the rental period, Renter will be responsible for any damages or any fees involved with the Vehicle.'],
+  ['Return Time / Payment', 'Return time and payment are due by 12:00 PM. Failure to return or pay on time may result in a late fee or loss of deposit.'],
+  ['Unauthorized Drivers', 'Drivers who are not on this contract are not permitted to drive the Vehicle.'],
+  ['Excessive Wear & Tear', 'Renter is responsible for excessive wear and tear on the Vehicle.'],
+  ['No Smoking', 'No smoking in the Vehicle. A $200 fee applies.'],
+  ['Gas', 'Renter must replace all gas used during the rental.'],
+  ['Tolls, Parking & Tickets', 'Customers are responsible for all tolls and parking/ticket violation expenses.'],
+  ['No Travel Outside NC', 'No travelling outside of North Carolina.'],
 ];
 
 const id = new URLSearchParams(location.search).get('id');
@@ -226,7 +224,8 @@ function render(b, insurance) {
     </div>
 
     <div class="ra-section">
-      <div class="ra-section__title">Terms &amp; Conditions — Renter initials each</div>
+      <div class="ra-section__title">Rules of the Agreement — Renter initials each</div>
+      <p style="font-weight:700;margin-bottom:4px;">Failure to comply may result in early return and loss of Deposit.</p>
       <div class="ra-terms">
         ${TERMS.map(([heading, text]) => `
           <div class="ra-term">
