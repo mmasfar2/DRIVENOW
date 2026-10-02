@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rental Agreement — DriveNow Portal</title>
+<link rel="stylesheet" href="css/admin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+body { background: var(--gray-light); }
+.ra-toolbar {
+  position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px 16px; background: var(--black); color: #fff;
+}
+.ra-toolbar__title { font-weight: 800; margin-right: auto; }
+.ra-toolbar .btn { border-color: #fff; }
+.ra-toolbar .btn-outline { color: #fff; }
+.ra-toolbar .btn-outline:hover { background: #fff; color: var(--black); }
+.ra-toolbar__hint { width: 100%; font-size: 0.78rem; color: #bbb; }
+.ra-editing .ra-page { outline: 2px dashed #f2b705; outline-offset: 6px; }
+
+.ra-page {
+  max-width: 8.5in; margin: 24px auto; padding: 0.6in 0.7in; background: #fff;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08); font-size: 10.5pt; line-height: 1.45; color: #000;
+}
+.ra-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 16px; }
+.ra-head__biz { font-size: 9.5pt; }
+.ra-head__name { font-size: 18pt; font-weight: 900; letter-spacing: -0.01em; }
+.ra-head__doc { text-align: right; font-size: 9.5pt; }
+.ra-head__doctitle { font-size: 13pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+
+.ra-section { margin-bottom: 14px; break-inside: avoid; }
+.ra-section__title { font-size: 9pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; background: #000; color: #fff; padding: 3px 8px; margin-bottom: 6px; }
+.ra-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+.ra-field { display: flex; gap: 6px; padding: 4px 0; border-bottom: 1px solid #ccc; min-height: 26px; align-items: baseline; }
+.ra-field__label { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #444; white-space: nowrap; }
+.ra-field__val { flex: 1; text-align: right; }
+.ra-field--wide { grid-column: 1 / -1; }
+
+.ra-charges { display: table !important; width: 100% !important; white-space: normal !important; border-collapse: collapse; }
+.ra-charges td { padding: 4px 0; border-bottom: 1px solid #ccc; }
+.ra-charges td:last-child { text-align: right; white-space: nowrap; }
+.ra-charges tr.ra-total td { font-weight: 800; border-top: 2px solid #000; border-bottom: 2px solid #000; }
+
+.ra-terms { counter-reset: term; }
+.ra-term { display: flex; gap: 12px; padding: 5px 0; border-bottom: 1px solid #eee; break-inside: avoid; }
+.ra-term__body { flex: 1; }
+.ra-term__body::before { counter-increment: term; content: counter(term) ". "; font-weight: 800; }
+.ra-term__heading { font-weight: 800; }
+.ra-initial { flex-shrink: 0; width: 64px; text-align: center; font-size: 7pt; color: #555; }
+.ra-initial__box { height: 24px; border: 1px solid #000; margin-bottom: 2px; }
+
+.ra-condition { height: 70px; border: 1px solid #000; margin-top: 6px; }
+.ra-sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 18px; }
+.ra-sig-line { border-bottom: 1px solid #000; height: 34px; }
+.ra-sig-label { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #444; margin-top: 3px; margin-bottom: 12px; }
+.ra-sig-prefill { height: 34px; display: flex; align-items: flex-end; padding-bottom: 2px; border-bottom: 1px solid #000; }
+.ra-footer { margin-top: 18px; font-size: 8pt; color: #555; text-align: center; }
+.ra-error { max-width: 8.5in; margin: 40px auto; padding: 24px; background: #fff; color: #c62828; }
+
+@media (max-width: 700px) {
+  .ra-page { margin: 0; padding: 20px 16px; box-shadow: none; }
+  .ra-grid, .ra-sig-grid { grid-template-columns: 1fr; }
+  .ra-head { flex-direction: column; }
+  .ra-head__doc { text-align: left; }
+}
+
+@page { size: letter; margin: 0.5in; }
+@media print {
+  body { background: #fff; }
+  .ra-toolbar { display: none; }
+  .ra-page { margin: 0; padding: 0; max-width: none; box-shadow: none; outline: none !important; }
+  .ra-section__title { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+</head>
+<body>
+<div class="ra-toolbar">
+  <div class="ra-toolbar__title">Rental Agreement</div>
+  <a class="btn btn-sm btn-outline" id="ra-back" href="reservations.html">Back to Reservation</a>
+  <button class="btn btn-sm btn-outline" id="ra-edit">Edit Before Printing</button>
+  <button class="btn btn-sm" onclick="window.print()">Print</button>
+  <div class="ra-toolbar__hint" id="ra-edit-hint" style="display:none;">Click anywhere on the agreement to change wording. Edits only apply to this printout — reloading the page restores the standard text.</div>
+</div>
+
+<div id="ra-root"></div>
+
+<script src="js/admin-common.js"></script>
+<script>
+// Lessor details printed in the agreement header. Same window.DRIVENOW_BUSINESS_*
+// overrides the public site's js/config.js reads — set them in an inline
+// <script> above admin-common.js to brand a real deployment. Anything left
+// unset prints as a blank line to fill in by hand, never as placeholder text
+// on a document someone is signing.
+const LESSOR = {
+  name: window.DRIVENOW_BUSINESS_NAME || 'DriveNow',
+  legalName: window.DRIVENOW_BUSINESS_LEGAL_NAME || '',
+  address: window.DRIVENOW_BUSINESS_ADDRESS || '',
+  city: window.DRIVENOW_BUSINESS_CITY || '',
+  phone: window.DRIVENOW_BUSINESS_PHONE_DISPLAY || '',
+  email: window.DRIVENOW_BUSINESS_EMAIL || '',
+};
+
+// Standard terms, one per initial box. Edit the wording here to change every
+// agreement going forward — have it reviewed by an attorney licensed in your
+// state before relying on it.
+const TERMS = [
+  ['Authorized Driver', 'Only the Renter named above may operate the Vehicle. Renter must hold a valid driver\'s license at all times during the rental. Allowing any other person to drive the Vehicle is a material breach of this Agreement.'],
+  ['Permitted Use', 'The Vehicle may be used for personal use and for rideshare or delivery work (e.g. Uber, Lyft, DoorDash). The Vehicle may not be used for any illegal purpose, racing, towing, off-road driving, or while the driver is under the influence of alcohol or drugs, and may not be taken out of the state without the Owner\'s written permission.'],
+  ['Rental Payments', 'Renter agrees to pay the rental rate and fees listed above, in advance, on the schedule agreed with the Owner. Payments not received when due may result in a late fee and/or the Owner recovering the Vehicle without further notice.'],
+  ['Security Deposit', 'The security deposit listed above is held for the length of the rental and may be applied to unpaid rent, fees, tolls, tickets, cleaning, fuel, or damage. Any remaining balance is returned after the Vehicle is returned and inspected.'],
+  ['Insurance', 'Renter must keep the insurance coverage required by the Owner in effect for the entire rental and provide proof on request. Renter is responsible for any deductible and for any loss not covered by insurance.'],
+  ['Accidents, Damage & Theft', 'Renter must report any accident, damage, or theft to the Owner and, where required, to the police immediately. Renter is responsible for damage to the Vehicle, and for loss of use while it is being repaired, to the extent not covered by insurance.'],
+  ['Tickets, Tolls & Fines', 'Renter is responsible for all parking tickets, traffic violations, toll charges, and impound or towing fees incurred during the rental, plus any administrative fee the Owner incurs to process them.'],
+  ['Maintenance & Care', 'Renter will keep the Vehicle clean, check fluid levels, and bring the Vehicle in for scheduled maintenance when requested. Renter will not modify the Vehicle. Smoking and vaping in the Vehicle are prohibited and will result in a cleaning fee.'],
+  ['Fuel & Mileage', 'The Vehicle must be returned with the same fuel level recorded at pickup or Renter will be charged for the difference.'],
+  ['Return of Vehicle', 'Renter will return the Vehicle on the return date above, in the same condition as received apart from normal wear. The Owner may end this Agreement and recover the Vehicle at any time if Renter breaches any term of this Agreement.'],
+  ['Entire Agreement', 'This document is the entire agreement between Renter and Owner. Renter confirms they have read and understand every term, have received a copy, and accept the Vehicle in the condition noted.'],
+];
+
+const id = new URLSearchParams(location.search).get('id');
+const blank = '&nbsp;';
+
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function val(v) { return v === null || v === undefined || v === '' ? blank : esc(v); }
+function field(label, v, cls = '') {
+  return `<div class="ra-field ${cls}"><span class="ra-field__label">${label}</span><span class="ra-field__val">${val(v)}</span></div>`;
+}
+function fmtPhone(p) {
+  const d = String(p || '').replace(/\D/g, '');
+  return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : p;
+}
+function chargeRow(label, amount) {
+  return `<tr><td>${label}</td><td>${fmtExact(amount)}</td></tr>`;
+}
+
+function render(b, insurance) {
+  const days = b.pickup_scheduled_at && b.rental_end_at
+    ? Math.round((new Date(b.rental_end_at) - new Date(b.pickup_scheduled_at)) / 86400000)
+    : null;
+  const vehicle = b.make ? `${b.year} ${b.make} ${b.model}` : '';
+  const cityLine = [b.city, b.state].filter(Boolean).join(', ') + (b.zip_code ? ` ${b.zip_code}` : '');
+  const email = displayEmail(b.email) === 'No email on file' ? '' : b.email;
+  const privateIns = insurance.find(r => r.type === 'private') || {};
+  const deposit = Number(b.deposits_held) || Number(b.security_deposit) || 0;
+
+  const charges = [];
+  if (b.weekly_rate) charges.push(chargeRow('Weekly rental rate', b.weekly_rate));
+  if (Number(b.admin_fee_rate)) charges.push(chargeRow('Admin fee (per day)', b.admin_fee_rate));
+  if (Number(b.insurance_fee_rate)) charges.push(chargeRow('Insurance fee (per day)', b.insurance_fee_rate));
+  if (Number(b.travel_fee)) charges.push(chargeRow('Delivery / travel fee', b.travel_fee));
+  if (Number(b.processing_fee)) charges.push(chargeRow('Processing fee', b.processing_fee));
+  if (Number(b.misc_fee)) charges.push(chargeRow('Miscellaneous', b.misc_fee));
+  if (Number(b.toll_fee)) charges.push(chargeRow('Tolls', b.toll_fee));
+  if (Number(b.discount)) charges.push(chargeRow('Discount', -b.discount));
+
+  const lessorLines = [LESSOR.legalName, LESSOR.address, LESSOR.city, LESSOR.phone, LESSOR.email].filter(Boolean).map(esc);
+
+  document.getElementById('ra-root').innerHTML = `
+  <div class="ra-page" id="ra-page">
+    <div class="ra-head">
+      <div class="ra-head__biz">
+        <div class="ra-head__name">${esc(LESSOR.name)}</div>
+        ${lessorLines.join('<br>') || 'Address: ______________________________<br>Phone: ________________'}
+      </div>
+      <div class="ra-head__doc">
+        <div class="ra-head__doctitle">Vehicle Rental Agreement</div>
+        Agreement #${esc(b.id)}<br>
+        Date: ${fmtDateOnly(todayStr())}
+      </div>
+    </div>
+
+    <p style="margin-bottom:14px;">This Vehicle Rental Agreement ("Agreement") is made between <strong>${esc(LESSOR.legalName || LESSOR.name)}</strong> ("Owner") and the renter named below ("Renter") for the rental of the vehicle described below ("Vehicle").</p>
+
+    <div class="ra-section">
+      <div class="ra-section__title">Renter</div>
+      <div class="ra-grid">
+        ${field('Name', `${b.first_name || ''} ${b.last_name || ''}`.trim())}
+        ${field('Date of Birth', b.dob ? fmtDateOnly(b.dob) : '')}
+        ${field('Address', b.address, 'ra-field--wide')}
+        ${field('City / State / ZIP', cityLine.trim())}
+        ${field('Phone', fmtPhone(b.phone))}
+        ${field('Email', email)}
+        ${field('Driver\'s License #', b.license_number)}
+        ${field('Insurance Carrier', privateIns.carrier)}
+        ${field('Policy #', privateIns.policy_number)}
+      </div>
+    </div>
+
+    <div class="ra-section">
+      <div class="ra-section__title">Vehicle</div>
+      <div class="ra-grid">
+        ${field('Year / Make / Model', vehicle)}
+        ${field('Color', b.color)}
+        ${field('VIN', b.vin)}
+        ${field('License Plate', b.license_plate)}
+        ${field('Odometer Out', b.odometer_out != null ? Number(b.odometer_out).toLocaleString() : '')}
+        ${field('Fuel Level Out', b.gas_level_out != null ? `${b.gas_level_out}%` : '')}
+        ${field('Odometer In', b.odometer_in != null ? Number(b.odometer_in).toLocaleString() : '')}
+        ${field('Fuel Level In', b.gas_level_in != null ? `${b.gas_level_in}%` : '')}
+      </div>
+    </div>
+
+    <div class="ra-section">
+      <div class="ra-section__title">Rental Period</div>
+      <div class="ra-grid">
+        ${field('Pickup Date', b.pickup_scheduled_at ? fmtDateOnly(b.pickup_scheduled_at) : '')}
+        ${field('Return Date', b.rental_end_at ? fmtDateOnly(b.rental_end_at) : '')}
+        ${field('Pickup Location', b.pickup_location)}
+        ${field('Return Location', b.dropoff_location)}
+        ${field('Rental Length', days > 0 ? `${days} day${days === 1 ? '' : 's'}` : '')}
+      </div>
+    </div>
+
+    <div class="ra-section">
+      <div class="ra-section__title">Charges</div>
+      <table class="ra-charges">
+        ${charges.join('')}
+        <tr class="ra-total"><td>Total Rental Charges${b.invoice_amount ? '' : ' (incl. taxes)'}</td><td>${b.charge ? fmtExact(b.charge) : blank}</td></tr>
+        <tr><td>Security Deposit (refundable)</td><td>${deposit ? fmtExact(deposit) : blank}</td></tr>
+        <tr><td>Paid to Date</td><td>${fmtExact(b.paid_total)}</td></tr>
+        <tr><td><strong>Balance Due</strong></td><td><strong>${fmtExact(Math.max(0, b.owed || 0))}</strong></td></tr>
+      </table>
+    </div>
+
+    <div class="ra-section">
+      <div class="ra-section__title">Terms &amp; Conditions — Renter initials each</div>
+      <div class="ra-terms">
+        ${TERMS.map(([heading, text]) => `
+          <div class="ra-term">
+            <div class="ra-term__body"><span class="ra-term__heading">${esc(heading)}.</span> ${esc(text)}</div>
+            <div class="ra-initial"><div class="ra-initial__box"></div>Initials</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="ra-section">
+      <div class="ra-section__title">Vehicle Condition at Pickup</div>
+      <div>Existing damage, scratches, dents, or notes (write "None" if none):</div>
+      <div class="ra-condition"></div>
+    </div>
+
+    <div class="ra-section">
+      <div class="ra-section__title">Signatures</div>
+      <p>By signing below, Renter agrees to all terms of this Agreement and acknowledges receiving the Vehicle in the condition noted above.</p>
+      <div class="ra-sig-grid">
+        <div>
+          <div class="ra-sig-line"></div><div class="ra-sig-label">Renter Signature</div>
+          <div class="ra-sig-prefill">${esc(`${b.first_name || ''} ${b.last_name || ''}`.trim())}</div><div class="ra-sig-label">Renter Printed Name</div>
+          <div class="ra-sig-line"></div><div class="ra-sig-label">Date</div>
+        </div>
+        <div>
+          <div class="ra-sig-line"></div><div class="ra-sig-label">Owner Representative Signature</div>
+          <div class="ra-sig-line"></div><div class="ra-sig-label">Printed Name &amp; Title</div>
+          <div class="ra-sig-line"></div><div class="ra-sig-label">Date</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ra-footer">Agreement #${esc(b.id)} · ${esc(LESSOR.name)} · Renter received a copy: ________</div>
+  </div>`;
+}
+
+document.getElementById('ra-edit').addEventListener('click', (e) => {
+  const page = document.getElementById('ra-page');
+  if (!page) return;
+  const on = page.contentEditable !== 'true';
+  page.contentEditable = on ? 'true' : 'false';
+  document.body.classList.toggle('ra-editing', on);
+  document.getElementById('ra-edit-hint').style.display = on ? '' : 'none';
+  e.target.textContent = on ? 'Done Editing' : 'Edit Before Printing';
+});
+
+(async () => {
+  if (!(await requireLogin())) return;
+  const root = document.getElementById('ra-root');
+  if (!id) { root.innerHTML = '<div class="ra-error">No reservation selected.</div>'; return; }
+  document.getElementById('ra-back').href = `reservation-detail.html?id=${encodeURIComponent(id)}`;
+  try {
+    const b = await api(`/api/applications/${id}/detail`);
+    const insurance = b.customer_id ? await api(`/api/insurance/by-customer-id/${b.customer_id}`).catch(() => []) : [];
+    document.title = `Rental Agreement #${b.id} — ${b.first_name} ${b.last_name}`;
+    render(b, insurance);
+    if (new URLSearchParams(location.search).get('print') === '1') setTimeout(() => window.print(), 300);
+  } catch (err) {
+    root.innerHTML = `<div class="ra-error">Couldn't load this reservation: ${esc(err.message)}</div>`;
+  }
+})();
+</script>
+</body>
+</html>
