@@ -188,6 +188,9 @@ const LESSOR = {
   email: window.DRIVENOW_BUSINESS_EMAIL || '',
 };
 
+// Standard security deposit — same amount the Terms and Conditions page states.
+const DEPOSIT_AMOUNT = 200;
+
 // Rules of the Agreement, one per initial box — [heading, text]. Edit the
 // wording here to change every agreement going forward.
 const TERMS = [
@@ -202,7 +205,7 @@ const TERMS = [
   ['No Smoking', 'No smoking in the Vehicle. A $200 fee applies.'],
   ['Gas', 'Renter must replace all gas used during the rental.'],
   ['Tolls, Parking & Tickets', 'Customers are responsible for all tolls and parking/ticket violation expenses.'],
-  ['No Travel Outside NC', 'No travelling outside of North Carolina.'],
+  ['Travel', 'Travel within North Carolina and South Carolina is permitted. Travelling outside NC or SC carries a $150 travelling fee, and the deposit will be lost if the customer travels without letting us know.'],
 ];
 
 const id = new URLSearchParams(location.search).get('id');
@@ -231,7 +234,6 @@ function render(b, insurance) {
   const cityLine = [b.city, b.state].filter(Boolean).join(', ') + (b.zip_code ? ` ${b.zip_code}` : '');
   const email = displayEmail(b.email) === 'No email on file' ? '' : b.email;
   const privateIns = insurance.find(r => r.type === 'private') || {};
-  const deposit = Number(b.deposits_held) || Number(b.security_deposit) || 0;
 
   const charges = [];
   if (b.weekly_rate) charges.push(chargeRow('Weekly rental rate', b.weekly_rate));
@@ -307,7 +309,7 @@ function render(b, insurance) {
       <table class="ra-charges">
         ${charges.join('')}
         <tr class="ra-total"><td>Total Rental Charges${b.invoice_amount ? '' : ' (incl. taxes)'}</td><td>${b.charge ? fmtExact(b.charge) : blank}</td></tr>
-        <tr><td>Security Deposit (refundable)</td><td>${deposit ? fmtExact(deposit) : blank}</td></tr>
+        <tr><td>Security Deposit (refundable)</td><td>${fmtExact(DEPOSIT_AMOUNT)}</td></tr>
         <tr><td>Paid to Date</td><td>${fmtExact(b.paid_total)}</td></tr>
         <tr><td><strong>Balance Due</strong></td><td><strong>${fmtExact(Math.max(0, b.owed || 0))}</strong></td></tr>
       </table>
