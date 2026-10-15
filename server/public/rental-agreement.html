@@ -41,13 +41,15 @@ body { background: var(--gray-light); }
 .ra-field--span2 { grid-column: span 2; }
 .ra-subhead { grid-column: 1 / -1; font-size: 6.5pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #000; margin-top: 4px; }
 
-.ra-money { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid #000; }
+.ra-money { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid #000; }
 .ra-money > div { padding: 3px 6px; border-left: 1px solid #000; }
 .ra-money > div:first-child { border-left: none; }
 .ra-money__label { font-size: 6.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: #444; }
 .ra-money__val { font-size: 10pt; font-weight: 800; }
 .ra-fees { font-size: 7pt; color: #333; margin-top: 2px; }
 
+.ra-star { display: flex; gap: 6px; align-items: baseline; border: 1.5px solid #000; padding: 2px 8px; margin-bottom: 5px; font-size: 7.5pt; break-inside: avoid; }
+.ra-star__mark { font-size: 11pt; line-height: 1; }
 .ra-rules-note { font-weight: 800; font-size: 7.5pt; margin-bottom: 2px; }
 .ra-terms { counter-reset: term; columns: 2; column-gap: 16px; font-size: 7.5pt; line-height: 1.25; }
 .ra-term { padding: 2px 0; break-inside: avoid; }
@@ -60,9 +62,9 @@ body { background: var(--gray-light); }
 .ra-sig-text { font-size: 7.5pt; }
 
 .ra-inspect__hint { font-size: 7pt; color: #444; margin-bottom: 3px; }
-.ra-inspect__row { display: grid; grid-template-columns: 1fr 2.3in; gap: 12px; align-items: start; }
+.ra-inspect__row { display: grid; grid-template-columns: 1fr 2.7in; gap: 12px; align-items: start; }
 .ra-car { display: block; width: 100%; height: auto; border: 1px solid #000; }
-.ra-fuel { display: block; width: 100%; height: auto; }
+.ra-fuel { display: block; width: 100%; max-width: 2.2in; height: auto; margin: 0 auto; }
 .ra-inspect__label { font-size: 6.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #444; margin-bottom: 2px; }
 .ra-notes { border: 1px solid #000; padding: 0 6px; }
 .ra-notes div { height: 19px; border-bottom: 1px solid #bbb; }
@@ -208,10 +210,12 @@ const LESSOR = {
 // Standard security deposit — same amount the Terms and Conditions page states.
 const DEPOSIT_AMOUNT = 200;
 
+// Starred notice printed above the Rules of the Agreement.
+const STARRED_NOTICE = ['Right to Refuse Service', 'Rental service may be refused to anyone when done in the best interest of the renting company or customer. Rates do not include gasoline.'];
+
 // Rules of the Agreement — [heading, text]. Edit the
 // wording here to change every agreement going forward.
 const TERMS = [
-  ['Right to Refuse Service', 'Rental service may be refused to anyone when done in the best interest of the renting company or customer. Rates do not include gasoline.'],
   ['Security Deposit', 'The deposit will be retained if any of the following rules are not adhered to while renting the Vehicle.'],
   ['Accidents', 'If the Vehicle is involved in an accident at any point during the rental period, the deposit is retained and the Vehicle will be repossessed immediately.'],
   ['Insurance', 'The Customer\'s personal policy is the primary insurance used in case of an accident. Renter is responsible for deductible repairs.'],
@@ -317,14 +321,6 @@ function render(b, insurance) {
   const email = displayEmail(b.email) === 'No email on file' ? '' : b.email;
   const privateIns = insurance.find(r => r.type === 'private') || {};
 
-  const fees = [];
-  if (Number(b.admin_fee_rate)) fees.push(`Admin ${fmtExact(b.admin_fee_rate)}/day`);
-  if (Number(b.insurance_fee_rate)) fees.push(`Insurance ${fmtExact(b.insurance_fee_rate)}/day`);
-  if (Number(b.travel_fee)) fees.push(`Delivery/travel ${fmtExact(b.travel_fee)}`);
-  if (Number(b.processing_fee)) fees.push(`Processing ${fmtExact(b.processing_fee)}`);
-  if (Number(b.misc_fee)) fees.push(`Misc. ${fmtExact(b.misc_fee)}`);
-  if (Number(b.toll_fee)) fees.push(`Tolls ${fmtExact(b.toll_fee)}`);
-  if (Number(b.discount)) fees.push(`Discount -${fmtExact(b.discount)}`);
 
   const renterName = `${b.first_name || ''} ${b.last_name || ''}`.trim();
   const lessorLine = [LESSOR.legalName, LESSOR.address, LESSOR.city, LESSOR.phone, LESSOR.email].filter(Boolean).map(esc).join(' · ');
@@ -371,13 +367,13 @@ function render(b, insurance) {
       <div class="ra-section__title">Charges${days > 0 ? ` — ${days} day${days === 1 ? '' : 's'}` : ''}</div>
       <div class="ra-money">
         ${money('Weekly Rate', b.weekly_rate ? fmtExact(b.weekly_rate) : blank)}
-        ${money(`Total Charges${b.invoice_amount ? '' : ' (incl. tax)'}`, b.charge ? fmtExact(b.charge) : blank)}
         ${money('Security Deposit', fmtExact(DEPOSIT_AMOUNT))}
-        ${money('Paid to Date', fmtExact(b.paid_total))}
-        ${money('Balance Due', fmtExact(Math.max(0, b.owed || 0)))}
+        ${money('Total Charges', b.charge ? fmtExact(b.charge) : blank)}
       </div>
-      ${fees.length ? `<div class="ra-fees">Fees included: ${fees.join(' · ')}</div>` : ''}
+      <div class="ra-fees">Fees included: Highway + Sales Tax</div>
     </div>
+
+    <div class="ra-star"><span class="ra-star__mark">&#9733;</span><span><strong>${esc(STARRED_NOTICE[0])}.</strong> ${esc(STARRED_NOTICE[1])}</span></div>
 
     <div class="ra-section">
       <div class="ra-section__title">Rules of the Agreement</div>
@@ -407,7 +403,7 @@ function render(b, insurance) {
           <div class="ra-inspect__label">Fuel Level Out — circle one</div>
           ${FUEL_GAUGE_SVG}
           <div class="ra-inspect__label" style="margin-top:6px;">Condition Notes at Check-Out</div>
-          <div class="ra-notes"><div></div><div></div><div></div><div></div><div></div></div>
+          <div class="ra-notes"><div></div><div></div><div></div><div></div></div>
         </div>
       </div>
     </div>
