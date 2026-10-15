@@ -48,8 +48,8 @@ body { background: var(--gray-light); }
 .ra-money__val { font-size: 10pt; font-weight: 800; }
 .ra-fees { font-size: 7pt; color: #333; margin-top: 2px; }
 
-.ra-star { display: flex; gap: 6px; align-items: baseline; border: 1.5px solid #000; padding: 2px 8px; margin-bottom: 5px; font-size: 7.5pt; break-inside: avoid; }
-.ra-star__mark { font-size: 11pt; line-height: 1; }
+.ra-star { display: flex; gap: 6px; align-items: baseline; border: 1.5px solid #000; padding: 2px 8px; margin-bottom: 5px; font-size: 6.8pt; break-inside: avoid; }
+.ra-star__mark { font-size: 10pt; font-weight: 800; line-height: 1; }
 .ra-rules-note { font-weight: 800; font-size: 7.5pt; margin-bottom: 2px; }
 .ra-terms { counter-reset: term; columns: 2; column-gap: 16px; font-size: 7.5pt; line-height: 1.25; }
 .ra-term { padding: 2px 0; break-inside: avoid; }
@@ -373,7 +373,7 @@ function render(b, insurance) {
       <div class="ra-fees">Fees included: Highway + Sales Tax</div>
     </div>
 
-    <div class="ra-star"><span class="ra-star__mark">&#9733;</span><span><strong>${esc(STARRED_NOTICE[0])}.</strong> ${esc(STARRED_NOTICE[1])}</span></div>
+    <div class="ra-star"><span class="ra-star__mark">*</span><span><strong>${esc(STARRED_NOTICE[0])}.</strong> ${esc(STARRED_NOTICE[1])}</span></div>
 
     <div class="ra-section">
       <div class="ra-section__title">Rules of the Agreement</div>
