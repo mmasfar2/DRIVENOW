@@ -223,13 +223,20 @@ function businessTotals(from, to) {
 const REPORTS = {
   revenue_by_vehicle: {
     category: 'revenue', label: 'Revenue by Vehicle',
-    description: 'Switch View to compare Revenue or Profit month by month, one column per month in range. The car\'s daily rate, travel fee, and admin fee, accrued night-by-night across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged, and only to the extent that night has actually been paid for (oldest night first). Plus any deposit amounts forfeited against that vehicle, counted as of the booking\'s return date, and any insurance claim payout for that vehicle, counted as of its payout date. Expense is maintenance cost (tolls excluded — a pass-through cost recovered from the customer, not money actually lost) plus any claim deductible paid on that vehicle, counted as of the date the damage was reported; Business Expense is Swipe card-processing fees attributed to that vehicle\'s bookings, dated to when each payment was actually charged (not the rental night it applies to) — shown as its own column. Profit is Revenue less both.',
+    description: 'Switch View to compare Revenue or Profit month by month, one column per month in range. Once generated, filter Revenue to All, Rent Rate (rental revenue and forfeited deposits only), or Payouts (insurance claim payouts and vehicle sales only) — Expense is unaffected. The car\'s daily rate, travel fee, and admin fee, accrued night-by-night across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged, and only to the extent that night has actually been paid for (oldest night first). Plus any deposit amounts forfeited against that vehicle, counted as of the booking\'s return date, and any insurance claim payout for that vehicle, counted as of its payout date. Expense is maintenance cost (tolls excluded — a pass-through cost recovered from the customer, not money actually lost) plus any claim deductible paid on that vehicle, counted as of the date the damage was reported; Business Expense is Swipe card-processing fees attributed to that vehicle\'s bookings, dated to when each payment was actually charged (not the rental night it applies to) — shown as its own column. Profit is Revenue less both.',
     hasDateRange: true,
     extraParams: [
       { key: 'view', label: 'View', type: 'select', default: 'total', options: [
         { value: 'total', label: 'Total for Range' },
         { value: 'revenue_month', label: 'Compare Revenue by Month' },
         { value: 'profit_month', label: 'Compare Profit by Month' },
+      ] },
+      // placement 'modal': shown as a filter in the report window's header
+      // instead of on the card, so it can be flipped after generating.
+      { key: 'source', label: 'Revenue', type: 'select', placement: 'modal', default: 'all', options: [
+        { value: 'all', label: 'All' },
+        { value: 'rental', label: 'Rent Rate' },
+        { value: 'payouts', label: 'Payouts' },
       ] },
     ],
     // The compare views put one column per month in range (named by the
@@ -267,7 +274,7 @@ const REPORTS = {
         const field = params.view === 'revenue_month' ? 'revenue' : 'profit';
         const byVehicle = new Map();
         for (const m of monthSegments(from, to)) {
-          for (const r of this.run(m.from, m.to)) {
+          for (const r of this.run(m.from, m.to, { source: params.source })) {
             if (!byVehicle.has(r.vehicle_id)) {
               byVehicle.set(r.vehicle_id, { vehicle_id: r.vehicle_id, vehicle: r.vehicle, license_plate: r.license_plate, total: 0 });
             }
@@ -342,7 +349,12 @@ const REPORTS = {
       });
       return vehicles.map(v => {
         const entry = byVehicle.get(v.id);
-        const revenue = round2((entry ? entry.revenue : 0) + (forfeitedByVehicle.get(v.id) || 0) + (payoutByVehicle.get(v.id) || 0) + (saleByVehicle.get(v.id) || 0));
+        // Rent Rate = rental revenue + forfeited deposits; Payouts = insurance
+        // claim payouts + vehicle sale proceeds; All = both.
+        const source = (params && params.source) || 'all';
+        const rental = (entry ? entry.revenue : 0) + (forfeitedByVehicle.get(v.id) || 0);
+        const payouts = (payoutByVehicle.get(v.id) || 0) + (saleByVehicle.get(v.id) || 0);
+        const revenue = round2((source !== 'payouts' ? rental : 0) + (source !== 'rental' ? payouts : 0));
         const expense = round2((expenseByVehicle.get(v.id) || 0) + (deductibleByVehicle.get(v.id) || 0));
         const businessExpense = round2(businessExpenseByVehicle.get(v.id) || 0);
         return {
