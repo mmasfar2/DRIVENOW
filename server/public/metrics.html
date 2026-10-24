@@ -29,6 +29,12 @@
   .report-modal__header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 20px 26px; border-bottom: 1px solid var(--gray-border); }
   .report-modal__title { font-weight: 800; font-size: 1.15rem; margin-bottom: 4px; }
   .report-modal__sub { font-size: 0.82rem; color: var(--text-muted); }
+  .report-modal__filters { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+  .report-modal__filters-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+  .report-filter { display: inline-flex; border: 1px solid var(--gray-border); border-radius: 8px; overflow: hidden; }
+  .report-filter button { background: var(--white); color: var(--black); border: none; border-left: 1px solid var(--gray-border); padding: 7px 14px; font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+  .report-filter button:first-child { border-left: none; }
+  .report-filter button.is-active { background: var(--black); color: var(--white); }
   .report-modal__close { background: none; border: none; font-size: 1.6rem; cursor: pointer; color: var(--text-muted); line-height: 1; flex-shrink: 0; }
   .report-modal__body { padding: 0; overflow: auto; flex: 1; }
   .report-modal__body table { font-size: 0.85rem; width: 100%; }
@@ -103,6 +109,7 @@
         <div class="report-modal__title" id="report-modal-title"></div>
         <div class="report-modal__sub" id="report-modal-sub"></div>
       </div>
+      <div class="report-modal__filters" id="report-modal-filters"></div>
       <button class="report-modal__close" id="report-modal-close">&times;</button>
     </div>
     <div class="report-modal__body" id="report-modal-body"></div>
@@ -122,6 +129,9 @@ const CATEGORY_COLORS = {
 };
 
 let catalog = null;
+// Current choice for each report's in-window filters (extraParams with
+// placement 'modal'), keyed by report key then param key.
+const modalFilters = {};
 
 function defaultDates() {
   const to = todayStr();
@@ -146,11 +156,36 @@ function reportUrl(key, format) {
   if (to) params.set('to', to.value);
   const report = catalog && catalog.reports.find(r => r.key === key);
   (report ? report.extraParams : []).forEach(p => {
+    if (p.placement === 'modal') {
+      params.set(p.key, (modalFilters[key] && modalFilters[key][p.key]) || p.default);
+      return;
+    }
     const el = document.getElementById(`rpt-${key}-${p.key}`);
     if (el) params.set(p.key, el.value);
   });
   if (format) params.set('format', format);
   return `/api/reports/${key}/data?${params.toString()}`;
+}
+
+// Segmented buttons in the report window's header for that report's
+// placement 'modal' params — clicking one re-runs the report with it.
+function renderModalFilters(key, label, columns) {
+  const wrap = document.getElementById('report-modal-filters');
+  const report = catalog && catalog.reports.find(r => r.key === key);
+  const params = report ? report.extraParams.filter(p => p.placement === 'modal') : [];
+  wrap.innerHTML = params.map(p => {
+    const current = (modalFilters[key] && modalFilters[key][p.key]) || p.default;
+    return `
+      <span class="report-modal__filters-label">${p.label}</span>
+      <div class="report-filter">
+        ${p.options.map(o => `<button type="button" data-param="${p.key}" data-value="${o.value}" class="${o.value === current ? 'is-active' : ''}">${o.label}</button>`).join('')}
+      </div>
+    `;
+  }).join('');
+  wrap.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+    modalFilters[key] = { ...(modalFilters[key] || {}), [btn.dataset.param]: btn.dataset.value };
+    generateReport(key, label, columns);
+  }));
 }
 
 function openReportModal(label) {
@@ -343,6 +378,7 @@ async function toggleVehicleBookings(row, colSpan, from, to) {
 async function generateReport(key, label, columns) {
   const body = document.getElementById('report-modal-body');
   openReportModal(label);
+  renderModalFilters(key, label, columns);
   body.innerHTML = '<div class="report-results__empty">Loading…</div>';
   try {
     const data = await api(reportUrl(key));
@@ -402,7 +438,7 @@ async function generateReport(key, label, columns) {
 
 function reportCardHtml(report) {
   const dates = defaultDates();
-  const extraParamsHtml = (report.extraParams || []).map(p => `
+  const extraParamsHtml = (report.extraParams || []).filter(p => p.placement !== 'modal').map(p => `
     <div class="field">
       <label>${p.label}</label>
       <select id="rpt-${report.key}-${p.key}">
