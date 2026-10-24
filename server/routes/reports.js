@@ -148,6 +148,60 @@ function computeVehicleDays(from, to) {
   });
 }
 
+// Business-wide revenue and expense components for a date range — shared by
+// Revenue by Time Period and Fleet Utilization's month view so both count
+// "revenue" and "expense" exactly the same way.
+function businessTotals(from, to) {
+  const revenue = getAccruedRevenueDays()
+    .filter(d => d.date >= from && d.date <= to)
+    .reduce((sum, d) => sum + d.amount, 0);
+  const forfeited = getForfeitedDeposits()
+    .filter(d => d.date && d.date >= from && d.date <= to)
+    .reduce((sum, d) => sum + Number(d.forfeited_amount), 0);
+  const insurancePayout = db.prepare(`
+    SELECT COALESCE(SUM(insurance_payout), 0) as total FROM claims
+    WHERE insurance_payout IS NOT NULL AND payout_date IS NOT NULL AND substr(payout_date, 1, 10) BETWEEN ? AND ?
+  `).get(from, to).total;
+  const vehicleSales = db.prepare(`
+    SELECT COALESCE(SUM(sale_amount), 0) as total FROM vehicles
+    WHERE sale_amount IS NOT NULL AND sale_date IS NOT NULL AND substr(sale_date, 1, 10) BETWEEN ? AND ?
+  `).get(from, to).total;
+  // Tolls excluded — a pass-through cost recovered from the customer,
+  // not money actually lost. COALESCE first (see expenseByVehicle in
+  // Revenue by Vehicle for why) so a NULL category doesn't silently drop the whole row.
+  const vehicleExpense = db.prepare(`
+    SELECT COALESCE(SUM(cost), 0) as total FROM vehicle_maintenance
+    WHERE substr(performed_at, 1, 10) BETWEEN ? AND ?
+      AND NOT (COALESCE(category, '') = 'toll' OR lower(COALESCE(description, '')) LIKE '%toll%')
+  `).get(from, to).total;
+  const claimDeductible = db.prepare(`
+    SELECT COALESCE(SUM(deductible_amount), 0) as total FROM claims
+    WHERE deductible_amount IS NOT NULL AND substr(damage_reported_at, 1, 10) BETWEEN ? AND ?
+  `).get(from, to).total;
+  // General overhead (subscriptions, absorbed fees entered by hand, etc.)
+  // is dated by its own expense_date as before; Swipe card-processing
+  // fees (payment_id set) are excluded here and pulled in separately
+  // below via getSwipeFeeCharges, dated to when each payment was
+  // actually charged instead of its own expense_date.
+  const generalBusinessExpense = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) as total FROM business_expenses
+    WHERE payment_id IS NULL AND expense_date BETWEEN ? AND ?
+  `).get(from, to).total;
+  const cardFeeExpense = getSwipeFeeCharges()
+    .filter(d => d.date >= from && d.date <= to)
+    .reduce((sum, d) => sum + d.amount, 0);
+  const businessExpense = generalBusinessExpense + cardFeeExpense;
+  // Card processing fees (a card payment's own surcharge) are a
+  // separate, informational figure tied to when the payment actually
+  // happened — not part of revenue-eligible amounts, just still shown
+  // here for the range it landed in.
+  const cardFees = db.prepare(`
+    SELECT COALESCE(SUM(processing_fee), 0) as total FROM payments
+    WHERE substr(paid_at, 1, 10) BETWEEN ? AND ?
+  `).get(from, to).total;
+  return { revenue, forfeited, insurancePayout, vehicleSales, vehicleExpense, claimDeductible, businessExpense, cardFees };
+}
+
 // Each report: category, label, description, whether it takes a date range,
 // its display columns, and a run(from, to) that returns an array of row objects.
 const REPORTS = {
@@ -253,53 +307,7 @@ const REPORTS = {
       { key: 'card_fees', label: 'Card Processing Fees', type: 'money' },
     ],
     run(from, to) {
-      const revenue = getAccruedRevenueDays()
-        .filter(d => d.date >= from && d.date <= to)
-        .reduce((sum, d) => sum + d.amount, 0);
-      const forfeited = getForfeitedDeposits()
-        .filter(d => d.date && d.date >= from && d.date <= to)
-        .reduce((sum, d) => sum + Number(d.forfeited_amount), 0);
-      const insurancePayout = db.prepare(`
-        SELECT COALESCE(SUM(insurance_payout), 0) as total FROM claims
-        WHERE insurance_payout IS NOT NULL AND payout_date IS NOT NULL AND substr(payout_date, 1, 10) BETWEEN ? AND ?
-      `).get(from, to).total;
-      const vehicleSales = db.prepare(`
-        SELECT COALESCE(SUM(sale_amount), 0) as total FROM vehicles
-        WHERE sale_amount IS NOT NULL AND sale_date IS NOT NULL AND substr(sale_date, 1, 10) BETWEEN ? AND ?
-      `).get(from, to).total;
-      // Tolls excluded — a pass-through cost recovered from the customer,
-      // not money actually lost. COALESCE first (see expenseByVehicle above
-      // for why) so a NULL category doesn't silently drop the whole row.
-      const vehicleExpense = db.prepare(`
-        SELECT COALESCE(SUM(cost), 0) as total FROM vehicle_maintenance
-        WHERE substr(performed_at, 1, 10) BETWEEN ? AND ?
-          AND NOT (COALESCE(category, '') = 'toll' OR lower(COALESCE(description, '')) LIKE '%toll%')
-      `).get(from, to).total;
-      const claimDeductible = db.prepare(`
-        SELECT COALESCE(SUM(deductible_amount), 0) as total FROM claims
-        WHERE deductible_amount IS NOT NULL AND substr(damage_reported_at, 1, 10) BETWEEN ? AND ?
-      `).get(from, to).total;
-      // General overhead (subscriptions, absorbed fees entered by hand, etc.)
-      // is dated by its own expense_date as before; Swipe card-processing
-      // fees (payment_id set) are excluded here and pulled in separately
-      // below via getSwipeFeeCharges, dated to when each payment was
-      // actually charged instead of its own expense_date.
-      const generalBusinessExpense = db.prepare(`
-        SELECT COALESCE(SUM(amount), 0) as total FROM business_expenses
-        WHERE payment_id IS NULL AND expense_date BETWEEN ? AND ?
-      `).get(from, to).total;
-      const cardFeeExpense = getSwipeFeeCharges()
-        .filter(d => d.date >= from && d.date <= to)
-        .reduce((sum, d) => sum + d.amount, 0);
-      const businessExpense = generalBusinessExpense + cardFeeExpense;
-      // Card processing fees (a card payment's own surcharge) are a
-      // separate, informational figure tied to when the payment actually
-      // happened — not part of revenue-eligible amounts, just still shown
-      // here for the range it landed in.
-      const cardFees = db.prepare(`
-        SELECT COALESCE(SUM(processing_fee), 0) as total FROM payments
-        WHERE substr(paid_at, 1, 10) BETWEEN ? AND ?
-      `).get(from, to).total;
+      const { revenue, forfeited, insurancePayout, vehicleSales, vehicleExpense, claimDeductible, businessExpense, cardFees } = businessTotals(from, to);
       const totalRevenue = round2(revenue + forfeited + insurancePayout + vehicleSales);
       const totalExpense = round2(vehicleExpense + claimDeductible + businessExpense);
       return [{
@@ -443,7 +451,7 @@ const REPORTS = {
 
   fleet_utilization_rate: {
     category: 'utilization', label: 'Fleet Utilization Rate',
-    description: 'Percent of days in range each vehicle spent on an active or completed booking. Switch View to "Avg Cars Rented per Month" to see, for each month in range, the average number of cars out on rent on any given day (total rented car-days ÷ days in that month, rounded to the nearest hundredth), how many renters had a car that month, and the average daily rate those renters were paying (each renter counted once).',
+    description: 'Percent of days in range each vehicle spent on an active or completed booking. Switch View to "Avg Cars Rented per Month" to see, for each month in range, the average number of cars out on rent on any given day (total rented car-days ÷ days in that month, rounded to the nearest hundredth), how many renters had a car that month, the average daily rate those renters were paying (each renter counted once), and Net Profit: rental revenue plus forfeited deposits, less every expense Revenue by Time Period counts (maintenance excluding tolls, claim deductibles, business expenses, Swipe processing fees) — insurance payouts and vehicle sale proceeds are not included.',
     hasDateRange: true,
     extraParams: [
       { key: 'view', label: 'View', type: 'select', default: 'vehicle', options: [
@@ -464,6 +472,7 @@ const REPORTS = {
           // spanning two months would count twice; an average of averages).
           { key: 'renters', label: 'Renters', type: 'number', noTotal: true },
           { key: 'avg_daily_rate', label: 'Avg Daily Rate', type: 'money', noTotal: true },
+          { key: 'net_profit', label: 'Net Profit', type: 'money' },
         ];
       }
       return this.columns;
@@ -494,6 +503,10 @@ const REPORTS = {
           // once regardless of how many days they had the car.
           const renters = vehicleDays.flatMap(d => d.bookings);
           const rated = renters.filter(a => a.weekly_rate != null);
+          // Revenue by Time Period's profit, minus its one-off income:
+          // insurance payouts and vehicle sale proceeds aren't earned by
+          // renting, so they're left out of Net Profit here.
+          const t = businessTotals(segFrom, segTo);
           out.push({
             period: periodLabelFor(monthKey, 'month'),
             rented_days: rentedDays, range_days: rangeDays,
@@ -501,6 +514,7 @@ const REPORTS = {
             renters: renters.length,
             // Daily rate is weekly_rate / 7, the same daily rate billing uses.
             avg_daily_rate: rated.length ? round2(rated.reduce((sum, a) => sum + a.weekly_rate / 7, 0) / rated.length) : '—',
+            net_profit: round2(t.revenue + t.forfeited - t.vehicleExpense - t.claimDeductible - t.businessExpense),
           });
           const [y, m] = monthKey.split('-').map(Number);
           monthKey = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7);
