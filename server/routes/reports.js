@@ -223,7 +223,7 @@ function businessTotals(from, to) {
 const REPORTS = {
   revenue_by_vehicle: {
     category: 'revenue', label: 'Revenue by Vehicle',
-    description: 'Switch View to compare Revenue or Profit month by month, one column per month in range. Once generated, filter Revenue to All, Rent Rate (rental revenue and forfeited deposits only), or Payouts (insurance claim payouts and vehicle sales only) — Expense is unaffected. The car\'s daily rate, travel fee, and admin fee, accrued night-by-night across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged, and only to the extent that night has actually been paid for (oldest night first). Plus any deposit amounts forfeited against that vehicle, counted as of the booking\'s return date, and any insurance claim payout for that vehicle, counted as of its payout date. Expense is maintenance cost (tolls excluded — a pass-through cost recovered from the customer, not money actually lost) plus any claim deductible paid on that vehicle, counted as of the date the damage was reported; Business Expense is Swipe card-processing fees attributed to that vehicle\'s bookings, dated to when each payment was actually charged (not the rental night it applies to) — shown as its own column. Profit is Revenue less both.',
+    description: 'Switch View to compare Revenue or Profit month by month, one column per month in range. Once generated, filter Revenue to All, Rent Rate (rental revenue and forfeited deposits only), or Payouts (insurance claim payouts and vehicle sales only), and Expenses to All, Business, or Vehicle — Profit counts only the expenses shown. The car\'s daily rate, travel fee, and admin fee, accrued night-by-night across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged, and only to the extent that night has actually been paid for (oldest night first). Plus any deposit amounts forfeited against that vehicle, counted as of the booking\'s return date, and any insurance claim payout for that vehicle, counted as of its payout date. Expense is maintenance cost (tolls excluded — a pass-through cost recovered from the customer, not money actually lost) plus any claim deductible paid on that vehicle, counted as of the date the damage was reported; Business Expense is Swipe card-processing fees attributed to that vehicle\'s bookings, dated to when each payment was actually charged (not the rental night it applies to) — shown as its own column. Profit is Revenue less both.',
     hasDateRange: true,
     extraParams: [
       { key: 'view', label: 'View', type: 'select', default: 'total', options: [
@@ -237,6 +237,12 @@ const REPORTS = {
         { value: 'all', label: 'All' },
         { value: 'rental', label: 'Rent Rate' },
         { value: 'payouts', label: 'Payouts' },
+      ] },
+      // Which expenses count against Profit (and which expense columns show).
+      { key: 'expenses', label: 'Expenses', type: 'select', placement: 'modal', default: 'all', options: [
+        { value: 'all', label: 'All' },
+        { value: 'business', label: 'Business' },
+        { value: 'vehicle', label: 'Vehicle' },
       ] },
     ],
     // The compare views put one column per month in range (named by the
@@ -255,14 +261,16 @@ const REPORTS = {
           { key: 'total', label: `Total ${label}`, type: 'money' },
         ];
       }
-      return this.columns;
+      const expenses = (params && params.expenses) || 'all';
+      return this.columns.filter(c =>
+        !(expenses === 'business' && c.key === 'expense') && !(expenses === 'vehicle' && c.key === 'business_expense'));
     },
     columns: [
       { key: 'vehicle', label: 'Vehicle' },
       { key: 'license_plate', label: 'License Plate' },
       { key: 'bookings', label: 'Bookings', type: 'number' },
       { key: 'revenue', label: 'Revenue', type: 'money' },
-      { key: 'expense', label: 'Expense', type: 'money' },
+      { key: 'expense', label: 'Vehicle Expense', type: 'money' },
       { key: 'business_expense', label: 'Business Expense', type: 'money' },
       { key: 'profit', label: 'Profit', type: 'money' },
     ],
@@ -274,7 +282,7 @@ const REPORTS = {
         const field = params.view === 'revenue_month' ? 'revenue' : 'profit';
         const byVehicle = new Map();
         for (const m of monthSegments(from, to)) {
-          for (const r of this.run(m.from, m.to, { source: params.source })) {
+          for (const r of this.run(m.from, m.to, { source: params.source, expenses: params.expenses })) {
             if (!byVehicle.has(r.vehicle_id)) {
               byVehicle.set(r.vehicle_id, { vehicle_id: r.vehicle_id, vehicle: r.vehicle, license_plate: r.license_plate, total: 0 });
             }
@@ -352,6 +360,7 @@ const REPORTS = {
         // Rent Rate = rental revenue + forfeited deposits; Payouts = insurance
         // claim payouts + vehicle sale proceeds; All = both.
         const source = (params && params.source) || 'all';
+        const expenses = (params && params.expenses) || 'all';
         const rental = (entry ? entry.revenue : 0) + (forfeitedByVehicle.get(v.id) || 0);
         const payouts = (payoutByVehicle.get(v.id) || 0) + (saleByVehicle.get(v.id) || 0);
         const revenue = round2((source !== 'payouts' ? rental : 0) + (source !== 'rental' ? payouts : 0));
@@ -360,7 +369,8 @@ const REPORTS = {
         return {
           vehicle_id: v.id, vehicle: `${v.year} ${v.make} ${v.model}`, license_plate: v.license_plate || '—',
           bookings: entry ? entry.appIds.size : 0, revenue, expense, business_expense: businessExpense,
-          profit: round2(revenue - expense - businessExpense),
+          // Expenses filter: Business or Vehicle counts only that kind against Profit.
+          profit: round2(revenue - (expenses !== 'business' ? expense : 0) - (expenses !== 'vehicle' ? businessExpense : 0)),
         };
       }).sort((a, b) => b.revenue - a.revenue);
     },

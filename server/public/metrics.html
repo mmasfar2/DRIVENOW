@@ -29,7 +29,7 @@
   .report-modal__header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 20px 26px; border-bottom: 1px solid var(--gray-border); }
   .report-modal__title { font-weight: 800; font-size: 1.15rem; margin-bottom: 4px; }
   .report-modal__sub { font-size: 0.82rem; color: var(--text-muted); }
-  .report-modal__filters { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+  .report-modal__filters { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 10px; margin-left: auto; }
   .report-modal__filters-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
   .report-filter { display: inline-flex; border: 1px solid var(--gray-border); border-radius: 8px; overflow: hidden; }
   .report-filter button { background: var(--white); color: var(--black); border: none; border-left: 1px solid var(--gray-border); padding: 7px 14px; font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
@@ -213,7 +213,7 @@ const BOOKING_DRILLDOWN_COLUMNS = [
   { key: 'pickup_scheduled_at', label: 'Pickup', type: 'date' },
   { key: 'rental_end_at', label: 'Return', type: 'date' },
   { key: 'revenue', label: 'Revenue', type: 'money' },
-  { key: 'expense', label: 'Expense', type: 'money' },
+  { key: 'expense', label: 'Vehicle Expense', type: 'money' },
   { key: 'business_expense', label: 'Business Expense', type: 'money' },
   { key: 'profit', label: 'Profit', type: 'money' },
 ];
