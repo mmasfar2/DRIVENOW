@@ -233,6 +233,21 @@ const PERIOD_DRILLDOWN_CONFIG = {
       { key: 'notes', label: 'Notes' },
     ],
   },
+  reservations: {
+    endpoint: 'fleet_utilization_rate/reservations',
+    emptyLabel: 'reservations',
+    columns: [
+      { key: 'booking_id', label: 'Booking #' },
+      { key: 'customer', label: 'Customer' },
+      { key: 'vehicle', label: 'Vehicle' },
+      { key: 'license_plate', label: 'License Plate' },
+      { key: 'pickup_scheduled_at', label: 'Pickup', type: 'date' },
+      { key: 'returned_at', label: 'Return', type: 'date' },
+      { key: 'status', label: 'Status' },
+      { key: 'days_in_period', label: 'Days This Month' },
+      { key: 'daily_rate', label: 'Daily Rate', type: 'money' },
+    ],
+  },
   combined: {
     endpoint: 'maintenance_and_business_expense_by_period/entries',
     emptyLabel: 'entries',
@@ -346,6 +361,8 @@ async function generateReport(key, label, columns) {
       : key === 'maintenance_by_period' ? 'maintenance'
       : key === 'business_expense_by_period' ? 'business_expense'
       : key === 'maintenance_and_business_expense_by_period' ? 'combined'
+      // Only Fleet Utilization's month view has per-month rows to drill into.
+      : key === 'fleet_utilization_rate' && data.rows[0].period_from ? 'reservations'
       : null;
     const numericCols = columns.filter(c => (c.type === 'money' || c.type === 'number') && !c.noTotal);
     const hasTotals = numericCols.length > 0;
@@ -360,7 +377,7 @@ async function generateReport(key, label, columns) {
         <tbody>
           ${data.rows.map(r => {
             if (drillKind === 'vehicle') return `<tr class="report-row--drillable" data-vehicle-id="${r.vehicle_id}">${columns.map(c => `<td>${fmtCell(r[c.key], c.type)}</td>`).join('')}</tr>`;
-            if (drillKind === 'payments' || drillKind === 'maintenance' || drillKind === 'business_expense' || drillKind === 'combined') return `<tr class="report-row--drillable" data-period-from="${r.period_from}" data-period-to="${r.period_to}">${columns.map(c => `<td>${fmtCell(r[c.key], c.type)}</td>`).join('')}</tr>`;
+            if (drillKind === 'payments' || drillKind === 'maintenance' || drillKind === 'business_expense' || drillKind === 'combined' || drillKind === 'reservations') return `<tr class="report-row--drillable" data-period-from="${r.period_from}" data-period-to="${r.period_to}">${columns.map(c => `<td>${fmtCell(r[c.key], c.type)}</td>`).join('')}</tr>`;
             return `<tr>${columns.map(c => `<td>${fmtCell(r[c.key], c.type)}</td>`).join('')}</tr>`;
           }).join('')}
         </tbody>
@@ -373,7 +390,7 @@ async function generateReport(key, label, columns) {
       body.querySelectorAll('.report-row--drillable').forEach(row => {
         row.addEventListener('click', () => toggleVehicleBookings(row, columns.length, fromVal, toVal));
       });
-    } else if (drillKind === 'payments' || drillKind === 'maintenance' || drillKind === 'business_expense' || drillKind === 'combined') {
+    } else if (drillKind === 'payments' || drillKind === 'maintenance' || drillKind === 'business_expense' || drillKind === 'combined' || drillKind === 'reservations') {
       body.querySelectorAll('.report-row--drillable').forEach(row => {
         row.addEventListener('click', () => togglePeriodEntries(row, columns.length, row.dataset.periodFrom, row.dataset.periodTo, drillKind));
       });

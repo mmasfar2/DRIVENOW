@@ -108,7 +108,7 @@ function computeVehicleDays(from, to) {
   const vehicles = db.prepare('SELECT id, year, make, model, license_plate FROM vehicles ORDER BY year DESC').all();
   return vehicles.map(v => {
     const apps = db.prepare(`
-      SELECT id, weekly_rate, pickup_scheduled_at, rental_end_at, checked_in_at, updated_at, status FROM applications
+      SELECT id, first_name, last_name, weekly_rate, pickup_scheduled_at, rental_end_at, checked_in_at, updated_at, status FROM applications
       WHERE assigned_vehicle_id = ? AND status IN ('active', 'completed') AND pickup_scheduled_at IS NOT NULL
     `).all(v.id);
     let rentedDays = 0;
@@ -139,8 +139,9 @@ function computeVehicleDays(from, to) {
       const s = clip(start, rangeStart, rangeEnd);
       const e = clip(end, rangeStart, rangeEnd);
       if (e >= s) {
-        rentedDays += dayDiff(s, e) + 1;
-        bookings.push(a);
+        const days = dayDiff(s, e) + 1;
+        rentedDays += days;
+        bookings.push({ ...a, end: endRaw, daysInRange: days });
       }
     }
     rentedDays = Math.min(rentedDays, rangeDays);
@@ -511,6 +512,9 @@ const REPORTS = {
             period: periodLabelFor(monthKey, 'month'),
             rented_days: rentedDays, range_days: rangeDays,
             avg_cars_rented: round2(rentedDays / rangeDays),
+            // For the drilldown (which reservations make up this month) —
+            // not in columns, so never rendered as a column.
+            period_from: segFrom, period_to: segTo,
             renters: renters.length,
             // Daily rate is weekly_rate / 7, the same daily rate billing uses.
             avg_daily_rate: rated.length ? round2(rated.reduce((sum, a) => sum + a.weekly_rate / 7, 0) / rated.length) : '—',
@@ -1111,6 +1115,28 @@ router.get('/collections_by_method/payments', requireAuth, (req, res) => {
     method: PAYMENT_METHOD_LABELS[r.method] || r.method,
     amount: round2(r.amount),
   })));
+});
+
+// Per-reservation breakdown behind a Fleet Utilization month row — the same
+// bookings its Renters count is made of, so the two always match.
+router.get('/fleet_utilization_rate/reservations', requireAuth, (req, res) => {
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'from and to are required' });
+  const rows = computeVehicleDays(from, to).flatMap(({ v, bookings }) => bookings.map(b => ({
+    booking_id: b.id,
+    customer: `${b.first_name} ${b.last_name}`,
+    vehicle: `${v.year} ${v.make} ${v.model}`,
+    license_plate: v.license_plate || '—',
+    pickup_scheduled_at: b.pickup_scheduled_at,
+    // Actual return if checked in; otherwise the scheduled return (or
+    // today, for an active booking already past it).
+    returned_at: b.end,
+    status: b.status === 'active' ? 'Active' : 'Completed',
+    days_in_period: b.daysInRange,
+    daily_rate: b.weekly_rate != null ? round2(b.weekly_rate / 7) : '—',
+  })));
+  rows.sort((a, b) => a.pickup_scheduled_at.localeCompare(b.pickup_scheduled_at));
+  res.json(rows);
 });
 
 // Per-entry breakdown behind a Maintenance by Week/Month row — every
