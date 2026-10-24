@@ -108,7 +108,7 @@ function computeVehicleDays(from, to) {
   const vehicles = db.prepare('SELECT id, year, make, model, license_plate FROM vehicles ORDER BY year DESC').all();
   return vehicles.map(v => {
     const apps = db.prepare(`
-      SELECT pickup_scheduled_at, rental_end_at, updated_at, status FROM applications
+      SELECT pickup_scheduled_at, rental_end_at, checked_in_at, updated_at, status FROM applications
       WHERE assigned_vehicle_id = ? AND status IN ('active', 'completed') AND pickup_scheduled_at IS NOT NULL
     `).all(v.id);
     let rentedDays = 0;
@@ -116,7 +116,13 @@ function computeVehicleDays(from, to) {
       const start = new Date(a.pickup_scheduled_at.slice(0, 10));
       let endRaw;
       if (a.status === 'completed') {
-        endRaw = a.rental_end_at ? a.rental_end_at.slice(0, 10) : a.updated_at.slice(0, 10);
+        // A checked-in booking stops being on rent the day it actually came
+        // back (checked_in_at, set only by Check In) — not its scheduled
+        // return date, which overcounts an early return (a car returned in
+        // mid-August but booked into September kept showing September days).
+        // Same actual-return date Late Returns uses.
+        const actual = a.checked_in_at || a.rental_end_at || a.updated_at;
+        endRaw = actual.slice(0, 10);
       } else {
         // Still active (never checked in)? Keep counting it as on rent
         // through today rather than stopping at a scheduled return date
@@ -125,6 +131,9 @@ function computeVehicleDays(from, to) {
         endRaw = scheduled > todayStr ? scheduled : todayStr;
       }
       const end = new Date(endRaw);
+      // Entirely outside the range — clipping both ends would otherwise
+      // collapse it onto the range's first/last day and count it as 1 day.
+      if (end < rangeStart || start > rangeEnd) continue;
       const s = clip(start, rangeStart, rangeEnd);
       const e = clip(end, rangeStart, rangeEnd);
       if (e >= s) rentedDays += dayDiff(s, e) + 1;
