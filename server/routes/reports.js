@@ -149,6 +149,21 @@ function computeVehicleDays(from, to) {
   });
 }
 
+// Splits [from, to] into calendar months, each clipped to the range (a range
+// starting Sep 15 gives Sep 15–30 for September) — for the month-by-month
+// report views.
+function monthSegments(from, to) {
+  const out = [];
+  let key = from.slice(0, 7);
+  while (key <= to.slice(0, 7)) {
+    const { from: mFrom, to: mTo } = periodRangeFor(key, 'month');
+    out.push({ key, from: mFrom < from ? from : mFrom, to: mTo > to ? to : mTo });
+    const [y, m] = key.split('-').map(Number);
+    key = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7);
+  }
+  return out;
+}
+
 // Business-wide revenue and expense components for a date range — shared by
 // Revenue by Time Period and Fleet Utilization's month view so both count
 // "revenue" and "expense" exactly the same way.
@@ -208,8 +223,33 @@ function businessTotals(from, to) {
 const REPORTS = {
   revenue_by_vehicle: {
     category: 'revenue', label: 'Revenue by Vehicle',
-    description: 'The car\'s daily rate, travel fee, and admin fee, accrued night-by-night across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged, and only to the extent that night has actually been paid for (oldest night first). Plus any deposit amounts forfeited against that vehicle, counted as of the booking\'s return date, and any insurance claim payout for that vehicle, counted as of its payout date. Expense is maintenance cost (tolls excluded — a pass-through cost recovered from the customer, not money actually lost) plus any claim deductible paid on that vehicle, counted as of the date the damage was reported; Business Expense is Swipe card-processing fees attributed to that vehicle\'s bookings, dated to when each payment was actually charged (not the rental night it applies to) — shown as its own column. Profit is Revenue less both.',
+    description: 'Switch View to compare Revenue or Profit month by month, one column per month in range. The car\'s daily rate, travel fee, and admin fee, accrued night-by-night across the actual rental dates that fall in the selected range (sales tax, highway tax, insurance fee, and processing fee excluded — not revenue) — not when a payment happened to be logged, and only to the extent that night has actually been paid for (oldest night first). Plus any deposit amounts forfeited against that vehicle, counted as of the booking\'s return date, and any insurance claim payout for that vehicle, counted as of its payout date. Expense is maintenance cost (tolls excluded — a pass-through cost recovered from the customer, not money actually lost) plus any claim deductible paid on that vehicle, counted as of the date the damage was reported; Business Expense is Swipe card-processing fees attributed to that vehicle\'s bookings, dated to when each payment was actually charged (not the rental night it applies to) — shown as its own column. Profit is Revenue less both.',
     hasDateRange: true,
+    extraParams: [
+      { key: 'view', label: 'View', type: 'select', default: 'total', options: [
+        { value: 'total', label: 'Total for Range' },
+        { value: 'revenue_month', label: 'Compare Revenue by Month' },
+        { value: 'profit_month', label: 'Compare Profit by Month' },
+      ] },
+    ],
+    // The compare views put one column per month in range (named by the
+    // range itself), with the vehicles still as rows.
+    columnsFor(params, from, to) {
+      if (params && (params.view === 'revenue_month' || params.view === 'profit_month')) {
+        const label = params.view === 'revenue_month' ? 'Revenue' : 'Profit';
+        return [
+          { key: 'vehicle', label: 'Vehicle' },
+          { key: 'license_plate', label: 'License Plate' },
+          ...monthSegments(from, to).map(m => {
+            const [y, mo] = m.key.split('-').map(Number);
+            const name = new Date(Date.UTC(y, mo - 1, 1)).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+            return { key: `m_${m.key}`, label: name, type: 'money' };
+          }),
+          { key: 'total', label: `Total ${label}`, type: 'money' },
+        ];
+      }
+      return this.columns;
+    },
     columns: [
       { key: 'vehicle', label: 'Vehicle' },
       { key: 'license_plate', label: 'License Plate' },
@@ -219,7 +259,25 @@ const REPORTS = {
       { key: 'business_expense', label: 'Business Expense', type: 'money' },
       { key: 'profit', label: 'Profit', type: 'money' },
     ],
-    run(from, to) {
+    run(from, to, params) {
+      if (params && (params.view === 'revenue_month' || params.view === 'profit_month')) {
+        // Same per-vehicle figures as the Total view, just computed one
+        // month at a time, so each month's column matches running the
+        // report for that month alone.
+        const field = params.view === 'revenue_month' ? 'revenue' : 'profit';
+        const byVehicle = new Map();
+        for (const m of monthSegments(from, to)) {
+          for (const r of this.run(m.from, m.to)) {
+            if (!byVehicle.has(r.vehicle_id)) {
+              byVehicle.set(r.vehicle_id, { vehicle_id: r.vehicle_id, vehicle: r.vehicle, license_plate: r.license_plate, total: 0 });
+            }
+            const row = byVehicle.get(r.vehicle_id);
+            row[`m_${m.key}`] = r[field];
+            row.total = round2(row.total + r[field]);
+          }
+        }
+        return [...byVehicle.values()].sort((a, b) => b.total - a.total);
+      }
       const vehicles = db.prepare('SELECT id, year, make, model, license_plate FROM vehicles').all();
       const byVehicle = new Map();
       getAccruedRevenueDays().forEach(d => {
@@ -491,12 +549,7 @@ const REPORTS = {
         // starting Sep 15 only counts Sep 15–30 for September). Reuses the
         // same per-vehicle rented-day logic as the vehicle view, just run
         // month by month, so the two views always agree.
-        const out = [];
-        let monthKey = from.slice(0, 7);
-        while (monthKey <= to.slice(0, 7)) {
-          const { from: mFrom, to: mTo } = periodRangeFor(monthKey, 'month');
-          const segFrom = mFrom < from ? from : mFrom;
-          const segTo = mTo > to ? to : mTo;
+        return monthSegments(from, to).map(({ key: monthKey, from: segFrom, to: segTo }) => {
           const vehicleDays = computeVehicleDays(segFrom, segTo);
           const rangeDays = dayDiff(new Date(segFrom), new Date(segTo)) + 1;
           const rentedDays = vehicleDays.reduce((sum, d) => sum + d.rentedDays, 0);
@@ -508,7 +561,7 @@ const REPORTS = {
           // insurance payouts and vehicle sale proceeds aren't earned by
           // renting, so they're left out of Net Profit here.
           const t = businessTotals(segFrom, segTo);
-          out.push({
+          return {
             period: periodLabelFor(monthKey, 'month'),
             rented_days: rentedDays, range_days: rangeDays,
             avg_cars_rented: round2(rentedDays / rangeDays),
@@ -519,11 +572,8 @@ const REPORTS = {
             // Daily rate is weekly_rate / 7, the same daily rate billing uses.
             avg_daily_rate: rated.length ? round2(rated.reduce((sum, a) => sum + a.weekly_rate / 7, 0) / rated.length) : '—',
             net_profit: round2(t.revenue + t.forfeited - t.vehicleExpense - t.claimDeductible - t.businessExpense),
-          });
-          const [y, m] = monthKey.split('-').map(Number);
-          monthKey = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7);
-        }
-        return out;
+          };
+        });
       }
       return computeVehicleDays(from, to).map(({ v, rentedDays, rangeDays }) => ({
         vehicle: `${v.year} ${v.make} ${v.model}`, license_plate: v.license_plate || '—',
@@ -993,7 +1043,7 @@ router.get('/:key/data', requireAuth, (req, res) => {
     params[p.key] = allowed.includes(req.query[p.key]) ? req.query[p.key] : p.default;
   }
   const rows = report.run(from, to, params);
-  const columns = report.columnsFor ? report.columnsFor(params) : report.columns;
+  const columns = report.columnsFor ? report.columnsFor(params, from, to) : report.columns;
 
   if (req.query.format === 'csv') {
     const csv = toCsv(columns, rows);
