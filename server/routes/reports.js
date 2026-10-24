@@ -438,8 +438,27 @@ const REPORTS = {
 
   fleet_utilization_rate: {
     category: 'utilization', label: 'Fleet Utilization Rate',
-    description: 'Percent of days in range each vehicle spent on an active or completed booking.',
+    description: 'Percent of days in range each vehicle spent on an active or completed booking. Switch View to "Avg Cars Rented per Month" to see, for each month in range, the average number of cars out on rent on any given day (total rented car-days ÷ days in that month, rounded to the nearest hundredth).',
     hasDateRange: true,
+    extraParams: [
+      { key: 'view', label: 'View', type: 'select', default: 'vehicle', options: [
+        { value: 'vehicle', label: 'By Vehicle' },
+        { value: 'month', label: 'Avg Cars Rented per Month' },
+      ] },
+    ],
+    // The month view is a different shape of table entirely, so it swaps in
+    // its own columns (the /data endpoint and CSV export both use these).
+    columnsFor(params) {
+      if (params && params.view === 'month') {
+        return [
+          { key: 'period', label: 'Month' },
+          { key: 'rented_days', label: 'Rented Car-Days', type: 'number' },
+          { key: 'range_days', label: 'Days', type: 'number' },
+          { key: 'avg_cars_rented', label: 'Avg Cars Rented', type: 'decimal' },
+        ];
+      }
+      return this.columns;
+    },
     columns: [
       { key: 'vehicle', label: 'Vehicle' },
       { key: 'license_plate', label: 'License Plate' },
@@ -447,7 +466,31 @@ const REPORTS = {
       { key: 'range_days', label: 'Range Days', type: 'number' },
       { key: 'utilization', label: 'Utilization', type: 'percent' },
     ],
-    run(from, to) {
+    run(from, to, params) {
+      if (params && params.view === 'month') {
+        // One row per calendar month, clipped to the selected range (a range
+        // starting Sep 15 only counts Sep 15–30 for September). Reuses the
+        // same per-vehicle rented-day logic as the vehicle view, just run
+        // month by month, so the two views always agree.
+        const out = [];
+        let monthKey = from.slice(0, 7);
+        while (monthKey <= to.slice(0, 7)) {
+          const { from: mFrom, to: mTo } = periodRangeFor(monthKey, 'month');
+          const segFrom = mFrom < from ? from : mFrom;
+          const segTo = mTo > to ? to : mTo;
+          const vehicleDays = computeVehicleDays(segFrom, segTo);
+          const rangeDays = dayDiff(new Date(segFrom), new Date(segTo)) + 1;
+          const rentedDays = vehicleDays.reduce((sum, d) => sum + d.rentedDays, 0);
+          out.push({
+            period: periodLabelFor(monthKey, 'month'),
+            rented_days: rentedDays, range_days: rangeDays,
+            avg_cars_rented: round2(rentedDays / rangeDays),
+          });
+          const [y, m] = monthKey.split('-').map(Number);
+          monthKey = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7);
+        }
+        return out;
+      }
       return computeVehicleDays(from, to).map(({ v, rentedDays, rangeDays }) => ({
         vehicle: `${v.year} ${v.make} ${v.model}`, license_plate: v.license_plate || '—',
         rented_days: rentedDays, range_days: rangeDays,
@@ -916,14 +959,15 @@ router.get('/:key/data', requireAuth, (req, res) => {
     params[p.key] = allowed.includes(req.query[p.key]) ? req.query[p.key] : p.default;
   }
   const rows = report.run(from, to, params);
+  const columns = report.columnsFor ? report.columnsFor(params) : report.columns;
 
   if (req.query.format === 'csv') {
-    const csv = toCsv(report.columns, rows);
+    const csv = toCsv(columns, rows);
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="${req.params.key}.csv"`);
     return res.send(csv);
   }
-  res.json({ columns: report.columns, rows });
+  res.json({ columns, rows });
 });
 
 // Per-booking breakdown behind a Revenue by Vehicle row — same figures,
