@@ -108,10 +108,12 @@ function computeVehicleDays(from, to) {
   const vehicles = db.prepare('SELECT id, year, make, model, license_plate FROM vehicles ORDER BY year DESC').all();
   return vehicles.map(v => {
     const apps = db.prepare(`
-      SELECT pickup_scheduled_at, rental_end_at, checked_in_at, updated_at, status FROM applications
+      SELECT id, weekly_rate, pickup_scheduled_at, rental_end_at, checked_in_at, updated_at, status FROM applications
       WHERE assigned_vehicle_id = ? AND status IN ('active', 'completed') AND pickup_scheduled_at IS NOT NULL
     `).all(v.id);
     let rentedDays = 0;
+    // The bookings that actually put this vehicle on rent within the range.
+    const bookings = [];
     for (const a of apps) {
       const start = new Date(a.pickup_scheduled_at.slice(0, 10));
       let endRaw;
@@ -136,10 +138,13 @@ function computeVehicleDays(from, to) {
       if (end < rangeStart || start > rangeEnd) continue;
       const s = clip(start, rangeStart, rangeEnd);
       const e = clip(end, rangeStart, rangeEnd);
-      if (e >= s) rentedDays += dayDiff(s, e) + 1;
+      if (e >= s) {
+        rentedDays += dayDiff(s, e) + 1;
+        bookings.push(a);
+      }
     }
     rentedDays = Math.min(rentedDays, rangeDays);
-    return { v, rentedDays, rangeDays };
+    return { v, rentedDays, rangeDays, bookings };
   });
 }
 
@@ -438,8 +443,31 @@ const REPORTS = {
 
   fleet_utilization_rate: {
     category: 'utilization', label: 'Fleet Utilization Rate',
-    description: 'Percent of days in range each vehicle spent on an active or completed booking.',
+    description: 'Percent of days in range each vehicle spent on an active or completed booking. Switch View to "Avg Cars Rented per Month" to see, for each month in range, the average number of cars out on rent on any given day (total rented car-days ÷ days in that month, rounded to the nearest hundredth), how many renters had a car that month, and the average daily rate those renters were paying (each renter counted once).',
     hasDateRange: true,
+    extraParams: [
+      { key: 'view', label: 'View', type: 'select', default: 'vehicle', options: [
+        { value: 'vehicle', label: 'By Vehicle' },
+        { value: 'month', label: 'Avg Cars Rented per Month' },
+      ] },
+    ],
+    // The month view is a different shape of table entirely, so it swaps in
+    // its own columns (the /data endpoint and CSV export both use these).
+    columnsFor(params) {
+      if (params && params.view === 'month') {
+        return [
+          { key: 'period', label: 'Month' },
+          { key: 'rented_days', label: 'Rented Car-Days', type: 'number' },
+          { key: 'range_days', label: 'Days', type: 'number' },
+          { key: 'avg_cars_rented', label: 'Avg Cars Rented', type: 'decimal' },
+          // noTotal: summing these across months is meaningless (a renter
+          // spanning two months would count twice; an average of averages).
+          { key: 'renters', label: 'Renters', type: 'number', noTotal: true },
+          { key: 'avg_daily_rate', label: 'Avg Daily Rate', type: 'money', noTotal: true },
+        ];
+      }
+      return this.columns;
+    },
     columns: [
       { key: 'vehicle', label: 'Vehicle' },
       { key: 'license_plate', label: 'License Plate' },
@@ -447,7 +475,38 @@ const REPORTS = {
       { key: 'range_days', label: 'Range Days', type: 'number' },
       { key: 'utilization', label: 'Utilization', type: 'percent' },
     ],
-    run(from, to) {
+    run(from, to, params) {
+      if (params && params.view === 'month') {
+        // One row per calendar month, clipped to the selected range (a range
+        // starting Sep 15 only counts Sep 15–30 for September). Reuses the
+        // same per-vehicle rented-day logic as the vehicle view, just run
+        // month by month, so the two views always agree.
+        const out = [];
+        let monthKey = from.slice(0, 7);
+        while (monthKey <= to.slice(0, 7)) {
+          const { from: mFrom, to: mTo } = periodRangeFor(monthKey, 'month');
+          const segFrom = mFrom < from ? from : mFrom;
+          const segTo = mTo > to ? to : mTo;
+          const vehicleDays = computeVehicleDays(segFrom, segTo);
+          const rangeDays = dayDiff(new Date(segFrom), new Date(segTo)) + 1;
+          const rentedDays = vehicleDays.reduce((sum, d) => sum + d.rentedDays, 0);
+          // Every renter on the road at any point that month, each counted
+          // once regardless of how many days they had the car.
+          const renters = vehicleDays.flatMap(d => d.bookings);
+          const rated = renters.filter(a => a.weekly_rate != null);
+          out.push({
+            period: periodLabelFor(monthKey, 'month'),
+            rented_days: rentedDays, range_days: rangeDays,
+            avg_cars_rented: round2(rentedDays / rangeDays),
+            renters: renters.length,
+            // Daily rate is weekly_rate / 7, the same daily rate billing uses.
+            avg_daily_rate: rated.length ? round2(rated.reduce((sum, a) => sum + a.weekly_rate / 7, 0) / rated.length) : '—',
+          });
+          const [y, m] = monthKey.split('-').map(Number);
+          monthKey = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7);
+        }
+        return out;
+      }
       return computeVehicleDays(from, to).map(({ v, rentedDays, rangeDays }) => ({
         vehicle: `${v.year} ${v.make} ${v.model}`, license_plate: v.license_plate || '—',
         rented_days: rentedDays, range_days: rangeDays,
@@ -916,14 +975,15 @@ router.get('/:key/data', requireAuth, (req, res) => {
     params[p.key] = allowed.includes(req.query[p.key]) ? req.query[p.key] : p.default;
   }
   const rows = report.run(from, to, params);
+  const columns = report.columnsFor ? report.columnsFor(params) : report.columns;
 
   if (req.query.format === 'csv') {
-    const csv = toCsv(report.columns, rows);
+    const csv = toCsv(columns, rows);
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="${req.params.key}.csv"`);
     return res.send(csv);
   }
-  res.json({ columns: report.columns, rows });
+  res.json({ columns, rows });
 });
 
 // Per-booking breakdown behind a Revenue by Vehicle row — same figures,

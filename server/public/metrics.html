@@ -134,6 +134,7 @@ function fmtCell(val, type) {
   if (val === '—' || val == null || val === '') return '—';
   if (type === 'money') return fmtExact(val);
   if (type === 'percent') return `${val}%`;
+  if (type === 'decimal') return Number(val).toFixed(2);
   return val;
 }
 
@@ -330,6 +331,9 @@ async function generateReport(key, label, columns) {
   body.innerHTML = '<div class="report-results__empty">Loading…</div>';
   try {
     const data = await api(reportUrl(key));
+    // A report can swap its columns based on a chosen option (e.g. Fleet
+    // Utilization's month view) — the server sends back the ones it used.
+    if (data.columns) columns = data.columns;
     const fromEl = document.getElementById(`rpt-${key}-from`);
     const toEl = document.getElementById(`rpt-${key}-to`);
     document.getElementById('report-modal-sub').textContent = (fromEl && toEl) ? `${fromEl.value} – ${toEl.value} · ${data.rows.length} row${data.rows.length === 1 ? '' : 's'}` : `${data.rows.length} row${data.rows.length === 1 ? '' : 's'}`;
@@ -343,7 +347,7 @@ async function generateReport(key, label, columns) {
       : key === 'business_expense_by_period' ? 'business_expense'
       : key === 'maintenance_and_business_expense_by_period' ? 'combined'
       : null;
-    const numericCols = columns.filter(c => c.type === 'money' || c.type === 'number');
+    const numericCols = columns.filter(c => (c.type === 'money' || c.type === 'number') && !c.noTotal);
     const hasTotals = numericCols.length > 0;
     const totals = {};
     if (hasTotals) {
@@ -360,7 +364,7 @@ async function generateReport(key, label, columns) {
             return `<tr>${columns.map(c => `<td>${fmtCell(r[c.key], c.type)}</td>`).join('')}</tr>`;
           }).join('')}
         </tbody>
-        ${hasTotals ? `<tfoot><tr style="font-weight:700;border-top:2px solid var(--border-color,#ddd);">${columns.map((c, i) => `<td style="padding:8px 12px;">${i === 0 ? 'Total' : (c.type === 'money' || c.type === 'number') ? fmtCell(totals[c.key], c.type) : ''}</td>`).join('')}</tr></tfoot>` : ''}
+        ${hasTotals ? `<tfoot><tr style="font-weight:700;border-top:2px solid var(--border-color,#ddd);">${columns.map((c, i) => `<td style="padding:8px 12px;">${i === 0 ? 'Total' : c.key in totals ? fmtCell(totals[c.key], c.type) : ''}</td>`).join('')}</tr></tfoot>` : ''}
       </table>
     `;
     if (drillKind === 'vehicle') {
