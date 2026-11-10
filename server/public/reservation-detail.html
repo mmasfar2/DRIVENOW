@@ -334,7 +334,10 @@
         <span style="font-weight:700;">Invoice Total</span>
         <strong id="inv-total-preview" style="font-size:1.1rem;">—</strong>
       </div>
-      <button class="btn btn-block btn-outline" id="inv-preview" style="margin-bottom:10px;">Preview / Print</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <button class="btn btn-outline" id="inv-preview">Preview / Print</button>
+        <button class="btn btn-outline" id="inv-download-pdf">Download PDF</button>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <button class="btn" id="inv-send-email">Send by Email</button>
         <button class="btn" id="inv-send-text">Send by Text</button>
@@ -1490,15 +1493,42 @@ async function afterInvoiceSent() {
   await loadInvoiceHistory();
 }
 
-document.getElementById('inv-preview').addEventListener('click', async () => {
+// Preview opens the invoice; Download PDF opens it and saves it as a PDF
+// right away, to attach to an email sent from the owner's own mailbox.
+// Either way the status box also gets a plain link, in case the new tab is
+// blocked, plus a Copy Link button.
+async function openInvoicePage(download) {
   // Opened before the request so the browser doesn't treat it as a pop-up.
   const win = window.open('', '_blank');
   const inv = await createInvoice(null);
   if (!inv) { if (win) win.close(); return; }
-  if (win) win.location = invoiceUrl(inv.token); else window.open(invoiceUrl(inv.token), '_blank');
+  const url = invoiceUrl(inv.token) + (download ? '&download=1' : '');
+  if (win) win.location = url;
+  showInvoiceLink(inv, url, download, !!win);
   loadInvoiceHistory();
   load();
-});
+}
+function showInvoiceLink(inv, url, download, opened) {
+  const box = document.getElementById('inv-email-status');
+  box.style.display = 'block';
+  const what = download ? 'The PDF downloads from the invoice tab' : 'The invoice opened in a new tab';
+  box.innerHTML = `
+    <div>${opened ? `${what} — didn't open?` : 'Your browser blocked the new tab. Click to open the invoice:'}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+      <a class="btn btn-sm" href="${url}" target="_blank" rel="noopener">${download ? 'Open & Download PDF' : 'Open Invoice'}</a>
+      <button type="button" class="btn btn-sm btn-outline" id="inv-copy-link">Copy Link</button>
+    </div>`;
+  document.getElementById('inv-copy-link').addEventListener('click', async (e) => {
+    try {
+      await navigator.clipboard.writeText(invoiceUrl(inv.token));
+      e.target.textContent = 'Copied!';
+    } catch (err) {
+      prompt('Copy the invoice link:', invoiceUrl(inv.token));
+    }
+  });
+}
+document.getElementById('inv-preview').addEventListener('click', () => openInvoicePage(false));
+document.getElementById('inv-download-pdf').addEventListener('click', () => openInvoicePage(true));
 // Status box under the send buttons. With a Gmail link it always offers a
 // plain link to click: opening a tab from code after waiting on the server
 // can be silently blocked (pop-up blockers, ad blockers), a click never is.

@@ -75,6 +75,9 @@ app.use('/api/downtime', downtimeRoutes);
 app.use('/api/business-expenses', businessExpenseRoutes);
 
 app.use('/uploads', express.static(UPLOADS_DIR));
+// html2pdf.js for the invoice page's Download PDF, served from the installed
+// package rather than a CDN.
+app.use('/vendor/html2pdf', express.static(path.join(__dirname, 'node_modules', 'html2pdf.js', 'dist')));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/health', (req, res) => res.json({ ok: true, timestamp: new Date().toISOString() }));
