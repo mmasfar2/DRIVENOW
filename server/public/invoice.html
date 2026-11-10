@@ -32,9 +32,6 @@ td { padding: 10px 0; border-bottom: 1px solid var(--gray-border); vertical-alig
 .inv-totals { margin-left: auto; width: min(100%, 320px); margin-top: 16px; }
 .inv-totals div { display: flex; justify-content: space-between; padding: 5px 0; font-variant-numeric: tabular-nums; }
 .inv-totals .inv-grand { border-top: 2px solid var(--black); margin-top: 6px; padding-top: 10px; font-size: 1.15rem; font-weight: 900; }
-.inv-section { margin-top: 34px; }
-.inv-account { margin-top: 30px; padding: 16px 18px; background: var(--gray-light); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.inv-account strong { font-size: 1.15rem; }
 .inv-msg { max-width: 8.5in; margin: 60px auto; padding: 0 16px; text-align: center; color: var(--text-muted); }
 @media (max-width: 600px) { .inv-page { padding: 22px 16px; margin: 12px 0 24px; } .inv-doc { text-align: left; } }
 @media print {
@@ -55,7 +52,6 @@ const money = n => (n < 0 ? '−' : '') + '$' + Math.abs(Number(n) || 0).toLocal
 // Date-only strings are calendar dates, not instants — format them in UTC so
 // they don't shift a day in the customer's own timezone.
 const fmtDay = d => d ? new Date(`${String(d).slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : '—';
-const METHODS = { cash: 'Cash', card: 'Card', swipe: 'Card', cash_app: 'Cash App', apple_pay: 'Apple Pay', zelle: 'Zelle' };
 
 async function load() {
   const root = document.getElementById('inv-root');
@@ -99,27 +95,8 @@ async function load() {
         </tbody>
       </table>
       <div class="inv-totals">
-        <div><span>Invoice Total</span><span>${money(inv.total)}</span></div>
-        ${inv.previous_balance ? `<div><span>${inv.previous_balance > 0 ? 'Previous balance' : 'Credit from earlier payments'}</span><span>${money(inv.previous_balance)}</span></div>` : ''}
-        <div class="inv-grand"><span>${inv.amount_due < 0 ? 'Credit' : 'Amount Due'}</span><span>${money(Math.abs(inv.amount_due))}</span></div>
+        <div class="inv-grand"><span>Invoice Total</span><span>${money(inv.total)}</span></div>
       </div>
-
-      ${inv.payments.length ? `
-        <div class="inv-section">
-          <div class="inv-label" style="margin-bottom:6px;">Payments Received on This Rental</div>
-          <table>
-            <tbody>
-              ${inv.payments.map(p => `<tr><td>${fmtDay(p.paid_at)}<div class="inv-detail">${esc(METHODS[p.method] || p.method)}</div></td><td class="num">${money(p.amount)}</td></tr>`).join('')}
-            </tbody>
-          </table>
-          <div class="inv-totals"><div><span>Total Paid</span><span>${money(inv.paid_total)}</span></div></div>
-        </div>` : ''}
-
-      ${inv.remaining !== inv.amount_due ? `
-        <div class="inv-account">
-          <span>Remaining on your full rental, including later weeks (through ${fmtDay(inv.rental_to)})</span>
-          <strong>${money(inv.remaining)}</strong>
-        </div>` : ''}
     </div>
   `;
 }

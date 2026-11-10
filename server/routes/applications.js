@@ -6,7 +6,6 @@ const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
 const { computeCharge, computeOwed, computePeriodLineItems, SWIPE_FEE_RATE } = require('../billing');
 const { todayStr } = require('../timezone');
-const { invoiceAmounts } = require('./invoices');
 const { emailConfigured, sendEmail, EMAIL_FROM_NAME } = require('../mailer');
 
 // Rental payments: 'card' carries a customer-facing processing_fee surcharge,
@@ -384,9 +383,9 @@ const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
 //   fees  — this invoice's amount for each of them (defaults to the
 //           reservation's);
 //   added — charges for this invoice only ({ field, amount, note }).
-// None of it changes the reservation: an invoice is its own document. What
-// it bills beyond the reservation's own amounts is stored as `extra` so
-// Amount Due still adds up (see invoiceAmounts in routes/invoices.js).
+// None of it changes the reservation: an invoice is its own document, and
+// its total is exactly what's on it. (`extra` records what it billed beyond
+// the reservation's own amounts, for reference.)
 // When the period is the whole booking and every reservation charge is
 // billed, an Adjustment line makes the invoice match the reservation's real
 // saved total (e.g. an overridden total from Invoice Adjustments). With
@@ -454,13 +453,8 @@ router.post('/:id/invoices', requireAuth, (req, res) => {
     invoice = db.prepare('SELECT * FROM invoices WHERE id = ?').get(info.lastInsertRowid);
   }
   if (via) markInvoiceSent(invoice, via);
-  const fresh = db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoice.id);
-  res.json({ id: invoice.id, token: invoice.token, total, amount_due: invoiceAmounts(app, fresh, paidTotalFor(id)).amount_due });
+  res.json({ id: invoice.id, token: invoice.token, total });
 });
-
-function paidTotalFor(applicationId) {
-  return db.prepare('SELECT COALESCE(SUM(amount), 0) as t FROM payments WHERE application_id = ?').get(applicationId).t;
-}
 
 function markInvoiceSent(invoice, via) {
   const id = invoice.application_id;
