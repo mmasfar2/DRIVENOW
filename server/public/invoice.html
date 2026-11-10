@@ -71,7 +71,6 @@ async function load() {
   }
   document.title = `Invoice ${inv.number} — ${BUSINESS.name}`;
   const bizLines = [BUSINESS.address, BUSINESS.city, BUSINESS.phone, BUSINESS.email].filter(Boolean);
-  const balance = inv.account_balance;
   root.innerHTML = `
     <div class="inv-toolbar"><button class="inv-btn" onclick="window.print()">Print / Save PDF</button></div>
     <div class="inv-page">
@@ -100,7 +99,9 @@ async function load() {
         </tbody>
       </table>
       <div class="inv-totals">
-        <div class="inv-grand"><span>Invoice Total</span><span>${money(inv.total)}</span></div>
+        <div><span>Invoice Total</span><span>${money(inv.total)}</span></div>
+        ${inv.previous_balance ? `<div><span>${inv.previous_balance > 0 ? 'Previous balance' : 'Credit from earlier payments'}</span><span>${money(inv.previous_balance)}</span></div>` : ''}
+        <div class="inv-grand"><span>${inv.amount_due < 0 ? 'Credit' : 'Amount Due'}</span><span>${money(Math.abs(inv.amount_due))}</span></div>
       </div>
 
       ${inv.payments.length ? `
@@ -114,10 +115,11 @@ async function load() {
           <div class="inv-totals"><div><span>Total Paid</span><span>${money(inv.paid_total)}</span></div></div>
         </div>` : ''}
 
-      <div class="inv-account">
-        <span>${balance < 0 ? 'Credit on your account' : `Remaining balance on your full rental (through ${fmtDay(inv.rental_to)})`}</span>
-        <strong>${money(Math.abs(balance))}</strong>
-      </div>
+      ${inv.remaining !== inv.amount_due ? `
+        <div class="inv-account">
+          <span>Remaining on your full rental, including later weeks (through ${fmtDay(inv.rental_to)})</span>
+          <strong>${money(inv.remaining)}</strong>
+        </div>` : ''}
     </div>
   `;
 }
