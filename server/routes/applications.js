@@ -6,6 +6,7 @@ const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
 const { computeCharge, computeOwed, computePeriodLineItems, SWIPE_FEE_RATE } = require('../billing');
 const { todayStr } = require('../timezone');
+const { invoiceAmounts } = require('./invoices');
 
 // Rental payments: 'card' carries a customer-facing processing_fee surcharge,
 // 'swipe' carries an absorbed processor cut logged as a Business Expense —
@@ -484,7 +485,10 @@ router.post('/:id/invoices', requireAuth, (req, res) => {
       logActivity(id, `Invoice #${id}-${invoice.id} (${period_from} to ${period_to}, $${total.toFixed(2)}) sent by ${via}`);
     })();
   }
-  res.json({ id: invoice.id, token: invoice.token, total });
+  const fresh = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
+  const stored = db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoice.id);
+  const paidTotal = db.prepare('SELECT COALESCE(SUM(amount), 0) as t FROM payments WHERE application_id = ?').get(id).t;
+  res.json({ id: invoice.id, token: invoice.token, total, amount_due: invoiceAmounts(fresh, stored, paidTotal).amount_due });
 });
 
 router.get('/:id/invoices', requireAuth, (req, res) => {
