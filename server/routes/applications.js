@@ -501,7 +501,10 @@ router.post('/:id/invoices/:invoiceId/email', requireAuth, async (req, res) => {
     await sendEmail({ to: app.email, subject, text, html });
   } catch (err) {
     console.error('Invoice email failed:', err.message);
-    return res.status(502).json({ error: `The email couldn't be sent: ${err.message}` });
+    const unreachable = ['ETIMEDOUT', 'ECONNREFUSED', 'ECONNECTION', 'ESOCKET'].includes(err.code);
+    return res.status(502).json({ error: unreachable
+      ? 'couldn\'t reach Gmail\'s mail server — the hosting plan may block outgoing email'
+      : err.code === 'EAUTH' ? 'Gmail rejected the login — check EMAIL_USER and EMAIL_APP_PASSWORD' : err.message });
   }
   markInvoiceSent(invoice, 'email');
   res.json({ ok: true, to: app.email });

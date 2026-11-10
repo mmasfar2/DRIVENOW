@@ -340,6 +340,7 @@
         <button class="btn" id="inv-send-text">Send by Text</button>
       </div>
       <div id="inv-contact" style="font-size:0.78rem;color:#888;margin-top:8px;"></div>
+      <div id="inv-email-status" style="display:none;font-size:0.85rem;margin-top:12px;padding:12px 14px;border-radius:8px;background:var(--gray-light);"></div>
       <div id="inv-history" style="margin-top:18px;"></div>
     </div>
   </div>
@@ -1336,6 +1337,7 @@ function openInvoiceModal() {
   document.getElementById('inv-to').value = (booking.rental_end_at || '').slice(0, 10);
   renderInvoiceFees(true);
   document.getElementById('inv-added-rows').innerHTML = '';
+  showEmailStatus('');
   const email = invoiceEmailAddress();
   const phone = smsNumber(booking.phone);
   document.getElementById('inv-send-email').disabled = !email;
@@ -1497,37 +1499,55 @@ document.getElementById('inv-preview').addEventListener('click', async () => {
   loadInvoiceHistory();
   load();
 });
-// With email set up on the server, the portal sends it and says so.
-// Otherwise this opens a Gmail compose window already filled in — a
-// mailto: link silently does nothing on a computer with no mail app set up.
+// Status box under the send buttons. With a Gmail link it always offers a
+// plain link to click: opening a tab from code after waiting on the server
+// can be silently blocked (pop-up blockers, ad blockers), a click never is.
+function showEmailStatus(text, gmailUrl) {
+  const box = document.getElementById('inv-email-status');
+  if (!text) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'block';
+  box.innerHTML = `<div>${text}</div>${gmailUrl ? `<a class="btn btn-sm" href="${gmailUrl}" target="_blank" rel="noopener" style="margin-top:10px;">Open Gmail to send</a>` : ''}`;
+}
+function gmailComposeUrl(inv) {
+  const subject = `Invoice #${id}-${inv.id} from ${BUSINESS.name}`;
+  return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(booking.email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(invoiceMessage(inv))}`;
+}
+
+// With email set up on the server, the portal sends it and says so; if that
+// fails it falls back to Gmail. Otherwise it opens a Gmail compose window
+// already filled in — a mailto: link silently does nothing on a computer
+// with no mail app set up.
 document.getElementById('inv-send-email').addEventListener('click', async () => {
   const btn = document.getElementById('inv-send-email');
-  if (invoiceEmailConfigured) {
-    btn.disabled = true;
-    try {
+  btn.disabled = true;
+  try {
+    if (invoiceEmailConfigured) {
+      showEmailStatus('Sending…');
       const inv = await createInvoice(null);
-      if (!inv) return;
-      const subject = `Invoice #${id}-${inv.id} from ${BUSINESS.name}`;
-      const r = await api(`/api/applications/${id}/invoices/${inv.id}/email`, { method: 'POST', body: JSON.stringify({
-        subject, message: invoiceMessage(inv), link: invoiceUrl(inv.token),
-      }) });
-      await afterInvoiceSent();
-      alert(`Invoice emailed to ${r.to}.`);
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      btn.disabled = false;
+      if (!inv) { showEmailStatus(''); return; }
+      try {
+        const r = await api(`/api/applications/${id}/invoices/${inv.id}/email`, { method: 'POST', body: JSON.stringify({
+          subject: `Invoice #${id}-${inv.id} from ${BUSINESS.name}`, message: invoiceMessage(inv), link: invoiceUrl(inv.token),
+        }) });
+        showEmailStatus(`✓ Invoice emailed to ${r.to}.`);
+        await afterInvoiceSent();
+      } catch (err) {
+        showEmailStatus(`The portal couldn't send it (${err.message}). You can send it from Gmail instead:`, gmailComposeUrl(inv));
+      }
+      return;
     }
-    return;
+    // Opened before the request so the browser doesn't treat it as a pop-up;
+    // if it's blocked anyway, the link in the status box still works.
+    const win = window.open('', '_blank');
+    const inv = await createInvoice('email');
+    if (!inv) { if (win) win.close(); return; }
+    const gmail = gmailComposeUrl(inv);
+    if (win) win.location = gmail;
+    showEmailStatus(win ? 'Gmail opened in a new tab with the invoice filled in — press Send there. Didn\'t open?' : 'Your browser blocked the new tab. Click to open Gmail with the invoice filled in:', gmail);
+    afterInvoiceSent();
+  } finally {
+    btn.disabled = false;
   }
-  // Opened before the request so the browser doesn't treat it as a pop-up.
-  const win = window.open('', '_blank');
-  const inv = await createInvoice('email');
-  if (!inv) { if (win) win.close(); return; }
-  const subject = `Invoice #${id}-${inv.id} from ${BUSINESS.name}`;
-  const gmail = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(booking.email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(invoiceMessage(inv))}`;
-  if (win) win.location = gmail; else window.open(gmail, '_blank');
-  afterInvoiceSent();
 });
 document.getElementById('inv-send-text').addEventListener('click', async () => {
   const inv = await createInvoice('text');

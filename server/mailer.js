@@ -17,6 +17,12 @@ function getTransport() {
       port,
       secure: port === 465,
       auth: { user: EMAIL_USER, pass: EMAIL_APP_PASSWORD },
+      // Fail fast instead of nodemailer's ~2 minute default — some hosts
+      // (e.g. Render's free plan) block outgoing mail-server connections,
+      // and the page falls back to Gmail when this errors.
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
     });
   }
   return transport;
