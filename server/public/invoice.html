@@ -13,6 +13,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--gray-light); color: var(--black); font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 1.45; }
 .inv-toolbar { display: flex; justify-content: flex-end; gap: 10px; max-width: 8.5in; margin: 16px auto 0; padding: 0 16px; }
+.inv-btn--ghost { background: var(--white) !important; color: var(--black) !important; }
 .inv-btn { background: var(--black); color: var(--white); border: 1px solid var(--black); border-radius: 6px; padding: 9px 18px; font: inherit; font-weight: 700; font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
 .inv-page { max-width: 8.5in; margin: 16px auto 32px; padding: 40px; background: var(--white); box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
 .inv-head { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; border-bottom: 2px solid var(--black); padding-bottom: 14px; margin-bottom: 22px; }
@@ -33,6 +34,7 @@ td { padding: 10px 0; border-bottom: 1px solid var(--gray-border); vertical-alig
 .inv-totals div { display: flex; justify-content: space-between; padding: 5px 0; font-variant-numeric: tabular-nums; }
 .inv-totals .inv-grand { border-top: 2px solid var(--black); margin-top: 6px; padding-top: 10px; font-size: 1.15rem; font-weight: 900; }
 .inv-msg { max-width: 8.5in; margin: 60px auto; padding: 0 16px; text-align: center; color: var(--text-muted); }
+.inv-exporting .inv-page { box-shadow: none; }
 @media (max-width: 600px) { .inv-page { padding: 22px 16px; margin: 12px 0 24px; } .inv-doc { text-align: left; } }
 @media print {
   body { background: #fff; }
@@ -45,6 +47,7 @@ td { padding: 10px 0; border-bottom: 1px solid var(--gray-border); vertical-alig
 <div id="inv-root"><div class="inv-msg">Loading invoice…</div></div>
 
 <script src="js/business.js"></script>
+<script src="vendor/html2pdf/html2pdf.bundle.min.js"></script>
 <script>
 const token = new URLSearchParams(window.location.search).get('t');
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -65,10 +68,14 @@ async function load() {
     root.innerHTML = '<div class="inv-msg">This invoice could not be found. Please contact us for a new link.</div>';
     return;
   }
+  currentInvoice = inv;
   document.title = `Invoice ${inv.number} — ${BUSINESS.name}`;
   const bizLines = [BUSINESS.address, BUSINESS.city, BUSINESS.phone, BUSINESS.email].filter(Boolean);
   root.innerHTML = `
-    <div class="inv-toolbar"><button class="inv-btn" onclick="window.print()">Print / Save PDF</button></div>
+    <div class="inv-toolbar">
+      <button class="inv-btn inv-btn--ghost" onclick="window.print()">Print</button>
+      <button class="inv-btn" id="inv-download" onclick="downloadPdf()">Download PDF</button>
+    </div>
     <div class="inv-page">
       <div class="inv-head">
         <div>
@@ -100,7 +107,35 @@ async function load() {
     </div>
   `;
 }
-load();
+// Saves the invoice as a PDF file (Letter size) — for attaching to an email
+// sent from the owner's own mailbox. ?download=1 does it as soon as the
+// invoice loads (the portal's Download PDF button opens that).
+let currentInvoice = null;
+async function downloadPdf() {
+  if (!currentInvoice || !window.html2pdf) return;
+  const btn = document.getElementById('inv-download');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  document.body.classList.add('inv-exporting');
+  const name = `Invoice ${currentInvoice.number} - ${currentInvoice.customer}`.replace(/[\\/:*?"<>|]+/g, '');
+  try {
+    await html2pdf().set({
+      margin: 0.4,
+      filename: `${name}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, backgroundColor: '#ffffff' },
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+    }).from(document.querySelector('.inv-page')).save();
+  } finally {
+    document.body.classList.remove('inv-exporting');
+    btn.disabled = false;
+    btn.textContent = 'Download PDF';
+  }
+}
+
+load().then(() => {
+  if (currentInvoice && new URLSearchParams(window.location.search).get('download') === '1') downloadPdf();
+});
 </script>
 </body>
 </html>
