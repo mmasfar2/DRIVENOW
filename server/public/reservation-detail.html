@@ -1477,7 +1477,7 @@ async function createInvoice(via) {
 function invoiceMessage(inv) {
   const from = fmtPeriodDay(document.getElementById('inv-from').value);
   const to = fmtPeriodDay(document.getElementById('inv-to').value);
-  return `Hi ${booking.first_name}, here is your ${BUSINESS.name} invoice for ${from} – ${to}. Amount due: ${fmtExact(inv.amount_due)}. View it here: ${invoiceUrl(inv.token)}`;
+  return `Hi ${booking.first_name}, here is your ${BUSINESS.name} invoice for ${from} – ${to}. Total: ${fmtExact(inv.total)}. View it here: ${invoiceUrl(inv.token)}`;
 }
 
 // Refreshes the page and the invoice history after a send. Done before
