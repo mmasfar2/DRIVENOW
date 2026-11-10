@@ -297,6 +297,15 @@
   </div>
 </div>
 
+<style>
+  .inv-sub { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #888; margin-bottom: 4px; }
+  .inv-fee-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 0.85rem; }
+  .inv-fee-row label { display: flex; align-items: center; gap: 8px; flex: 1; cursor: pointer; margin: 0; text-transform: none; letter-spacing: 0; font-weight: 500; color: inherit; }
+  .inv-fee-row input[type="number"] { width: 100px; padding: 6px 8px; text-align: right; }
+  .inv-added-row { display: grid; grid-template-columns: 110px 1fr 88px 24px; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .inv-added-row select, .inv-added-row input { padding: 6px 8px; font-size: 0.82rem; width: 100%; min-width: 0; }
+  .inv-added-row button { background: none; border: none; font-size: 1.2rem; color: #888; cursor: pointer; line-height: 1; }
+</style>
 <div id="invoice-overlay" class="simple-modal-overlay" style="display:none;">
   <div class="simple-modal" style="width:440px;">
     <div class="simple-modal__header">
@@ -308,12 +317,22 @@
         <div class="field"><label>Period From</label><input type="date" id="inv-from"></div>
         <div class="field"><label>Period To</label><input type="date" id="inv-to"></div>
       </div>
-      <label style="display:flex;gap:8px;align-items:flex-start;font-size:0.82rem;margin-bottom:14px;cursor:pointer;">
-        <input type="checkbox" id="inv-one-time" style="margin-top:3px;">
-        <span>Include one-time charges (travel, processing, misc, tolls, discount)</span>
-      </label>
-      <div style="font-size:0.8rem;color:#666;margin-bottom:16px;">
-        Bills the lease rate, taxes and daily fees for the days in this period. Any unsaved Invoice Adjustments are saved first.
+      <div style="font-size:0.8rem;color:#666;margin-bottom:14px;">
+        Bills the lease rate, taxes and daily fees for the days in this period.
+      </div>
+
+      <div class="inv-sub">Additional Charges</div>
+      <div style="font-size:0.76rem;color:#888;margin-bottom:6px;">The rental's charges — tick the ones to bill on this invoice. Changing an amount updates the rental.</div>
+      <div id="inv-fee-rows"></div>
+
+      <div class="inv-sub" style="margin-top:14px;">New Charges on This Invoice</div>
+      <div style="font-size:0.76rem;color:#888;margin-bottom:6px;">E.g. this week's tolls. Added to the rental's balance when the invoice is sent.</div>
+      <div id="inv-added-rows"></div>
+      <button type="button" class="btn btn-sm btn-outline" id="inv-add-charge">+ Add Charge</button>
+
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin:18px 0 14px;padding-top:12px;border-top:1px solid var(--gray-border);">
+        <span style="font-weight:700;">Invoice Total</span>
+        <strong id="inv-total-preview" style="font-size:1.1rem;">—</strong>
       </div>
       <button class="btn btn-block btn-outline" id="inv-preview" style="margin-bottom:10px;">Preview / Print</button>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
@@ -1315,7 +1334,8 @@ function openInvoiceModal() {
   const pickup = (booking.pickup_scheduled_at || '').slice(0, 10);
   document.getElementById('inv-from').value = pickup;
   document.getElementById('inv-to').value = (booking.rental_end_at || '').slice(0, 10);
-  document.getElementById('inv-one-time').checked = true;
+  renderInvoiceFees(true);
+  document.getElementById('inv-added-rows').innerHTML = '';
   // Walk-ins carry a placeholder address (see displayEmail) — not sendable.
   const email = displayEmail(booking.email) === booking.email ? booking.email : '';
   const phone = smsNumber(booking.phone);
@@ -1324,14 +1344,81 @@ function openInvoiceModal() {
   document.getElementById('inv-contact').textContent = [email && `Email: ${email}`, phone && `Text: ${booking.phone}`].filter(Boolean).join(' · ') || 'No email or phone on file for this customer.';
   document.getElementById('invoice-overlay').style.display = 'flex';
   loadInvoiceHistory();
+  refreshInvoiceTotal();
 }
 function closeInvoiceModal() {
   document.getElementById('invoice-overlay').style.display = 'none';
 }
-// One-time charges belong on the invoice that starts the rental — default
-// the box to whether this period does.
-document.getElementById('inv-from').addEventListener('change', (e) => {
-  document.getElementById('inv-one-time').checked = e.target.value === (booking.pickup_scheduled_at || '').slice(0, 10);
+// The rental's flat additional charges, matched to the Invoice Adjustments
+// row that holds each one (so editing an amount here saves the same way).
+const INVOICE_FEES = [
+  { field: 'travel_fee', item: 'travel', label: 'Travel Fee' },
+  { field: 'processing_fee', item: 'processingfee', label: 'Processing Fee' },
+  { field: 'misc_fee', item: 'misc', label: 'Miscellaneous' },
+  { field: 'toll_fee', item: 'tolls', label: 'Tolls' },
+  { field: 'discount', item: 'discount', label: 'Discount' },
+];
+// Saved charges belong on the invoice that starts the rental — ticked by
+// default only when this period does (later weekly invoices don't re-bill them).
+function renderInvoiceFees(resetAmounts) {
+  const startsRental = document.getElementById('inv-from').value === (booking.pickup_scheduled_at || '').slice(0, 10);
+  document.getElementById('inv-fee-rows').innerHTML = INVOICE_FEES.map(f => {
+    const prev = document.querySelector(`#inv-fee-rows input[data-fee="${f.field}"]`);
+    const amount = !resetAmounts && prev ? prev.value : (Number(booking[f.field]) || 0).toFixed(2);
+    return `
+      <div class="inv-fee-row">
+        <label><input type="checkbox" data-bill="${f.field}" ${startsRental && Number(amount) ? 'checked' : ''}>${f.label}${f.field === 'discount' ? ' (−)' : ''}</label>
+        <input type="number" min="0" step="0.01" data-fee="${f.field}" data-saved="${(Number(booking[f.field]) || 0).toFixed(2)}" value="${amount}">
+      </div>`;
+  }).join('');
+}
+function addInvoiceChargeRow() {
+  const row = document.createElement('div');
+  row.className = 'inv-added-row';
+  row.innerHTML = `
+    <select>${INVOICE_FEES.map(f => `<option value="${f.field}"${f.field === 'toll_fee' ? ' selected' : ''}>${f.label}</option>`).join('')}</select>
+    <input type="text" placeholder="Note (optional)" maxlength="120">
+    <input type="number" min="0" step="0.01" placeholder="0.00">
+    <button type="button" title="Remove">&times;</button>`;
+  row.querySelector('button').addEventListener('click', () => { row.remove(); refreshInvoiceTotal(); });
+  document.getElementById('inv-added-rows').appendChild(row);
+  row.querySelector('input[type="number"]').focus();
+}
+// Everything the invoice popup currently says, in the shape the server takes.
+function invoiceForm() {
+  const fees = {};
+  document.querySelectorAll('#inv-fee-rows input[data-fee]').forEach(el => { fees[el.dataset.fee] = Number(el.value) || 0; });
+  return {
+    period_from: document.getElementById('inv-from').value,
+    period_to: document.getElementById('inv-to').value,
+    fees,
+    bill: [...document.querySelectorAll('#inv-fee-rows input[data-bill]:checked')].map(el => el.dataset.bill),
+    added: [...document.querySelectorAll('#inv-added-rows .inv-added-row')].map(row => ({
+      field: row.querySelector('select').value,
+      note: row.querySelector('input[type="text"]').value,
+      amount: Number(row.querySelector('input[type="number"]').value) || 0,
+    })).filter(c => c.amount > 0),
+  };
+}
+let invoiceTotalSeq = 0;
+async function refreshInvoiceTotal() {
+  const el = document.getElementById('inv-total-preview');
+  const form = invoiceForm();
+  if (!form.period_from || !form.period_to || form.period_to <= form.period_from) { el.textContent = '—'; return; }
+  const seq = ++invoiceTotalSeq;
+  try {
+    const r = await api(`/api/applications/${id}/invoices`, { method: 'POST', body: JSON.stringify({ ...form, dry_run: true }) });
+    if (seq === invoiceTotalSeq) el.textContent = fmtExact(r.total);
+  } catch (err) {
+    if (seq === invoiceTotalSeq) el.textContent = '—';
+  }
+}
+document.getElementById('inv-from').addEventListener('change', () => { renderInvoiceFees(false); refreshInvoiceTotal(); });
+document.getElementById('inv-to').addEventListener('change', refreshInvoiceTotal);
+document.getElementById('inv-add-charge').addEventListener('click', addInvoiceChargeRow);
+['inv-fee-rows', 'inv-added-rows'].forEach(boxId => {
+  document.getElementById(boxId).addEventListener('input', refreshInvoiceTotal);
+  document.getElementById(boxId).addEventListener('change', refreshInvoiceTotal);
 });
 
 async function loadInvoiceHistory() {
@@ -1353,18 +1440,32 @@ async function loadInvoiceHistory() {
   `;
 }
 
-// Saves any on-screen Invoice Adjustments, then creates the invoice record.
+// Saves any edited charge amounts (through Invoice Adjustments, so the
+// rental's total stays in step) along with any other unsaved adjustments,
+// then creates the invoice record.
 async function createInvoice(via) {
-  const period_from = document.getElementById('inv-from').value;
-  const period_to = document.getElementById('inv-to').value;
-  if (!period_from || !period_to || period_to <= period_from) {
+  const form = invoiceForm();
+  if (!form.period_from || !form.period_to || form.period_to <= form.period_from) {
     alert('Pick a period that ends after it starts.');
     return null;
   }
-  if (!(await saveAdjustments())) return null;
+  INVOICE_FEES.forEach(f => {
+    const amount = Math.round(form.fees[f.field] * 100) / 100;
+    // An edit is a change from what the box was showing as saved, not from
+    // the latest booking — after a send adds a charge they can differ.
+    const input = document.querySelector(`#inv-fee-rows input[data-fee="${f.field}"]`);
+    if (amount === Number(input.dataset.saved)) return;
+    const item = paymentBreakdownItems.find(i => i.key === f.item);
+    item.amount = amount;
+    item.checked = amount > 0;
+    breakdownDirty = true;
+  });
+  // Only when something was actually edited — saving untouched adjustments
+  // would write this page's copy of the rental back over the server's.
+  if (breakdownDirty && !(await saveAdjustments())) return null;
   try {
     return await api(`/api/applications/${id}/invoices`, { method: 'POST', body: JSON.stringify({
-      period_from, period_to, include_one_time: document.getElementById('inv-one-time').checked, via,
+      period_from: form.period_from, period_to: form.period_to, bill: form.bill, added: form.added, via,
     }) });
   } catch (err) {
     alert(err.message);
@@ -1376,6 +1477,19 @@ function invoiceMessage(inv) {
   const from = fmtPeriodDay(document.getElementById('inv-from').value);
   const to = fmtPeriodDay(document.getElementById('inv-to').value);
   return `Hi ${booking.first_name}, here is your ${BUSINESS.name} invoice for ${from} – ${to}: ${fmtExact(inv.total)}. View it here: ${invoiceUrl(inv.token)}`;
+}
+
+// Refreshes the page and popup to the rental as it is after a send: its fee
+// boxes show the saved amounts (now including any charges this invoice
+// added), and the new-charge rows are cleared since they've been applied.
+// Done before handing off to the mail/messages app, which can cancel
+// requests still in flight.
+async function afterInvoiceSent() {
+  await load();
+  renderInvoiceFees(true);
+  document.getElementById('inv-added-rows').innerHTML = '';
+  refreshInvoiceTotal();
+  loadInvoiceHistory();
 }
 
 document.getElementById('inv-preview').addEventListener('click', async () => {
@@ -1391,17 +1505,17 @@ document.getElementById('inv-send-email').addEventListener('click', async () => 
   const inv = await createInvoice('email');
   if (!inv) return;
   const subject = `Invoice #${id}-${inv.id} from ${BUSINESS.name}`;
+  // Refresh first: handing off to the mail app can cancel requests still
+  // in flight, leaving this page with the rental as it was before sending.
+  await afterInvoiceSent();
   window.location.href = `mailto:${encodeURIComponent(booking.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(invoiceMessage(inv))}`;
-  loadInvoiceHistory();
-  load();
 });
 document.getElementById('inv-send-text').addEventListener('click', async () => {
   const inv = await createInvoice('text');
   if (!inv) return;
+  await afterInvoiceSent();
   // "?&body=" is understood by both iOS and Android messaging apps.
   window.location.href = `sms:${smsNumber(booking.phone)}?&body=${encodeURIComponent(invoiceMessage(inv))}`;
-  loadInvoiceHistory();
-  load();
 });
 
 document.getElementById('rd-send-invoice-btn').addEventListener('click', openInvoiceModal);

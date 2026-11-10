@@ -360,6 +360,14 @@ CREATE TABLE IF NOT EXISTS invoices (
   FOREIGN KEY (application_id) REFERENCES applications(id)
 )
 `);
+const invoiceCols = db.prepare('PRAGMA table_info(invoices)').all().map(c => c.name);
+if (!invoiceCols.includes('added_json')) {
+  // Charges added on the invoice itself (e.g. that week's tolls), as
+  // [{ field, amount, note }] — folded into the rental's fees once, when the
+  // invoice is first sent (charges_applied_at), so a re-send can't double them.
+  db.exec('ALTER TABLE invoices ADD COLUMN added_json TEXT');
+  db.exec('ALTER TABLE invoices ADD COLUMN charges_applied_at TEXT');
+}
 
 const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);
 if (!vehicleCols.includes('photo_path')) {
