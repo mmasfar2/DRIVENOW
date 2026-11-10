@@ -322,11 +322,11 @@
       </div>
 
       <div class="inv-sub">Additional Charges</div>
-      <div style="font-size:0.76rem;color:#888;margin-bottom:6px;">The rental's charges — tick the ones to bill on this invoice. Changing an amount updates the rental.</div>
+      <div style="font-size:0.76rem;color:#888;margin-bottom:6px;">Tick the ones to bill on this invoice. Amounts you change here only apply to this invoice — the reservation keeps its own.</div>
       <div id="inv-fee-rows"></div>
 
       <div class="inv-sub" style="margin-top:14px;">New Charges on This Invoice</div>
-      <div style="font-size:0.76rem;color:#888;margin-bottom:6px;">E.g. this week's tolls. Added to the rental's balance when the invoice is sent.</div>
+      <div style="font-size:0.76rem;color:#888;margin-bottom:6px;">E.g. this week's tolls. Only on this invoice — the reservation isn't changed.</div>
       <div id="inv-added-rows"></div>
       <button type="button" class="btn btn-sm btn-outline" id="inv-add-charge">+ Add Charge</button>
 
@@ -1336,27 +1336,42 @@ function openInvoiceModal() {
   document.getElementById('inv-to').value = (booking.rental_end_at || '').slice(0, 10);
   renderInvoiceFees(true);
   document.getElementById('inv-added-rows').innerHTML = '';
-  // Walk-ins carry a placeholder address (see displayEmail) — not sendable.
-  const email = displayEmail(booking.email) === booking.email ? booking.email : '';
+  const email = invoiceEmailAddress();
   const phone = smsNumber(booking.phone);
   document.getElementById('inv-send-email').disabled = !email;
   document.getElementById('inv-send-text').disabled = !phone;
-  document.getElementById('inv-contact').textContent = [email && `Email: ${email}`, phone && `Text: ${booking.phone}`].filter(Boolean).join(' · ') || 'No email or phone on file for this customer.';
+  updateInvoiceContact();
   document.getElementById('invoice-overlay').style.display = 'flex';
   loadInvoiceHistory();
   refreshInvoiceTotal();
 }
+// Whether the server can send email itself (EMAIL_USER/EMAIL_APP_PASSWORD
+// set on Render) — learned from the invoice list; until then, and when it
+// can't, Send by Email opens a Gmail compose window instead.
+let invoiceEmailConfigured = false;
+function invoiceEmailAddress() {
+  // Walk-ins carry a placeholder address (see displayEmail) — not sendable.
+  return displayEmail(booking.email) === booking.email ? booking.email : '';
+}
+function updateInvoiceContact() {
+  const email = invoiceEmailAddress();
+  const phone = smsNumber(booking.phone);
+  document.getElementById('inv-contact').textContent = [
+    email && `Email: ${email} (${invoiceEmailConfigured ? 'sent from the portal' : 'opens Gmail'})`,
+    phone && `Text: ${booking.phone}`,
+  ].filter(Boolean).join(' · ') || 'No email or phone on file for this customer.';
+}
 function closeInvoiceModal() {
   document.getElementById('invoice-overlay').style.display = 'none';
 }
-// The rental's flat additional charges, matched to the Invoice Adjustments
-// row that holds each one (so editing an amount here saves the same way).
+// The reservation's flat additional charges. The popup starts from its
+// amounts; anything changed or added here stays on the invoice only.
 const INVOICE_FEES = [
-  { field: 'travel_fee', item: 'travel', label: 'Travel Fee' },
-  { field: 'processing_fee', item: 'processingfee', label: 'Processing Fee' },
-  { field: 'misc_fee', item: 'misc', label: 'Miscellaneous' },
-  { field: 'toll_fee', item: 'tolls', label: 'Tolls' },
-  { field: 'discount', item: 'discount', label: 'Discount' },
+  { field: 'travel_fee', label: 'Travel Fee' },
+  { field: 'processing_fee', label: 'Processing Fee' },
+  { field: 'misc_fee', label: 'Miscellaneous' },
+  { field: 'toll_fee', label: 'Tolls' },
+  { field: 'discount', label: 'Discount' },
 ];
 // Saved charges belong on the invoice that starts the rental — ticked by
 // default only when this period does (later weekly invoices don't re-bill them).
@@ -1368,7 +1383,7 @@ function renderInvoiceFees(resetAmounts) {
     return `
       <div class="inv-fee-row">
         <label><input type="checkbox" data-bill="${f.field}" ${startsRental && Number(amount) ? 'checked' : ''}>${f.label}${f.field === 'discount' ? ' (−)' : ''}</label>
-        <input type="number" min="0" step="0.01" data-fee="${f.field}" data-saved="${(Number(booking[f.field]) || 0).toFixed(2)}" value="${amount}">
+        <input type="number" min="0" step="0.01" data-fee="${f.field}" value="${amount}">
       </div>`;
   }).join('');
 }
@@ -1423,8 +1438,12 @@ document.getElementById('inv-add-charge').addEventListener('click', addInvoiceCh
 
 async function loadInvoiceHistory() {
   const box = document.getElementById('inv-history');
-  const invoices = await api(`/api/applications/${id}/invoices`);
-  if (!invoices || !invoices.length) { box.innerHTML = ''; return; }
+  const res = await api(`/api/applications/${id}/invoices`);
+  if (!res) return;
+  invoiceEmailConfigured = res.email_configured;
+  updateInvoiceContact();
+  const invoices = res.invoices;
+  if (!invoices.length) { box.innerHTML = ''; return; }
   box.innerHTML = `
     <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#888;margin-bottom:6px;">Previous Invoices</div>
     ${invoices.map(inv => `
@@ -1440,33 +1459,15 @@ async function loadInvoiceHistory() {
   `;
 }
 
-// Saves any edited charge amounts (through Invoice Adjustments, so the
-// rental's total stays in step) along with any other unsaved adjustments,
-// then creates the invoice record.
+// Creates the invoice record from the popup. Never changes the reservation.
 async function createInvoice(via) {
   const form = invoiceForm();
   if (!form.period_from || !form.period_to || form.period_to <= form.period_from) {
     alert('Pick a period that ends after it starts.');
     return null;
   }
-  INVOICE_FEES.forEach(f => {
-    const amount = Math.round(form.fees[f.field] * 100) / 100;
-    // An edit is a change from what the box was showing as saved, not from
-    // the latest booking — after a send adds a charge they can differ.
-    const input = document.querySelector(`#inv-fee-rows input[data-fee="${f.field}"]`);
-    if (amount === Number(input.dataset.saved)) return;
-    const item = paymentBreakdownItems.find(i => i.key === f.item);
-    item.amount = amount;
-    item.checked = amount > 0;
-    breakdownDirty = true;
-  });
-  // Only when something was actually edited — saving untouched adjustments
-  // would write this page's copy of the rental back over the server's.
-  if (breakdownDirty && !(await saveAdjustments())) return null;
   try {
-    return await api(`/api/applications/${id}/invoices`, { method: 'POST', body: JSON.stringify({
-      period_from: form.period_from, period_to: form.period_to, bill: form.bill, added: form.added, via,
-    }) });
+    return await api(`/api/applications/${id}/invoices`, { method: 'POST', body: JSON.stringify({ ...form, via }) });
   } catch (err) {
     alert(err.message);
     return null;
@@ -1479,17 +1480,12 @@ function invoiceMessage(inv) {
   return `Hi ${booking.first_name}, here is your ${BUSINESS.name} invoice for ${from} – ${to}. Amount due: ${fmtExact(inv.amount_due)}. View it here: ${invoiceUrl(inv.token)}`;
 }
 
-// Refreshes the page and popup to the rental as it is after a send: its fee
-// boxes show the saved amounts (now including any charges this invoice
-// added), and the new-charge rows are cleared since they've been applied.
-// Done before handing off to the mail/messages app, which can cancel
-// requests still in flight.
+// Refreshes the page and the invoice history after a send. Done before
+// handing off to the mail/messages app, which can cancel requests still in
+// flight.
 async function afterInvoiceSent() {
   await load();
-  renderInvoiceFees(true);
-  document.getElementById('inv-added-rows').innerHTML = '';
-  refreshInvoiceTotal();
-  loadInvoiceHistory();
+  await loadInvoiceHistory();
 }
 
 document.getElementById('inv-preview').addEventListener('click', async () => {
@@ -1501,14 +1497,37 @@ document.getElementById('inv-preview').addEventListener('click', async () => {
   loadInvoiceHistory();
   load();
 });
+// With email set up on the server, the portal sends it and says so.
+// Otherwise this opens a Gmail compose window already filled in — a
+// mailto: link silently does nothing on a computer with no mail app set up.
 document.getElementById('inv-send-email').addEventListener('click', async () => {
+  const btn = document.getElementById('inv-send-email');
+  if (invoiceEmailConfigured) {
+    btn.disabled = true;
+    try {
+      const inv = await createInvoice(null);
+      if (!inv) return;
+      const subject = `Invoice #${id}-${inv.id} from ${BUSINESS.name}`;
+      const r = await api(`/api/applications/${id}/invoices/${inv.id}/email`, { method: 'POST', body: JSON.stringify({
+        subject, message: invoiceMessage(inv), link: invoiceUrl(inv.token),
+      }) });
+      await afterInvoiceSent();
+      alert(`Invoice emailed to ${r.to}.`);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      btn.disabled = false;
+    }
+    return;
+  }
+  // Opened before the request so the browser doesn't treat it as a pop-up.
+  const win = window.open('', '_blank');
   const inv = await createInvoice('email');
-  if (!inv) return;
+  if (!inv) { if (win) win.close(); return; }
   const subject = `Invoice #${id}-${inv.id} from ${BUSINESS.name}`;
-  // Refresh first: handing off to the mail app can cancel requests still
-  // in flight, leaving this page with the rental as it was before sending.
-  await afterInvoiceSent();
-  window.location.href = `mailto:${encodeURIComponent(booking.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(invoiceMessage(inv))}`;
+  const gmail = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(booking.email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(invoiceMessage(inv))}`;
+  if (win) win.location = gmail; else window.open(gmail, '_blank');
+  afterInvoiceSent();
 });
 document.getElementById('inv-send-text').addEventListener('click', async () => {
   const inv = await createInvoice('text');

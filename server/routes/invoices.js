@@ -5,30 +5,40 @@ const { computeCharge, computePeriodLineItems } = require('../billing');
 const router = express.Router();
 const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
 
+// What this invoice bills beyond the reservation's own amounts (see the
+// `extra` column in db.js). Invoices from before that column existed only
+// had added charges, which were folded into the reservation once sent.
+function invoiceExtra(inv) {
+  if (inv.extra != null) return inv.extra;
+  if (!inv.added_json || inv.charges_applied_at) return 0;
+  return JSON.parse(inv.added_json).reduce((sum, c) => sum + (c.field === 'discount' ? -1 : 1) * c.amount, 0);
+}
+
 // What the customer owes as of this invoice, so the page adds up on its own:
-//   amount_due       = everything billed on the rental through the end of
-//                      this invoice's period, less every payment so far;
+//   amount_due       = the reservation's charges through the end of this
+//                      invoice's period, plus what this and earlier sent
+//                      invoices billed beyond the reservation (invoiceExtra),
+//                      less every payment so far;
 //   previous_balance = amount_due - this invoice's total (anything left
 //                      unpaid from before, or a credit if they paid ahead);
-//   remaining        = the whole rental's balance, including later periods
-//                      not invoiced yet.
-// Charges added on this invoice count even before it's sent (until then
-// they aren't on the rental yet — see POST /:id/invoices). Later periods are
-// priced at the rental's rates without one-time charges, the same way their
-// own invoices will be.
+//   remaining        = the same for the whole rental, including later
+//                      periods not invoiced yet.
+// Later periods are priced at the reservation's rates without one-time
+// charges, the same way their own invoices will be.
 function invoiceAmounts(app, inv, paidTotal) {
-  const pending = inv.added_json && !inv.charges_applied_at ? JSON.parse(inv.added_json) : [];
-  const pendingNet = pending.reduce((sum, c) => sum + (c.field === 'discount' ? -1 : 1) * c.amount, 0);
-  const rentalCharge = computeCharge(app) + pendingNet;
+  const others = db.prepare('SELECT * FROM invoices WHERE application_id = ? AND id != ? AND sent_at IS NOT NULL').all(app.id, inv.id);
+  const earlierExtra = others.filter(o => o.period_to <= inv.period_from).reduce((sum, o) => sum + invoiceExtra(o), 0);
+  const allExtra = others.reduce((sum, o) => sum + invoiceExtra(o), 0) + invoiceExtra(inv);
+  const rentalCharge = computeCharge(app);
   const rentalEnd = app.rental_end_at ? app.rental_end_at.slice(0, 10) : null;
   const later = rentalEnd && inv.period_to < rentalEnd
     ? computePeriodLineItems(app, inv.period_to, rentalEnd, false).reduce((sum, i) => sum + i.amount, 0)
     : 0;
-  const amountDue = round2(rentalCharge - later - paidTotal);
+  const amountDue = round2(rentalCharge - later + earlierExtra + invoiceExtra(inv) - paidTotal);
   return {
     amount_due: amountDue,
     previous_balance: round2(amountDue - inv.total),
-    remaining: round2(rentalCharge - paidTotal),
+    remaining: round2(rentalCharge + allExtra - paidTotal),
   };
 }
 

@@ -368,6 +368,15 @@ if (!invoiceCols.includes('added_json')) {
   db.exec('ALTER TABLE invoices ADD COLUMN added_json TEXT');
   db.exec('ALTER TABLE invoices ADD COLUMN charges_applied_at TEXT');
 }
+if (!invoiceCols.includes('extra')) {
+  // How much this invoice bills beyond (or, if negative, below) what the
+  // reservation itself has for the same charges — e.g. tolls changed to $10
+  // on the invoice where the reservation has $20, or a charge added only on
+  // the invoice. Invoices never change the reservation, so this is what
+  // carries those differences into Amount Due. NULL on invoices made before
+  // this existed (see invoiceExtra in routes/invoices.js).
+  db.exec('ALTER TABLE invoices ADD COLUMN extra REAL');
+}
 
 const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);
 if (!vehicleCols.includes('photo_path')) {
