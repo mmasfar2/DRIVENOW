@@ -364,35 +364,84 @@ router.post('/:id/invoice', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── AUTHED: Create an invoice for a chosen period of the rental ──
+// The rental's flat additional charges, in invoice order. Discount is
+// stored positive and billed negative.
+const INVOICE_FEES = [
+  ['travel_fee', 'Travel Fee'], ['processing_fee', 'Processing Fee'],
+  ['misc_fee', 'Miscellaneous'], ['toll_fee', 'Tolls'], ['discount', 'Discount'],
+];
+const FEE_LABELS = Object.fromEntries(INVOICE_FEES);
+const feeSign = field => (field === 'discount' ? -1 : 1);
+const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
+
+// ── AUTHED: Create (or, with dry_run, just price) an invoice for a period ──
 // Bills [period_from, period_to) at the booking's current rates (see
-// computePeriodLineItems). When the period is the whole booking and its
-// saved total was overridden (Invoice Adjustments' total, a quote), an
-// Adjustment line makes the invoice match that real total. With `via`
-// ('email' | 'text') it's also marked sent; the message itself goes out from
-// the owner's own email/texting app with the invoice's private link.
+// computePeriodLineItems), plus:
+//   bill  — which of the rental's own additional charges (INVOICE_FEES) to
+//           put on this invoice, at the rental's saved amounts;
+//   added — new charges for this invoice only ({ field, amount, note }),
+//           e.g. this week's tolls. They're added to the rental's matching
+//           fee (and its saved total) once, when the invoice is first sent,
+//           so the rental's balance includes them.
+// When the period is the whole booking and every rental charge is billed,
+// an Adjustment line makes the invoice match the rental's real saved total
+// (e.g. an overridden total from Invoice Adjustments). dry_run returns the
+// line items and total without saving — `fees` (amounts not saved yet) is
+// only honored there. With `via` ('email' | 'text') the invoice is marked
+// sent; the message itself goes out from the owner's own email/texting app.
 router.post('/:id/invoices', requireAuth, (req, res) => {
   const id = req.params.id;
-  const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
-  if (!app) return res.status(404).json({ error: 'Not found' });
-  const { period_from, period_to, include_one_time, via } = req.body;
+  const saved = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
+  if (!saved) return res.status(404).json({ error: 'Not found' });
+  const { period_from, period_to, via, dry_run } = req.body;
   const isDate = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
   if (!isDate(period_from) || !isDate(period_to)) return res.status(400).json({ error: 'Pick both invoice period dates' });
   if (period_to <= period_from) return res.status(400).json({ error: 'Invoice period must end after it starts' });
-  if (!app.weekly_rate) return res.status(400).json({ error: 'This reservation has no lease rate to invoice yet' });
+  if (!saved.weekly_rate) return res.status(400).json({ error: 'This reservation has no lease rate to invoice yet' });
   if (via && !['email', 'text'].includes(via)) return res.status(400).json({ error: 'Unknown send method' });
 
-  const items = computePeriodLineItems(app, period_from, period_to, !!include_one_time);
-  let total = Math.round(items.reduce((sum, i) => sum + i.amount, 0) * 100) / 100;
+  const bill = new Set((Array.isArray(req.body.bill) ? req.body.bill : []).filter(f => FEE_LABELS[f]));
+  const added = [];
+  for (const c of (Array.isArray(req.body.added) ? req.body.added : [])) {
+    const amount = round2(c && c.amount);
+    if (!c || !FEE_LABELS[c.field] || !(amount > 0)) return res.status(400).json({ error: 'Each added charge needs a type and an amount above $0' });
+    added.push({ field: c.field, amount, note: String(c.note || '').trim().slice(0, 120) });
+  }
+  // Unsaved fee edits only shape a dry-run preview; a real invoice always
+  // bills what's saved on the rental (the page saves edits first).
+  let app = saved;
+  let feesEdited = false;
+  if (dry_run && req.body.fees) {
+    const overrides = {};
+    for (const [field] of INVOICE_FEES) {
+      if (req.body.fees[field] === undefined) continue;
+      overrides[field] = round2(req.body.fees[field]);
+      if (overrides[field] !== round2(saved[field])) feesEdited = true;
+    }
+    app = { ...saved, ...overrides };
+  }
+
+  const items = computePeriodLineItems(app, period_from, period_to, false);
+  for (const [field, label] of INVOICE_FEES) {
+    const amount = round2(app[field]);
+    if (bill.has(field) && amount) items.push({ key: field, label, amount: feeSign(field) * amount });
+  }
+  for (const c of added) {
+    items.push({ key: `added_${c.field}`, label: FEE_LABELS[c.field], detail: c.note || null, amount: feeSign(c.field) * c.amount });
+  }
+  let total = round2(items.reduce((sum, i) => sum + i.amount, 0));
   const fullBooking = app.pickup_scheduled_at && app.rental_end_at
     && period_from === app.pickup_scheduled_at.slice(0, 10) && period_to === app.rental_end_at.slice(0, 10);
-  if (fullBooking && include_one_time) {
-    const adjustment = Math.round((computeCharge(app) - total) * 100) / 100;
+  const allFeesBilled = INVOICE_FEES.every(([field]) => !round2(app[field]) || bill.has(field));
+  if (fullBooking && allFeesBilled && !feesEdited) {
+    const addedNet = added.reduce((sum, c) => sum + feeSign(c.field) * c.amount, 0);
+    const adjustment = round2(computeCharge(app) + addedNet - total);
     if (adjustment !== 0) {
       items.push({ key: 'adjustment', label: 'Adjustment', amount: adjustment });
-      total = Math.round((total + adjustment) * 100) / 100;
+      total = round2(total + adjustment);
     }
   }
+  if (dry_run) return res.json({ items, total });
 
   // Previewing and then sending (or texting and then emailing) the same
   // invoice reuses the latest one, same link and number, as long as nothing
@@ -406,15 +455,34 @@ router.post('/:id/invoices', requireAuth, (req, res) => {
   } else {
     const token = crypto.randomBytes(18).toString('base64url');
     const info = db.prepare(`
-      INSERT INTO invoices (application_id, token, period_from, period_to, items_json, total) VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, token, period_from, period_to, itemsJson, total);
-    invoice = { id: info.lastInsertRowid, token, sent_via: null };
+      INSERT INTO invoices (application_id, token, period_from, period_to, items_json, total, added_json) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(id, token, period_from, period_to, itemsJson, total, added.length ? JSON.stringify(added) : null);
+    invoice = { id: info.lastInsertRowid, token, sent_via: null, added_json: added.length ? JSON.stringify(added) : null, charges_applied_at: null };
   }
   if (via) {
-    const sentVia = [...new Set([...(invoice.sent_via ? invoice.sent_via.split(', ') : []), via])].join(', ');
-    db.prepare('UPDATE invoices SET sent_via = ?, sent_at = CURRENT_TIMESTAMP WHERE id = ?').run(sentVia, invoice.id);
-    db.prepare('UPDATE applications SET invoice_sent_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
-    logActivity(id, `Invoice #${id}-${invoice.id} (${period_from} to ${period_to}, $${total.toFixed(2)}) sent by ${via}`);
+    db.transaction(() => {
+      const sentVia = [...new Set([...(invoice.sent_via ? invoice.sent_via.split(', ') : []), via])].join(', ');
+      db.prepare('UPDATE invoices SET sent_via = ?, sent_at = CURRENT_TIMESTAMP WHERE id = ?').run(sentVia, invoice.id);
+      db.prepare('UPDATE applications SET invoice_sent_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+      // Charges added on this invoice join the rental the first time it's
+      // sent: onto the matching fee column, and onto a frozen saved total
+      // too, since computeCharge returns that instead of re-adding fees.
+      const toApply = invoice.added_json && !invoice.charges_applied_at ? JSON.parse(invoice.added_json) : [];
+      for (const c of toApply) {
+        const net = feeSign(c.field) * c.amount;
+        db.prepare(`
+          UPDATE applications SET ${c.field} = ROUND(COALESCE(${c.field}, 0) + ?, 2),
+            invoice_amount = CASE WHEN invoice_amount THEN ROUND(invoice_amount + ?, 2) ELSE invoice_amount END,
+            total_due_at_pickup = CASE WHEN total_due_at_pickup THEN ROUND(total_due_at_pickup + ?, 2) ELSE total_due_at_pickup END
+          WHERE id = ?
+        `).run(c.amount, net, net, id);
+      }
+      if (toApply.length) {
+        db.prepare('UPDATE invoices SET charges_applied_at = CURRENT_TIMESTAMP WHERE id = ?').run(invoice.id);
+        logActivity(id, `Charges added on invoice #${id}-${invoice.id}: ${toApply.map(c => `${FEE_LABELS[c.field]} $${c.amount.toFixed(2)}${c.note ? ` (${c.note})` : ''}`).join(', ')}`);
+      }
+      logActivity(id, `Invoice #${id}-${invoice.id} (${period_from} to ${period_to}, $${total.toFixed(2)}) sent by ${via}`);
+    })();
   }
   res.json({ id: invoice.id, token: invoice.token, total });
 });
