@@ -194,18 +194,11 @@ body { background: var(--gray-light); }
 </template>
 
 <script src="js/admin-common.js"></script>
+<script src="js/business.js"></script>
 <script>
-// Lessor details printed in the agreement header. Each can still be
-// overridden with the window.DRIVENOW_BUSINESS_* values the public site's
-// js/config.js reads (set in an inline <script> above admin-common.js).
-const LESSOR = {
-  name: window.DRIVENOW_BUSINESS_NAME || 'QueenCity Auto-Rentals',
-  legalName: window.DRIVENOW_BUSINESS_LEGAL_NAME || '',
-  address: window.DRIVENOW_BUSINESS_ADDRESS || '3765 E Independence Blvd',
-  city: window.DRIVENOW_BUSINESS_CITY || 'Charlotte, NC',
-  phone: window.DRIVENOW_BUSINESS_PHONE_DISPLAY || '(704) 595-7070',
-  email: window.DRIVENOW_BUSINESS_EMAIL || '',
-};
+// Lessor details printed in the agreement header — shared with invoices
+// (js/business.js).
+const LESSOR = BUSINESS;
 
 // Standard security deposit — same amount the Terms and Conditions page states.
 const DEPOSIT_AMOUNT = 200;

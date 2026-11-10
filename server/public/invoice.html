@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Invoice</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+/* Customer-facing and public (reached by a private link, no login), so it
+   doesn't load the admin portal's scripts or styles. */
+:root { --black: #0a0a0a; --white: #fff; --gray-light: #f5f5f5; --gray-border: #e0e0e0; --text-muted: #6b6b6b; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--gray-light); color: var(--black); font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 1.45; }
+.inv-toolbar { display: flex; justify-content: flex-end; gap: 10px; max-width: 8.5in; margin: 16px auto 0; padding: 0 16px; }
+.inv-btn { background: var(--black); color: var(--white); border: 1px solid var(--black); border-radius: 6px; padding: 9px 18px; font: inherit; font-weight: 700; font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+.inv-page { max-width: 8.5in; margin: 16px auto 32px; padding: 40px; background: var(--white); box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+.inv-head { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; border-bottom: 2px solid var(--black); padding-bottom: 14px; margin-bottom: 22px; }
+.inv-biz__name { font-size: 1.4rem; font-weight: 900; letter-spacing: -0.01em; }
+.inv-biz__line { color: var(--text-muted); font-size: 0.85rem; }
+.inv-doc { text-align: right; }
+.inv-doc__title { font-size: 1.6rem; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase; }
+.inv-doc__meta { font-size: 0.85rem; color: var(--text-muted); }
+.inv-parties { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 18px; margin-bottom: 26px; }
+.inv-label { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 3px; }
+.inv-val { font-weight: 600; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); padding: 8px 0; border-bottom: 1px solid var(--black); }
+td { padding: 10px 0; border-bottom: 1px solid var(--gray-border); vertical-align: top; }
+.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.inv-detail { color: var(--text-muted); font-size: 0.82rem; }
+.inv-totals { margin-left: auto; width: min(100%, 320px); margin-top: 16px; }
+.inv-totals div { display: flex; justify-content: space-between; padding: 5px 0; font-variant-numeric: tabular-nums; }
+.inv-totals .inv-grand { border-top: 2px solid var(--black); margin-top: 6px; padding-top: 10px; font-size: 1.15rem; font-weight: 900; }
+.inv-section { margin-top: 34px; }
+.inv-account { margin-top: 30px; padding: 16px 18px; background: var(--gray-light); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.inv-account strong { font-size: 1.15rem; }
+.inv-msg { max-width: 8.5in; margin: 60px auto; padding: 0 16px; text-align: center; color: var(--text-muted); }
+@media (max-width: 600px) { .inv-page { padding: 22px 16px; margin: 12px 0 24px; } .inv-doc { text-align: left; } }
+@media print {
+  body { background: #fff; }
+  .inv-toolbar { display: none; }
+  .inv-page { box-shadow: none; margin: 0; max-width: none; padding: 0; }
+}
+</style>
+</head>
+<body>
+<div id="inv-root"><div class="inv-msg">Loading invoice…</div></div>
+
+<script src="js/business.js"></script>
+<script>
+const token = new URLSearchParams(window.location.search).get('t');
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const money = n => (n < 0 ? '−' : '') + '$' + Math.abs(Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Date-only strings are calendar dates, not instants — format them in UTC so
+// they don't shift a day in the customer's own timezone.
+const fmtDay = d => d ? new Date(`${String(d).slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : '—';
+const METHODS = { cash: 'Cash', card: 'Card', swipe: 'Card', cash_app: 'Cash App', apple_pay: 'Apple Pay', zelle: 'Zelle' };
+
+async function load() {
+  const root = document.getElementById('inv-root');
+  if (!token) { root.innerHTML = '<div class="inv-msg">This invoice link is incomplete.</div>'; return; }
+  let inv;
+  try {
+    const res = await fetch(`/api/invoices/${encodeURIComponent(token)}`);
+    if (!res.ok) throw new Error();
+    inv = await res.json();
+  } catch (e) {
+    root.innerHTML = '<div class="inv-msg">This invoice could not be found. Please contact us for a new link.</div>';
+    return;
+  }
+  document.title = `Invoice ${inv.number} — ${BUSINESS.name}`;
+  const bizLines = [BUSINESS.address, BUSINESS.city, BUSINESS.phone, BUSINESS.email].filter(Boolean);
+  const balance = inv.account_balance;
+  root.innerHTML = `
+    <div class="inv-toolbar"><button class="inv-btn" onclick="window.print()">Print / Save PDF</button></div>
+    <div class="inv-page">
+      <div class="inv-head">
+        <div>
+          <div class="inv-biz__name">${esc(BUSINESS.name)}</div>
+          ${bizLines.map(l => `<div class="inv-biz__line">${esc(l)}</div>`).join('')}
+        </div>
+        <div class="inv-doc">
+          <div class="inv-doc__title">Invoice</div>
+          <div class="inv-doc__meta">No. ${esc(inv.number)}</div>
+          <div class="inv-doc__meta">Issued ${fmtDay(inv.issued_at)}</div>
+        </div>
+      </div>
+
+      <div class="inv-parties">
+        <div><div class="inv-label">Billed To</div><div class="inv-val">${esc(inv.customer)}</div><div class="inv-detail">Reservation #${esc(inv.reservation_id)}</div></div>
+        <div><div class="inv-label">Vehicle</div><div class="inv-val">${esc(inv.vehicle || '—')}</div>${inv.license_plate ? `<div class="inv-detail">Plate ${esc(inv.license_plate)}</div>` : ''}</div>
+        <div><div class="inv-label">Invoice Period</div><div class="inv-val">${fmtDay(inv.period_from)} – ${fmtDay(inv.period_to)}</div><div class="inv-detail">Rental ${fmtDay(inv.rental_from)} – ${fmtDay(inv.rental_to)}</div></div>
+      </div>
+
+      <table>
+        <thead><tr><th>Description</th><th class="num">Amount</th></tr></thead>
+        <tbody>
+          ${inv.items.map(i => `<tr><td>${esc(i.label)}${i.detail ? `<div class="inv-detail">${esc(i.detail)}</div>` : ''}</td><td class="num">${money(i.amount)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+      <div class="inv-totals">
+        <div class="inv-grand"><span>Invoice Total</span><span>${money(inv.total)}</span></div>
+      </div>
+
+      ${inv.payments.length ? `
+        <div class="inv-section">
+          <div class="inv-label" style="margin-bottom:6px;">Payments Received on This Rental</div>
+          <table>
+            <tbody>
+              ${inv.payments.map(p => `<tr><td>${fmtDay(p.paid_at)}<div class="inv-detail">${esc(METHODS[p.method] || p.method)}</div></td><td class="num">${money(p.amount)}</td></tr>`).join('')}
+            </tbody>
+          </table>
+          <div class="inv-totals"><div><span>Total Paid</span><span>${money(inv.paid_total)}</span></div></div>
+        </div>` : ''}
+
+      <div class="inv-account">
+        <span>${balance < 0 ? 'Credit on your account' : `Remaining balance on your full rental (through ${fmtDay(inv.rental_to)})`}</span>
+        <strong>${money(Math.abs(balance))}</strong>
+      </div>
+    </div>
+  `;
+}
+load();
+</script>
+</body>
+</html>

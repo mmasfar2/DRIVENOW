@@ -339,6 +339,28 @@ if (!existingCols.includes('checked_in_at')) {
   db.exec("UPDATE applications SET checked_in_at = updated_at WHERE status = 'completed' AND checked_in_at IS NULL");
 }
 
+// One row per invoice created from a reservation's Financials tab. Line
+// items and total are frozen at creation so a sent invoice never changes
+// under the customer if rates are edited later; payments and balance on it
+// are always read live. token is the unguessable part of the customer's
+// private link (invoice.html?t=...) — the only way that page is reachable
+// without logging in.
+db.exec(`
+CREATE TABLE IF NOT EXISTS invoices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  application_id INTEGER NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  period_from TEXT NOT NULL,
+  period_to TEXT NOT NULL,
+  items_json TEXT NOT NULL,
+  total REAL NOT NULL,
+  sent_via TEXT,
+  sent_at TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (application_id) REFERENCES applications(id)
+)
+`);
+
 const vehicleCols = db.prepare("PRAGMA table_info(vehicles)").all().map(c => c.name);
 if (!vehicleCols.includes('photo_path')) {
   db.exec('ALTER TABLE vehicles ADD COLUMN photo_path TEXT');
