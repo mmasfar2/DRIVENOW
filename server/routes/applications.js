@@ -1,9 +1,10 @@
+const crypto = require('crypto');
 const express = require('express');
 const multer = require('multer');
 const { db, logActivity, queueMessage, upsertCustomer, upsertInsuranceRecord, logUndo } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { UPLOADS_DIR } = require('../paths');
-const { computeCharge, computeOwed, SWIPE_FEE_RATE } = require('../billing');
+const { computeCharge, computeOwed, computePeriodLineItems, SWIPE_FEE_RATE } = require('../billing');
 const { todayStr } = require('../timezone');
 
 // Rental payments: 'card' carries a customer-facing processing_fee surcharge,
@@ -361,6 +362,68 @@ router.post('/:id/invoice', requireAuth, (req, res) => {
   logActivity(id, `Invoice sent for $${invoice_amount}`);
   queueMessage(id, 'sms', app.phone, `Your invoice for $${invoice_amount} is ready. Please complete payment to reserve your vehicle.`);
   res.json({ ok: true });
+});
+
+// ── AUTHED: Create an invoice for a chosen period of the rental ──
+// Bills [period_from, period_to) at the booking's current rates (see
+// computePeriodLineItems). When the period is the whole booking and its
+// saved total was overridden (Invoice Adjustments' total, a quote), an
+// Adjustment line makes the invoice match that real total. With `via`
+// ('email' | 'text') it's also marked sent; the message itself goes out from
+// the owner's own email/texting app with the invoice's private link.
+router.post('/:id/invoices', requireAuth, (req, res) => {
+  const id = req.params.id;
+  const app = db.prepare('SELECT * FROM applications WHERE id = ?').get(id);
+  if (!app) return res.status(404).json({ error: 'Not found' });
+  const { period_from, period_to, include_one_time, via } = req.body;
+  const isDate = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
+  if (!isDate(period_from) || !isDate(period_to)) return res.status(400).json({ error: 'Pick both invoice period dates' });
+  if (period_to <= period_from) return res.status(400).json({ error: 'Invoice period must end after it starts' });
+  if (!app.weekly_rate) return res.status(400).json({ error: 'This reservation has no lease rate to invoice yet' });
+  if (via && !['email', 'text'].includes(via)) return res.status(400).json({ error: 'Unknown send method' });
+
+  const items = computePeriodLineItems(app, period_from, period_to, !!include_one_time);
+  let total = Math.round(items.reduce((sum, i) => sum + i.amount, 0) * 100) / 100;
+  const fullBooking = app.pickup_scheduled_at && app.rental_end_at
+    && period_from === app.pickup_scheduled_at.slice(0, 10) && period_to === app.rental_end_at.slice(0, 10);
+  if (fullBooking && include_one_time) {
+    const adjustment = Math.round((computeCharge(app) - total) * 100) / 100;
+    if (adjustment !== 0) {
+      items.push({ key: 'adjustment', label: 'Adjustment', amount: adjustment });
+      total = Math.round((total + adjustment) * 100) / 100;
+    }
+  }
+
+  // Previewing and then sending (or texting and then emailing) the same
+  // invoice reuses the latest one, same link and number, as long as nothing
+  // on it changed — a new invoice only when the period or amounts differ.
+  const itemsJson = JSON.stringify(items);
+  const latest = db.prepare('SELECT * FROM invoices WHERE application_id = ? ORDER BY id DESC LIMIT 1').get(id);
+  let invoice;
+  if (latest && latest.period_from === period_from && latest.period_to === period_to
+      && latest.items_json === itemsJson && latest.total === total) {
+    invoice = latest;
+  } else {
+    const token = crypto.randomBytes(18).toString('base64url');
+    const info = db.prepare(`
+      INSERT INTO invoices (application_id, token, period_from, period_to, items_json, total) VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, token, period_from, period_to, itemsJson, total);
+    invoice = { id: info.lastInsertRowid, token, sent_via: null };
+  }
+  if (via) {
+    const sentVia = [...new Set([...(invoice.sent_via ? invoice.sent_via.split(', ') : []), via])].join(', ');
+    db.prepare('UPDATE invoices SET sent_via = ?, sent_at = CURRENT_TIMESTAMP WHERE id = ?').run(sentVia, invoice.id);
+    db.prepare('UPDATE applications SET invoice_sent_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+    logActivity(id, `Invoice #${id}-${invoice.id} (${period_from} to ${period_to}, $${total.toFixed(2)}) sent by ${via}`);
+  }
+  res.json({ id: invoice.id, token: invoice.token, total });
+});
+
+router.get('/:id/invoices', requireAuth, (req, res) => {
+  res.json(db.prepare(`
+    SELECT id, token, period_from, period_to, total, sent_via, sent_at, created_at
+    FROM invoices WHERE application_id = ? ORDER BY id DESC
+  `).all(req.params.id));
 });
 
 // ── AUTHED: Stage 8 — Payment verification ──
